@@ -1,0 +1,5 @@
+[codespell]
+
+skip = ./vendor,./.git
+check-filenames = true
+
