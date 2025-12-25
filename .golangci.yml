@@ -31,6 +31,15 @@ linters:
           - wrapcheck
 
   settings:
+    varnamelen:
+      ignore-names:
+        - tt
+        - ok
+        - tb
+        - i
+      ignore-decls:
+        - mc *minimock.Controller
+        - t T
     godot:
       scope: all
     lll:
@@ -55,4 +64,5 @@ linters:
             - "$test"
           allow:
             - $gostd
-            - "github.com/stretchr/testify"
+            - "github.com/shoenig/test"
+            - "github.com/tarantool/go-config"
