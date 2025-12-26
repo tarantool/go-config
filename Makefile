@@ -37,7 +37,7 @@ coveralls-deps:
 .PHONY: lint-deps
 lint-deps:
 	@echo "Installing lint deps"
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
 
 .PHONY: lint
 lint: lint-deps
