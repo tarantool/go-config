@@ -3,7 +3,6 @@ package testutil
 import (
 	"iter"
 	"slices"
-	"testing"
 
 	"github.com/shoenig/test"
 )
@@ -37,7 +36,7 @@ func testSeq2ToSlice[K any, V any](it iter.Seq2[K, V]) []TestIterSeq2Pair[K, V] 
 // It converts the iterator into a slice of TestIterSeq2Pair and uses test.Eq to assert equality.
 // Order does matter.
 // Useful for testing functions that return iter.Seq2.
-func TestIterSeq2Compare[K any, V any](t *testing.T, expected []TestIterSeq2Pair[K, V], it iter.Seq2[K, V]) {
+func TestIterSeq2Compare[K any, V any](t test.T, expected []TestIterSeq2Pair[K, V], it iter.Seq2[K, V]) {
 	t.Helper()
 
 	test.Eq(t, expected, testSeq2ToSlice(it))
@@ -47,7 +46,7 @@ func TestIterSeq2Compare[K any, V any](t *testing.T, expected []TestIterSeq2Pair
 // It converts the iterator into a slice of TestIterSeq2Pair and uses test.Eq to assert equality.
 // Order doesn't matter.
 // Useful for testing functions that return iter.Seq2.
-func TestIterSeq2UnorderedCompare[K any, V any](t *testing.T, expected []TestIterSeq2Pair[K, V], it iter.Seq2[K, V]) {
+func TestIterSeq2UnorderedCompare[K any, V any](t test.T, expected []TestIterSeq2Pair[K, V], it iter.Seq2[K, V]) {
 	t.Helper()
 
 	test.SliceContainsAll(t, expected, testSeq2ToSlice(it))
@@ -55,7 +54,7 @@ func TestIterSeq2UnorderedCompare[K any, V any](t *testing.T, expected []TestIte
 
 // TestIterSeq2Empty asserts that an iter.Seq2 produces no elements.
 // It converts the iterator into a slice of pairs and uses test.SliceEmpty to verify emptiness.
-func TestIterSeq2Empty[K any, V any](t *testing.T, it iter.Seq2[K, V]) {
+func TestIterSeq2Empty[K any, V any](t test.T, it iter.Seq2[K, V]) {
 	t.Helper()
 
 	test.SliceEmpty(t, testSeq2ToSlice(it))
@@ -63,7 +62,7 @@ func TestIterSeq2Empty[K any, V any](t *testing.T, it iter.Seq2[K, V]) {
 
 // TestIterSeq2Len asserts that an iter.Seq2 produces exactly the expected number of key-value pairs.
 // It converts the iterator into a slice of pairs and uses test.SliceLen to verify the length.
-func TestIterSeq2Len[K any, V any](t *testing.T, expected int, it iter.Seq2[K, V]) {
+func TestIterSeq2Len[K any, V any](t test.T, expected int, it iter.Seq2[K, V]) {
 	t.Helper()
 
 	test.SliceLen(t, expected, testSeq2ToSlice(it))
