@@ -8,16 +8,16 @@ on:
 jobs:
   run-tests:
     if: (github.event_name == 'push') ||
-        (github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name != github.repository) ||
-        (github.event_name == 'workflow_dispatch')
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository) ||
+      (github.event_name == 'workflow_dispatch')
 
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        golang: ['1.24', 'stable']
+        golang: ["1.24", "stable"]
 
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +33,9 @@ jobs:
 
   run-tests-with-coverage:
     if: (github.event_name == 'push') ||
-        (github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name != github.repository) ||
-        (github.event_name == 'workflow_dispatch')
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository) ||
+      (github.event_name == 'workflow_dispatch')
 
     runs-on: ubuntu-latest
 
@@ -48,6 +48,9 @@ jobs:
       - name: run tests, collect code coverage data and send to Coveralls
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use exact Go toolchain version to workaround Go 1.25 covdata issue.
+          # See: https://github.com/golang/go/issues/75031
+          GOTOOLCHAIN: go1.25.0+auto
         run: make coverage coveralls-deps coveralls
 
   run-benchmarks:
@@ -61,5 +64,4 @@ jobs:
         with:
           go-version: ${{ matrix.golang }}
       - name: run benchmarks
-        run:  make bench
-
+        run: make bench

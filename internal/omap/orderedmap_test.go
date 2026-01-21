@@ -416,3 +416,24 @@ func TestOrderedMap_EmptyMapBehavior_DeleteMissing(t *testing.T) {
 	m := omap.New[string, int]()
 	test.False(t, m.Delete("anything"))
 }
+
+func TestOrderedMap_EmptyMapBehavior_Keys(t *testing.T) {
+	t.Parallel()
+
+	m := omap.New[string, int]()
+	testutil.TestIterSeqEmpty(t, m.Keys())
+}
+
+func TestOrderedMap_EmptyMapBehavior_Values(t *testing.T) {
+	t.Parallel()
+
+	m := omap.New[string, int]()
+	testutil.TestIterSeqEmpty(t, m.Values())
+}
+
+func TestOrderedMap_EmptyMapBehavior_Items(t *testing.T) {
+	t.Parallel()
+
+	m := omap.New[string, int]()
+	testutil.TestIterSeq2Empty(t, m.Items())
+}

@@ -6,8 +6,8 @@ import (
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
 
-	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/path"
 )
 
 func TestNode_Set_Get_leaf(t *testing.T) {
@@ -15,20 +15,20 @@ func TestNode_Set_Get_leaf(t *testing.T) {
 
 	root := tree.New()
 
-	root.Set(config.NewKeyPath("a/b/c"), 42)
-	root.Set(config.NewKeyPath("a/b/d"), "hello")
-	root.Set(config.NewKeyPath("x/y"), true)
+	root.Set(path.NewKeyPath("a/b/c"), 42)
+	root.Set(path.NewKeyPath("a/b/d"), "hello")
+	root.Set(path.NewKeyPath("x/y"), true)
 
-	node := root.Get(config.NewKeyPath("a/b/c"))
+	node := root.Get(path.NewKeyPath("a/b/c"))
 	must.NotNil(t, node)
 	test.True(t, node.IsLeaf())
 	test.Eq(t, 42, node.Value)
 
-	node = root.Get(config.NewKeyPath("a/b/d"))
+	node = root.Get(path.NewKeyPath("a/b/d"))
 	must.NotNil(t, node)
 	test.Eq(t, "hello", node.Value)
 
-	node = root.Get(config.NewKeyPath("x/y"))
+	node = root.Get(path.NewKeyPath("x/y"))
 	must.NotNil(t, node)
 	test.Eq(t, true, node.Value)
 }
@@ -38,11 +38,11 @@ func TestNode_Set_Get_nonLeaf(t *testing.T) {
 
 	root := tree.New()
 
-	root.Set(config.NewKeyPath("a/b/c"), 42)
-	root.Set(config.NewKeyPath("a/b/d"), "hello")
-	root.Set(config.NewKeyPath("x/y"), true)
+	root.Set(path.NewKeyPath("a/b/c"), 42)
+	root.Set(path.NewKeyPath("a/b/d"), "hello")
+	root.Set(path.NewKeyPath("x/y"), true)
 
-	node := root.Get(config.NewKeyPath("a/b"))
+	node := root.Get(path.NewKeyPath("a/b"))
 	must.NotNil(t, node)
 	test.False(t, node.IsLeaf())
 }
@@ -52,11 +52,11 @@ func TestNode_Set_Get_missing(t *testing.T) {
 
 	root := tree.New()
 
-	root.Set(config.NewKeyPath("a/b/c"), 42)
-	root.Set(config.NewKeyPath("a/b/d"), "hello")
-	root.Set(config.NewKeyPath("x/y"), true)
+	root.Set(path.NewKeyPath("a/b/c"), 42)
+	root.Set(path.NewKeyPath("a/b/d"), "hello")
+	root.Set(path.NewKeyPath("x/y"), true)
 
-	node := root.Get(config.NewKeyPath("nonexistent"))
+	node := root.Get(path.NewKeyPath("nonexistent"))
 	test.Nil(t, node)
 }
 
@@ -67,7 +67,7 @@ func TestNode_Get_emptyPath(t *testing.T) {
 
 	root.Value = "test value"
 
-	node := root.Get(config.KeyPath{})
+	node := root.Get(path.KeyPath{})
 	must.NotNil(t, node)
 	test.Eq(t, "test value", node.Value)
 }
@@ -150,9 +150,9 @@ func TestNode_GetValue_leaf(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/b"), 100)
+	root.Set(path.NewKeyPath("a/b"), 100)
 
-	val := root.GetValue(config.NewKeyPath("a/b"))
+	val := root.GetValue(path.NewKeyPath("a/b"))
 	test.Eq(t, 100, val)
 }
 
@@ -160,9 +160,9 @@ func TestNode_GetValue_nonLeaf(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/b"), 100)
+	root.Set(path.NewKeyPath("a/b"), 100)
 
-	val := root.GetValue(config.NewKeyPath("a"))
+	val := root.GetValue(path.NewKeyPath("a"))
 	test.Nil(t, val)
 }
 
@@ -170,9 +170,9 @@ func TestNode_GetValue_missing(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/b"), 100)
+	root.Set(path.NewKeyPath("a/b"), 100)
 
-	val := root.GetValue(config.NewKeyPath("missing"))
+	val := root.GetValue(path.NewKeyPath("missing"))
 	test.Nil(t, val)
 }
 
@@ -180,10 +180,10 @@ func TestNode_Set_Overwrite(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/b"), "first")
-	root.Set(config.NewKeyPath("a/b"), "second")
+	root.Set(path.NewKeyPath("a/b"), "first")
+	root.Set(path.NewKeyPath("a/b"), "second")
 
-	node := root.Get(config.NewKeyPath("a/b"))
+	node := root.Get(path.NewKeyPath("a/b"))
 	must.NotNil(t, node)
 	test.Eq(t, "second", node.Value)
 }
@@ -192,16 +192,16 @@ func TestNode_Set_overwriteLeafToNonLeaf(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a"), "value")
+	root.Set(path.NewKeyPath("a"), "value")
 
-	node := root.Get(config.NewKeyPath("a"))
+	node := root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, node)
 	test.Eq(t, "value", node.Value)
 	test.True(t, node.IsLeaf())
 
 	node.SetChild("b", tree.New())
 
-	node = root.Get(config.NewKeyPath("a"))
+	node = root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, node)
 	test.Eq(t, "value", node.Value)
 	test.False(t, node.IsLeaf())
@@ -216,13 +216,13 @@ func TestNode_Set_overwriteNonLeafToLeaf(t *testing.T) {
 	nodeA := root.Child("a")
 	nodeA.SetChild("b", tree.New())
 
-	node := root.Get(config.NewKeyPath("a"))
+	node := root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, node)
 	test.False(t, node.IsLeaf())
 
-	root.Set(config.NewKeyPath("a"), "value")
+	root.Set(path.NewKeyPath("a"), "value")
 
-	node = root.Get(config.NewKeyPath("a"))
+	node = root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, node)
 	test.Eq(t, "value", node.Value)
 	test.False(t, node.IsLeaf())
@@ -232,11 +232,11 @@ func TestNode_ChildrenOrder_length(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/x"), 1)
-	root.Set(config.NewKeyPath("a/y"), 2)
-	root.Set(config.NewKeyPath("a/z"), 3)
+	root.Set(path.NewKeyPath("a/x"), 1)
+	root.Set(path.NewKeyPath("a/y"), 2)
+	root.Set(path.NewKeyPath("a/z"), 3)
 
-	parentNode := root.Get(config.NewKeyPath("a"))
+	parentNode := root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, parentNode)
 
 	children := parentNode.Children()
@@ -247,11 +247,11 @@ func TestNode_ChildrenOrder_values(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/x"), 1)
-	root.Set(config.NewKeyPath("a/y"), 2)
-	root.Set(config.NewKeyPath("a/z"), 3)
+	root.Set(path.NewKeyPath("a/x"), 1)
+	root.Set(path.NewKeyPath("a/y"), 2)
+	root.Set(path.NewKeyPath("a/z"), 3)
 
-	parentNode := root.Get(config.NewKeyPath("a"))
+	parentNode := root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, parentNode)
 
 	children := parentNode.Children()
@@ -264,11 +264,11 @@ func TestNode_ChildrenOrder_keys(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a/x"), 1)
-	root.Set(config.NewKeyPath("a/y"), 2)
-	root.Set(config.NewKeyPath("a/z"), 3)
+	root.Set(path.NewKeyPath("a/x"), 1)
+	root.Set(path.NewKeyPath("a/y"), 2)
+	root.Set(path.NewKeyPath("a/z"), 3)
 
-	parentNode := root.Get(config.NewKeyPath("a"))
+	parentNode := root.Get(path.NewKeyPath("a"))
 	must.NotNil(t, parentNode)
 
 	keys := parentNode.ChildrenKeys()
@@ -398,6 +398,15 @@ func TestNode_DeleteChild_missing(t *testing.T) {
 	test.False(t, ok)
 }
 
+func TestNode_DeleteChild_NilChildren(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	// root.children is nil initially.
+	ok := root.DeleteChild("any")
+	test.False(t, ok)
+}
+
 func TestNode_SourceRevision(t *testing.T) {
 	t.Parallel()
 
@@ -406,9 +415,9 @@ func TestNode_SourceRevision(t *testing.T) {
 	root.Source = "file"
 	root.Revision = "123"
 
-	root.Set(config.NewKeyPath("a/b"), "value")
+	root.Set(path.NewKeyPath("a/b"), "value")
 
-	node := root.Get(config.NewKeyPath("a/b"))
+	node := root.Get(path.NewKeyPath("a/b"))
 	must.NotNil(t, node)
 	test.Eq(t, "value", node.Value)
 	test.Eq(t, "", node.Source)
@@ -426,7 +435,7 @@ func TestNode_EmptyPath(t *testing.T) {
 	root := tree.New()
 
 	root.Value = "root value"
-	root.Set(config.KeyPath{}, "new root")
+	root.Set(path.KeyPath{}, "new root")
 
 	test.Eq(t, "new root", root.Value)
 }
@@ -435,16 +444,16 @@ func TestNode_IntermediateNodesCreated(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("deep/nested/path"), 99)
+	root.Set(path.NewKeyPath("deep/nested/path"), 99)
 
-	deep := root.Get(config.NewKeyPath("deep"))
+	deep := root.Get(path.NewKeyPath("deep"))
 	must.NotNil(t, deep)
 	test.False(t, deep.IsLeaf())
 
-	nested := deep.Get(config.NewKeyPath("nested"))
+	nested := deep.Get(path.NewKeyPath("nested"))
 	must.NotNil(t, nested)
 
-	leaf := root.Get(config.NewKeyPath("deep/nested/path"))
+	leaf := root.Get(path.NewKeyPath("deep/nested/path"))
 	must.NotNil(t, leaf)
 	test.Eq(t, 99, leaf.Value)
 }
@@ -453,13 +462,13 @@ func TestNode_PathEmptySegment(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(config.NewKeyPath("a//c"), 42)
+	root.Set(path.NewKeyPath("a//c"), 42)
 
-	node := root.Get(config.NewKeyPath("a//c"))
+	node := root.Get(path.NewKeyPath("a//c"))
 	must.NotNil(t, node)
 	test.Eq(t, 42, node.Value)
 
-	emptyNode := root.Get(config.NewKeyPath("a/"))
+	emptyNode := root.Get(path.NewKeyPath("a/"))
 	must.NotNil(t, emptyNode)
 	test.False(t, emptyNode.IsLeaf())
 }

@@ -20,7 +20,7 @@ testrace:
 .PHONY: coverage
 coverage:
 	@echo "Running tests with coveralls"
-	go test -tags "$(TAGS)" $(go list ./... | grep -v test_helpers) -v -p 1 -covermode=atomic -coverprofile=$(COVERAGE_FILE) -count=1
+	go test -tags "$(TAGS)" ./... -v -p 1 -covermode=atomic -coverprofile=$(COVERAGE_FILE) -count=1
 	go tool cover -func=$(COVERAGE_FILE)
 
 .PHONY: coveralls
