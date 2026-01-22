@@ -5,8 +5,101 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/path"
+	"github.com/tarantool/go-config/tree"
 )
+
+// MergerContext holds state for merging a single collector's values.
+// Implementations can use this to track ordering or other state across
+// multiple MergeValue calls within a single collector.
+//
+// Custom merger implementations must handle ordering properly when the collector's
+// KeepOrder method returns true. This typically involves:
+//  1. Allocating a map to track parent-child relationships in CreateContext
+//  2. Calling RecordOrdering for each value during MergeValue
+//  3. Implementing ApplyOrdering to set the order on tree nodes
+//
+// For collectors that do not preserve order (KeepOrder returns false),
+// the ordering methods can be no-ops.
+type MergerContext interface {
+	// Collector returns the collector being processed.
+	Collector() Collector
+
+	// RecordOrdering tracks a child key under its parent for ordering.
+	// This should be called for each value when the collector's KeepOrder
+	// returns true and ordering needs to be preserved.
+	//
+	// The parent parameter is the path to the parent node (may be nil for root).
+	// The child parameter is the key of the child node to record.
+	//
+	// Implementations should store this information and apply it in ApplyOrdering.
+	RecordOrdering(parent path.KeyPath, child string)
+
+	// ApplyOrdering applies recorded ordering to the tree.
+	// Called after all values from the collector have been processed.
+	//
+	// Implementations should iterate through recorded parent-child relationships
+	// and call SetOrder on the corresponding tree nodes to preserve insertion order.
+	//
+	// Returns an error if ordering cannot be applied.
+	ApplyOrdering(root *tree.Node) error
+}
+
+// Merger defines how values from collectors are merged into the configuration tree.
+// This interface allows customization of the merging process, enabling use cases such as:
+//   - Validation: reject invalid values before merging
+//   - Transformation: modify values based on their path or source
+//   - Selective merging: skip certain paths or sources
+//   - Auditing: log or track all merge operations
+//   - Custom conflict resolution: define how to handle duplicate keys
+//
+// The default merging logic is provided by DefaultMerger, which implements
+// standard last-write-wins semantics with type-aware merging for maps and arrays.
+//
+// Custom implementations should:
+//  1. Create a context in CreateContext that tracks state for the collector
+//  2. Implement MergeValue to handle each value from the collector
+//  3. Handle ordering properly if the collector's KeepOrder returns true
+//  4. Return meaningful errors when merging fails
+//
+// Example custom merger that counts merge operations is located in "merger_custom_test.go".
+//
+// Use Builder.WithMerger to configure a custom merger:
+//
+//	cfg, errs := config.NewBuilder().
+//	    WithMerger(&countingMerger{}).
+//	    AddCollector(myCollector).
+//	    Build()
+type Merger interface {
+	// CreateContext creates a new context for processing a collector.
+	// Called once per collector before any MergeValue calls.
+	//
+	// The context should store any state needed for merging values from this collector,
+	// such as ordering information, validation state, or statistics.
+	//
+	// If the collector's KeepOrder returns true, the context should allocate
+	// data structures for tracking ordering (typically a map[string][]string).
+	CreateContext(collector Collector) MergerContext
+
+	// MergeValue merges a single value into the tree.
+	// The method is called for each value produced by the collector.
+	//
+	// Parameters:
+	//   - ctx: the context created by CreateContext for this collector
+	//   - root: the root of the configuration tree to merge into
+	//   - path: the key path where the value should be merged
+	//   - value: the raw value to merge (primitive, slice, or map[string]any)
+	//
+	// Implementations should:
+	//   - Navigate to the appropriate node in the tree using path
+	//   - Merge the value according to custom logic or delegate to DefaultMerger
+	//   - Call ctx.RecordOrdering if the collector preserves order
+	//   - Return an error if merging fails (validation, type mismatch, etc.)
+	//
+	// The tree is modified in place. Multiple MergeValue calls may update the same
+	// nodes if paths overlap (e.g., "a.b" and "a.c" both create children under "a").
+	MergeValue(ctx MergerContext, root *tree.Node, path path.KeyPath, value any) error
+}
 
 // Config provides access to the final configuration data.
 type Config struct {

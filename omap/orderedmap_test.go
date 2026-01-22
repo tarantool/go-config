@@ -6,8 +6,8 @@ import (
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
 
-	"github.com/tarantool/go-config/internal/omap"
 	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/omap"
 )
 
 func TestOrderedMap_Set_Get_single(t *testing.T) {

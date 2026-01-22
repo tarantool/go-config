@@ -3,9 +3,10 @@ package collectors
 
 import (
 	"context"
+	"slices"
 
 	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/tree"
 )
 
 // Map reads configuration data from a map.
@@ -61,7 +62,7 @@ func (mc *Map) Read(ctx context.Context) <-chan config.Value {
 		defer close(valueCh)
 		// Build a tree from the map.
 		root := tree.New()
-		flattenMapIntoTree(root, config.NewKeyPath(""), mc.data)
+		flattenMapIntoTree(root, config.NewKeyPath(""), mc.data, mc.keepOrder)
 		// Walk the tree and send leaf values.
 		// For simplicity, we traverse recursively.
 		walkTree(ctx, root, config.NewKeyPath(""), valueCh)
@@ -91,13 +92,24 @@ func (mc *Map) KeepOrder() bool {
 }
 
 // flattenMapIntoTree recursively inserts map values into a tree node.
-func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any) {
-	for k, value := range m {
+// If keepOrder is true, keys are inserted in sorted order to provide deterministic ordering.
+func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any, keepOrder bool) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	if keepOrder {
+		slices.Sort(keys)
+	}
+
+	for _, k := range keys {
+		value := m[k]
 		path := prefix.Append(k)
 
 		switch val := value.(type) {
 		case map[string]any:
-			flattenMapIntoTree(node, path, val)
+			flattenMapIntoTree(node, path, val, keepOrder)
 		default:
 			// Leaf value.
 			node.Set(path, value)

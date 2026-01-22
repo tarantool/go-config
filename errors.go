@@ -1,6 +1,9 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrKeyNotFound is returned when a configuration key is not found.
@@ -8,3 +11,26 @@ var (
 	// ErrPathNotFound is returned when a configuration path is not found.
 	ErrPathNotFound = errors.New("path not found")
 )
+
+// CollectorError wraps an error that occurred while processing a collector,
+// providing context about which collector failed.
+type CollectorError struct {
+	CollectorName string
+	Err           error
+}
+
+// NewCollectorError creates a new CollectorError.
+func NewCollectorError(collectorName string, err error) *CollectorError {
+	return &CollectorError{
+		CollectorName: collectorName,
+		Err:           err,
+	}
+}
+
+func (e *CollectorError) Error() string {
+	return fmt.Sprintf("collector %s: %v", e.CollectorName, e.Err)
+}
+
+func (e *CollectorError) Unwrap() error {
+	return e.Err
+}
