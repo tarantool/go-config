@@ -10,9 +10,9 @@ import (
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
 
-	"github.com/tarantool/go-config/internal/tree"
 	"github.com/tarantool/go-config/meta"
 	"github.com/tarantool/go-config/path"
+	"github.com/tarantool/go-config/tree"
 )
 
 var _ = math.MaxInt64
