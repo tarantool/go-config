@@ -6,7 +6,7 @@ import (
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/internal/environ"
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/tree"
 )
 
 // Env reads configuration data from environment variables.

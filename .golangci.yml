@@ -74,4 +74,5 @@ linters:
           allow:
             - $gostd
             - "github.com/shoenig/test"
+            - "github.com/stretchr/testify"
             - "github.com/tarantool/go-config"
