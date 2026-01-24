@@ -1,0 +1,39 @@
+credentials:
+  users:
+    client:
+      password: 'secret'
+      roles: [super, puper, paratrooper]
+    peer:
+      password: peering
+      roles: ['replication']
+      privileges:
+      - permissions: ['execute']
+        lua_call: ['box.info']
+
+sharding:
+  bucket_count: 3000
+
+roles_cfg:
+  roles.metrics-export:
+    http:
+      - endpoints:
+          - format: prometheus
+            path: /metrics
+        server: default
+
+storage:
+  provider: etcd
+  etcd:
+    prefix: /tcm
+    endpoints: &etcd_ends
+      - http://localhost:2379
+
+initial-settings:
+  clusters:
+    - name: default-cluster
+      id: 00000000-0000-0000-0000-000000000000
+      storage-connection:
+        provider: etcd
+        etcd-connection:
+          prefix: /single
+          endpoints: *etcd_ends
