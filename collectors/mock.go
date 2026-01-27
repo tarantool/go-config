@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/tree"
 )
 
 // Mock is a testing collector that returns a predefined set of values.

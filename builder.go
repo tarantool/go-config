@@ -1,12 +1,10 @@
 package config
 
 import (
-	"context"
-	"fmt"
 	"io"
 	"sync"
 
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/tree"
 )
 
 // DefaultsType is a wrapper for default values in inheritance zones.
@@ -20,11 +18,13 @@ type Builder struct {
 	schema io.Reader
 	// Inheritance zones and their default values.
 	scopes map[string]DefaultsType
+	// Merger defines how values are merged into the configuration tree.
+	merger Merger
 }
 
 // NewBuilder creates a new instance of Builder.
 func NewBuilder() Builder {
-	return Builder{collectors: nil, schema: nil, scopes: nil}
+	return Builder{collectors: nil, schema: nil, scopes: nil, merger: nil}
 }
 
 // AddCollector adds a new data source to the build pipeline.
@@ -67,6 +67,13 @@ func (b *Builder) AddScope(scopes KeyPath, defaults DefaultsType) Builder {
 	return *b
 }
 
+// WithMerger sets a custom merger for the configuration assembly.
+// If not set, the default merging logic is used.
+func (b *Builder) WithMerger(merger Merger) Builder {
+	b.merger = merger
+	return *b
+}
+
 // Build starts the configuration assembly process.
 // It performs reading data from all collectors, merging them,
 // validation against the schema, and returns a ready Config object or an error.
@@ -74,9 +81,15 @@ func (b *Builder) Build() (Config, []error) {
 	root := tree.New()
 
 	var errs []error
+	// Determine which merger to use.
+	merger := b.merger
+	if merger == nil {
+		merger = Default
+	}
+
 	// Process collectors in order (later collectors have higher priority).
 	for _, col := range b.collectors {
-		err := mergeCollector(root, col)
+		err := MergeCollectorWithMerger(root, col, merger)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -87,42 +100,6 @@ func (b *Builder) Build() (Config, []error) {
 	}
 
 	return newConfig(root), nil
-}
-
-// mergeCollector reads all values from a collector and merges them into the tree.
-func mergeCollector(root *tree.Node, col Collector) error {
-	ctx := context.Background()
-
-	ch := col.Read(ctx)
-	for val := range ch {
-		meta := val.Meta()
-		// Set the value at the path in the tree.
-		// For now, we store raw value; tree.Node expects a raw value (any).
-		// We need to extract raw value from val. Use Get with interface{}.
-		var raw any
-
-		err := val.Get(&raw)
-		if err != nil {
-			// If Get fails, we cannot obtain raw value; skip or error.
-			return fmt.Errorf("failed to get raw value for key %s: %w", meta.Key.String(), err)
-		}
-
-		node := root.Get(meta.Key)
-		if node == nil {
-			// Create node and set value.
-			root.Set(meta.Key, raw)
-
-			node = root.Get(meta.Key)
-		} else {
-			// Replace value.
-			node.Value = raw
-		}
-		// Update node metadata.
-		node.Source = col.Name()
-		node.Revision = string(col.Revision())
-	}
-
-	return nil
 }
 
 // BuildMutable starts the configuration assembly process but returns

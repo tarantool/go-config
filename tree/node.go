@@ -3,7 +3,7 @@ package tree
 import (
 	"slices"
 
-	"github.com/tarantool/go-config/internal/omap"
+	"github.com/tarantool/go-config/omap"
 	"github.com/tarantool/go-config/path"
 )
 
@@ -21,6 +21,9 @@ type Node struct {
 	// Revision is a version identifier for the node (e.g., commit hash, timestamp).
 	Revision string
 
+	// orderSet indicates whether the order of children has been set by a higher-priority ordered collector.
+	orderSet bool
+
 	// children is an ordered map from child keys to their nodes.
 	children *omap.OrderedMap[string, *Node]
 }
@@ -31,7 +34,9 @@ func New() *Node {
 		Value:    nil,
 		Source:   "",
 		Revision: "",
+
 		children: nil,
+		orderSet: false,
 	}
 }
 
@@ -139,4 +144,105 @@ func (n *Node) GetValue(path path.KeyPath) Value {
 	}
 
 	return node.Value
+}
+
+// HasChild returns true if the node has a child with the given key.
+func (n *Node) HasChild(key string) bool {
+	return n.Child(key) != nil
+}
+
+// ClearChildren removes all child nodes and resets the orderSet flag.
+func (n *Node) ClearChildren() {
+	if n.children != nil {
+		n.children.Clear()
+	}
+
+	n.orderSet = false
+}
+
+// OrderSet returns true if the order of children has been set by a higher-priority ordered collector.
+func (n *Node) OrderSet() bool {
+	return n.orderSet
+}
+
+// SetOrderSet sets the orderSet flag.
+func (n *Node) SetOrderSet(v bool) {
+	n.orderSet = v
+}
+
+// ReorderChildren reorders the node's children according to the provided keys.
+// Only keys present in the keys slice are reordered; other keys keep their relative positions.
+// Keys that are not present in the node's children are ignored.
+// If the node has no children or keys is empty, nothing happens.
+func (n *Node) ReorderChildren(keys []string) error {
+	if n.children == nil || len(keys) == 0 {
+		return nil
+	}
+
+	// Build a set of keys to reorder for quick lookup.
+	reorderSet := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		reorderSet[k] = true
+	}
+
+	// Collect existing keys in current order.
+	existingKeys := n.ChildrenKeys()
+	if len(existingKeys) == 0 {
+		return nil
+	}
+
+	// Partition keys into those to reorder and those to keep in place.
+	var (
+		reorderList []string
+		keepList    []string
+	)
+
+	for _, k := range existingKeys {
+		if reorderSet[k] {
+			reorderList = append(reorderList, k)
+		} else {
+			keepList = append(keepList, k)
+		}
+	}
+
+	// Ensure all keys in the reorderList appear in the input keys in the same order as input.
+	// We need to reorder reorderList according to the input order.
+	// Create a map from key to its position in input keys.
+	inputPos := make(map[string]int, len(keys))
+	for i, k := range keys {
+		inputPos[k] = i
+	}
+
+	// Sort reorderList by input position.
+	slices.SortFunc(reorderList, func(a, b string) int {
+		posA := inputPos[a]
+
+		posB := inputPos[b]
+		if posA < posB {
+			return -1
+		}
+
+		if posA > posB {
+			return 1
+		}
+
+		return 0
+	})
+
+	// Build new order: first the reordered keys (in input order), then the kept keys.
+	newOrder := make([]string, 0, len(existingKeys))
+
+	newOrder = append(newOrder, reorderList...)
+	newOrder = append(newOrder, keepList...)
+
+	// Build a new ordered map with the new order.
+	newChildren := omap.NewWithCapacity[string, *Node](len(newOrder))
+	for _, key := range newOrder {
+		value, _ := n.children.Get(key)
+		newChildren.Set(key, value)
+	}
+
+	n.children = newChildren
+
+	return nil
 }
