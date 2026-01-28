@@ -40,9 +40,8 @@ lint-deps:
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
 
 .PHONY: lint
-lint: lint-deps
+lint:
 	@echo "Running go-linter"
 	@go mod tidy
 	@go mod vendor
-	@golangci-lint run --config=./.golangci.yml --modules-download-mode vendor --verbose
-
+	@golangci-lint run --config=./.golangci.yml --modules-download-mode vendor

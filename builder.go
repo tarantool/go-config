@@ -1,10 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
 	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/validator"
+	"github.com/tarantool/go-config/validators/jsonschema"
 )
 
 // DefaultsType is a wrapper for default values in inheritance zones.
@@ -14,8 +17,8 @@ type DefaultsType map[string]any
 type Builder struct {
 	// Ordered list of collectors from which the configuration will be assembled.
 	collectors []Collector
-	// Schema source for validation of the final configuration.
-	schema io.Reader
+	// Validator for validation of the final configuration.
+	validator validator.Validator
 	// Inheritance zones and their default values.
 	scopes map[string]DefaultsType
 	// Merger defines how values are merged into the configuration tree.
@@ -24,7 +27,7 @@ type Builder struct {
 
 // NewBuilder creates a new instance of Builder.
 func NewBuilder() Builder {
-	return Builder{collectors: nil, schema: nil, scopes: nil, merger: nil}
+	return Builder{collectors: nil, validator: nil, scopes: nil, merger: nil}
 }
 
 // AddCollector adds a new data source to the build pipeline.
@@ -36,11 +39,34 @@ func (b *Builder) AddCollector(collector Collector) Builder {
 	return *b
 }
 
-// WithJSONSchema sets a schema for validation of the final configuration.
-// If no schema is set, validation is not performed.
-func (b *Builder) WithJSONSchema(schema io.Reader) Builder {
-	b.schema = schema
+// WithValidator sets a custom validator for configuration validation.
+func (b *Builder) WithValidator(validator validator.Validator) Builder {
+	b.validator = validator
 	return *b
+}
+
+// WithJSONSchema creates a JSON Schema validator and sets it.
+// Returns error if schema parsing fails.
+func (b *Builder) WithJSONSchema(schema io.Reader) (Builder, error) {
+	validator, err := jsonschema.NewFromReader(schema)
+	if err != nil {
+		return *b, fmt.Errorf("failed to create JSON schema validator: %w", err)
+	}
+
+	b.validator = validator
+
+	return *b, nil
+}
+
+// MustWithJSONSchema is like WithJSONSchema but panics on error.
+// Useful for static schema definitions.
+func (b *Builder) MustWithJSONSchema(schema io.Reader) Builder {
+	result, err := b.WithJSONSchema(schema)
+	if err != nil {
+		panic(err)
+	}
+
+	return result
 }
 
 // AddScope adds an inheritance zone.
@@ -81,17 +107,27 @@ func (b *Builder) Build() (Config, []error) {
 	root := tree.New()
 
 	var errs []error
-	// Determine which merger to use.
+
 	merger := b.merger
 	if merger == nil {
 		merger = Default
 	}
 
-	// Process collectors in order (later collectors have higher priority).
 	for _, col := range b.collectors {
 		err := MergeCollectorWithMerger(root, col, merger)
 		if err != nil {
 			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return Config{root: nil}, errs
+	}
+
+	if b.validator != nil {
+		validationErrs := b.validator.Validate(root)
+		for i := range validationErrs {
+			errs = append(errs, &validationErrs[i])
 		}
 	}
 
@@ -107,8 +143,8 @@ func (b *Builder) Build() (Config, []error) {
 func (b *Builder) BuildMutable() (MutableConfig, []error) {
 	cfg, errs := b.Build()
 	if len(errs) > 0 {
-		return MutableConfig{Config: Config{root: nil}, mu: sync.RWMutex{}}, errs
+		return MutableConfig{Config: Config{root: nil}, mu: sync.RWMutex{}, validator: nil}, errs
 	}
 
-	return MutableConfig{Config: cfg, mu: sync.RWMutex{}}, nil
+	return MutableConfig{Config: cfg, mu: sync.RWMutex{}, validator: b.validator}, nil
 }

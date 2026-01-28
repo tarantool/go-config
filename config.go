@@ -7,6 +7,7 @@ import (
 
 	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/validator"
 )
 
 // MergerContext holds state for merging a single collector's values.
@@ -134,6 +135,10 @@ func (c *Config) Get(path KeyPath, dest any) (MetaInfo, error) {
 // Returns a special `Value` object and a flag indicating whether the value was found.
 // This is useful when you need to distinguish between a missing value and a nil value.
 func (c *Config) Lookup(path KeyPath) (Value, bool) {
+	if c.root == nil {
+		return nil, false
+	}
+
 	node := c.root.Get(path)
 	if node == nil {
 		return nil, false
@@ -145,6 +150,10 @@ func (c *Config) Lookup(path KeyPath) (Value, bool) {
 // Stat returns metadata for a key (source name, revision)
 // without touching the actual value. Useful for debugging and introspection tools.
 func (c *Config) Stat(path KeyPath) (MetaInfo, bool) {
+	if c.root == nil {
+		return MetaInfo{Key: nil, Source: SourceInfo{Name: "", Type: UnknownSource}, Revision: ""}, false
+	}
+
 	node := c.root.Get(path)
 	if node == nil {
 		return MetaInfo{Key: nil, Source: SourceInfo{Name: "", Type: UnknownSource}, Revision: ""}, false
@@ -162,6 +171,10 @@ func (c *Config) Stat(path KeyPath) (MetaInfo, bool) {
 // If depth > 0, only the part of the configuration tree limited by the specified depth is traversed.
 // If depth <= 0, the entire object is traversed.
 func (c *Config) Walk(ctx context.Context, path KeyPath, depth int) (<-chan Value, error) {
+	if c.root == nil {
+		return nil, fmt.Errorf("%w: %s", ErrPathNotFound, path)
+	}
+
 	start := c.root
 	if len(path) > 0 {
 		start = c.root.Get(path)
@@ -183,12 +196,10 @@ func (c *Config) Walk(ctx context.Context, path KeyPath, depth int) (<-chan Valu
 
 // walkNodes recursively sends values for leaf nodes.
 func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, valueCh chan<- Value) {
-	if depth == 0 {
+	switch {
+	case depth == 0:
 		return
-	}
-
-	// If node is leaf, send its value.
-	if node.IsLeaf() {
+	case node.IsLeaf():
 		select {
 		case <-ctx.Done():
 			return
@@ -198,7 +209,6 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 		return
 	}
 
-	// Otherwise, recurse into children.
 	for _, key := range node.ChildrenKeys() {
 		child := node.Child(key)
 		if child == nil {
@@ -214,6 +224,14 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 // If the path does not correspond to an object, returns an error.
 // If path is empty (or `nil`), returns a copy of the current Config object.
 func (c *Config) Slice(path KeyPath) (Config, error) {
+	if c.root == nil {
+		if len(path) == 0 {
+			return newConfig(nil), nil
+		}
+
+		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
+	}
+
 	if len(path) == 0 {
 		return newConfig(c.root), nil
 	}
@@ -247,40 +265,114 @@ type MutableConfig struct {
 
 	// mu provides synchronization for thread-safe configuration changes.
 	mu sync.RWMutex
+	// validator validates configuration changes (Set/Merge/Update).
+	validator validator.Validator
 }
 
 // Set sets or overwrites a value at the specified path.
 // The key's metadata must be updated: Source becomes 'ModifiedSource', and Revision is incremented.
-func (mc *MutableConfig) Set(_ KeyPath, _ any) error {
+func (mc *MutableConfig) Set(path KeyPath, value any) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	//nolint:godox
-	// TODO: not implemented.
+	mc.root.Set(path, value)
+
+	if mc.validator != nil {
+		validationErrs := mc.validator.Validate(mc.root)
+		if len(validationErrs) > 0 {
+			node := mc.root.Get(path)
+			if node != nil {
+				node.Value = nil
+				// TODO: properly revert to previous state (should be implemented in TNTP-5724).
+			}
+
+			return &validationErrs[0]
+		}
+	}
+
+	node := mc.root.Get(path)
+	if node != nil {
+		node.Source = "modified"
+		// TODO: increment revision (should be implemented in TNTP-5724).
+	}
+
 	return nil
 }
 
 // Merge merges two configurations so that all values from the new configuration
 // are added or override similar values in the current one.
 // An error may occur if the new values do not conform to the current schema.
-func (mc *MutableConfig) Merge(_ *Config) error {
+func (mc *MutableConfig) Merge(other *Config) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	//nolint:godox
-	// TODO: not implemented.
+	ctx := context.Background()
+
+	ch, err := other.Walk(ctx, nil, -1)
+	if err != nil {
+		return err
+	}
+
+	for val := range ch {
+		path := val.Meta().Key
+
+		var dest any
+
+		err := val.Get(&dest)
+		if err != nil {
+			return fmt.Errorf("failed to get value at path %s: %w", path, err)
+		}
+
+		mc.root.Set(path, dest)
+	}
+
+	if mc.validator != nil {
+		validationErrs := mc.validator.Validate(mc.root)
+		if len(validationErrs) > 0 {
+			return &validationErrs[0]
+		}
+	}
+
 	return nil
 }
 
 // Update merges two configurations, but applies only those values that already exist
 // in the current config. Everything else is ignored.
 // An error may occur if the new values do not match the type of the current value according to the schema.
-func (mc *MutableConfig) Update(_ *Config) error {
+func (mc *MutableConfig) Update(other *Config) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	//nolint:godox
-	// TODO: not implemented.
+	ctx := context.Background()
+
+	ch, err := other.Walk(ctx, nil, -1)
+	if err != nil {
+		return err
+	}
+
+	for val := range ch {
+		keyPath := val.Meta().Key
+		if mc.root.Get(keyPath) == nil {
+			continue
+		}
+
+		var dest any
+
+		err := val.Get(&dest)
+		if err != nil {
+			return fmt.Errorf("failed to get value at path %s: %w", keyPath, err)
+		}
+
+		mc.root.Set(keyPath, dest)
+	}
+
+	if mc.validator != nil {
+		validationErrs := mc.validator.Validate(mc.root)
+		if len(validationErrs) > 0 {
+			return &validationErrs[0]
+		}
+	}
+
 	return nil
 }
 
@@ -290,6 +382,6 @@ func (mc *MutableConfig) Delete(_ KeyPath) bool {
 	defer mc.mu.Unlock()
 
 	//nolint:godox
-	// TODO: not implemented.
+	// TODO: not implemented (should be implemented in TNTP-5724).
 	return false
 }

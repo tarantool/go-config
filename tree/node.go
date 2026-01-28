@@ -21,6 +21,9 @@ type Node struct {
 	// Revision is a version identifier for the node (e.g., commit hash, timestamp).
 	Revision string
 
+	// Range indicates the position in source file where this node was defined.
+	Range Range
+
 	// orderSet indicates whether the order of children has been set by a higher-priority ordered collector.
 	orderSet bool
 
@@ -34,6 +37,7 @@ func New() *Node {
 		Value:    nil,
 		Source:   "",
 		Revision: "",
+		Range:    Range{Start: Position{Line: 0, Column: 0}, End: Position{Line: 0, Column: 0}},
 
 		children: nil,
 		orderSet: false,
