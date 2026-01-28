@@ -10,6 +10,10 @@ var (
 	ErrKeyNotFound = errors.New("key not found")
 	// ErrPathNotFound is returned when a configuration path is not found.
 	ErrPathNotFound = errors.New("path not found")
+	// ErrValidationFailed is returned when configuration validation fails.
+	ErrValidationFailed = errors.New("validation failed")
+	// ErrSchemaInvalid is returned when schema parsing fails.
+	ErrSchemaInvalid = errors.New("schema invalid")
 )
 
 // CollectorError wraps an error that occurred while processing a collector,

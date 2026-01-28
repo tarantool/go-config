@@ -107,6 +107,13 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 		flattenYamlIntoTree(node, *yamlNode.Alias, prefix)
 	case yaml.ScalarNode:
 		node.Set(prefix, yamlNode.Value)
+
+		if n := node.Get(prefix); n != nil {
+			n.Range = tree.Range{
+				Start: tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
+				End:   tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
+			}
+		}
 	default:
 	}
 }
