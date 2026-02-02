@@ -2,52 +2,18 @@ credentials:
   users:
     client:
       password: 'secret'
-      roles: [super]
+      roles: [super, puper, paratrooper]
     peer:
       password: peering
       roles: ['replication']
       privileges:
       - permissions: ['execute']
         lua_call: ['box.info']
-    storage:
-      password: 'secret'
-      roles: [sharding]
-    tcf-replicator:
-      password: SuPPerSECreT_PAssw0rd
-      roles: [super]
-    tcf-dml:
-      password: SuPPerSECreT_PAssw0rd2
-      roles: [super, puper, paratrooper]
-
-iproto:
-  advertise:
-    peer:
-      login: peer
-    sharding:
-      login: storage
 
 sharding:
   bucket_count: 3000
 
 roles_cfg:
-  roles.tcf-worker:
-    cluster_1: cluster1
-    cluster_2: cluster2
-    initial_status: active
-
-    dml_users: [ tcf-dml ]
-
-    replication_user: tcf-replicator
-    replication_password: SuPPerSECreT_PAssw0rd
-
-    status_ttl: 4
-    enable_system_check: true
-
-  roles.tcf-coordinator:
-    failover_timeout: 20
-    health_check_delay: 2
-    max_suspect_counts: 3
-
   roles.metrics-export:
     http:
       - endpoints:

@@ -2,7 +2,7 @@ package collectors_test
 
 import (
 	"context"
-	"log"
+	_ "embed"
 	"os"
 	"strings"
 	"testing"
@@ -14,119 +14,60 @@ import (
 	"github.com/tarantool/go-config/collectors"
 )
 
-const configYaml = `
-credentials:
-  users:
-    client:
-      password: 'secret'
-      roles: [super]
-    peer:
-      password: peering
-      roles: ['replication']
-      privileges:
-      - permissions: ['execute']
-        lua_call: ['box.info']
-    storage:
-      password: 'secret'
-      roles: [sharding]
-    tcf-replicator:
-      password: SuPPerSECreT_PAssw0rd
-      roles: [super]
-    tcf-dml:
-      password: SuPPerSECreT_PAssw0rd2
-      roles: [super, puper, paratrooper]
+//go:embed testdata/config.yaml
+var configYaml string
 
-iproto:
-  advertise:
-    peer:
-      login: peer
-    sharding:
-      login: storage
-
-sharding:
-  bucket_count: 3000
-
-roles_cfg:
-  roles.tcf-worker:
-    cluster_1: cluster1
-    cluster_2: cluster2
-    initial_status: active
-
-    dml_users: [ tcf-dml ]
-
-    replication_user: tcf-replicator
-    replication_password: SuPPerSECreT_PAssw0rd
-
-    status_ttl: 4
-    enable_system_check: true
-
-  roles.tcf-coordinator:
-    failover_timeout: 20
-    health_check_delay: 2
-    max_suspect_counts: 3
-
-  roles.metrics-export:
-    http:
-      - endpoints:
-          - format: prometheus
-            path: /metrics
-        server: default
-
-storage:
-  provider: etcd
-  etcd:
-    prefix: /tcm
-    endpoints: &etcd_ends
-      - http://localhost:2379
-
-initial-settings:
-  clusters:
-    - name: default-cluster
-      id: 00000000-0000-0000-0000-000000000000
-      storage-connection:
-        provider: etcd
-        etcd-connection:
-          prefix: /single
-          endpoints: *etcd_ends
-`
-
-func TestNewYaml(t *testing.T) {
+func TestNewYamlBuilder(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewYamlCollector(os.Stdin)
-	must.NotNil(t, fc)
-	test.Eq(t, "yaml", fc.Name())
-	test.Eq(t, config.UnknownSource, fc.Source())
-	test.Eq(t, "", fc.Revision())
-	test.True(t, fc.KeepOrder())
+	fileCollector, err := collectors.NewYamlCollectorBuilder(os.Stdin).Build()
+	must.NotNil(t, fileCollector)
+	must.Nil(t, err)
+
+	test.Eq(t, "yaml", fileCollector.Name())
+	test.Eq(t, config.UnknownSource, fileCollector.Source())
+	test.Eq(t, "", fileCollector.Revision())
+	test.False(t, fileCollector.KeepOrder())
 }
 
-func TestYaml_WithName(t *testing.T) {
+func TestYamlBuilder_SetName(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewYamlCollector(os.Stdin).WithName("custom")
+	fc, err := collectors.NewYamlCollectorBuilder(os.Stdin).SetName("custom").Build()
+	must.NotNil(t, fc)
+	must.Nil(t, err)
+
 	test.Eq(t, "custom", fc.Name())
 }
 
-func TestYaml_WithSourceType(t *testing.T) {
+func TestYamlBuilder_SetSourceType(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewYamlCollector(os.Stdin).WithSourceType(config.FileSource)
+	fc, err := collectors.NewYamlCollectorBuilder(os.Stdin).SetSourceType(config.FileSource).Build()
+	must.NotNil(t, fc)
+	must.Nil(t, err)
+
 	test.Eq(t, config.FileSource, fc.Source())
 }
 
-func TestYaml_WithRevision(t *testing.T) {
+func TestYamlBuilder_SetRevision(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewYamlCollector(os.Stdin).WithRevision("v1.0.0")
+	fc, err := collectors.NewYamlCollectorBuilder(os.Stdin).SetRevision("v1.0.0").Build()
+	must.NotNil(t, fc)
+	must.Nil(t, err)
+
 	test.Eq(t, "v1.0.0", fc.Revision())
 }
 
-func TestYaml_WithKeepOrder(t *testing.T) {
+func TestYamlBuilder_SetKeepOrder(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewYamlCollector(os.Stdin).WithKeepOrder(false)
-	test.False(t, fc.KeepOrder())
+	fc, err := collectors.NewYamlCollectorBuilder(os.Stdin).SetKeepOrder(true).Build()
+	must.NotNil(t, fc)
+	must.Nil(t, err)
+
+	test.True(t, fc.KeepOrder())
 }
 
 func TestYaml_Read_Basic(t *testing.T) {
@@ -136,12 +77,13 @@ func TestYaml_Read_Basic(t *testing.T) {
 
 	reader := strings.NewReader(configYaml)
 
-	fc := collectors.NewYamlCollector(reader)
+	fc, err := collectors.NewYamlCollectorBuilder(reader).Build()
 	must.NotNil(t, fc)
+	must.Nil(t, err)
 
 	ch := fc.Read(ctx)
 
-	values := make([]config.Value, 0, 512)
+	values := make([]config.Value, 0, 32)
 	for val := range ch {
 		values = append(values, val)
 	}
@@ -155,12 +97,23 @@ func TestYaml_Read_Basic(t *testing.T) {
 		err := val.Get(&dest)
 		must.NoError(t, err)
 
-		// Debug print.
-		log.Println(val.Meta().Key, dest)
-
 		length++
 	}
 
-	must.Eq(t, length, 39)
 	must.Len(t, length, values)
+
+	var dest any
+
+	must.Eq(t, values[3].Meta().Key.String(), "credentials/users/client/roles/2")
+
+	err = values[3].Get(&dest)
+	must.NoError(t, err)
+	must.Eq(t, dest, "paratrooper")
+
+	must.Eq(t, values[19].Meta().Key.String(),
+		"initial-settings/clusters/0/storage-connection/etcd-connection/endpoints/0")
+
+	err = values[19].Get(&dest)
+	must.NoError(t, err)
+	must.Eq(t, dest, "http://localhost:2379")
 }

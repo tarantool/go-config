@@ -2,11 +2,12 @@ package collectors
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 
 	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/internal/tree"
+	"github.com/tarantool/go-config/tree"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -19,79 +20,38 @@ type YamlCollector struct {
 	data       []byte
 }
 
-// NewYamlCollector creates a Yaml collector with the given io.Reader.
-// The source type defaults to config.UnknownSource.
-func NewYamlCollector(reader io.Reader) *YamlCollector {
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil
-	}
-
-	return &YamlCollector{
-		name:       "yaml",
-		sourceType: config.UnknownSource,
-		revision:   "",
-		keepOrder:  true,
-		data:       data,
-	}
-}
-
-// WithName sets a custom name for the collector.
-func (yc *YamlCollector) WithName(name string) *YamlCollector {
-	yc.name = name
-	return yc
-}
-
-// WithSourceType sets the source type for the collector.
-func (yc *YamlCollector) WithSourceType(source config.SourceType) *YamlCollector {
-	yc.sourceType = source
-	return yc
-}
-
-// WithRevision sets the revision for the collector.
-func (yc *YamlCollector) WithRevision(rev config.RevisionType) *YamlCollector {
-	yc.revision = rev
-	return yc
-}
-
-// WithKeepOrder sets whether the collector preserves key order.
-func (yc *YamlCollector) WithKeepOrder(keep bool) *YamlCollector {
-	yc.keepOrder = keep
-	return yc
-}
-
 // Name implements the Collector interface.
-func (yc *YamlCollector) Name() string {
-	return yc.name
+func (y *YamlCollector) Name() string {
+	return y.name
 }
 
 // Source implements the Collector interface.
-func (yc *YamlCollector) Source() config.SourceType {
-	return yc.sourceType
+func (y *YamlCollector) Source() config.SourceType {
+	return y.sourceType
 }
 
 // Revision implements the Collector interface.
-func (yc *YamlCollector) Revision() config.RevisionType {
-	return yc.revision
+func (y *YamlCollector) Revision() config.RevisionType {
+	return y.revision
 }
 
 // KeepOrder implements the Collector interface.
-func (yc *YamlCollector) KeepOrder() bool {
-	return yc.keepOrder
+func (y *YamlCollector) KeepOrder() bool {
+	return y.keepOrder
 }
 
 // Read implements the Collector interface.
-func (yc *YamlCollector) Read(ctx context.Context) <-chan config.Value {
-	valueCh := make(chan config.Value)
+func (y *YamlCollector) Read(ctx context.Context) <-chan config.Value {
+	channel := make(chan config.Value)
 
 	go func() {
-		defer close(valueCh)
+		defer close(channel)
 
 		var err error
 
 		var node yaml.Node
 
-		err = yaml.Unmarshal(yc.data, &node)
+		err = yaml.Unmarshal(y.data, &node)
 		if err != nil {
 			return
 		}
@@ -103,10 +63,72 @@ func (yc *YamlCollector) Read(ctx context.Context) <-chan config.Value {
 
 		// Walk the tree and send leaf values.
 		// For simplicity, we traverse recursively.
-		walkTree(ctx, root, config.NewKeyPath(""), valueCh)
+		walkTree(ctx, root, config.NewKeyPath(""), channel)
 	}()
 
-	return valueCh
+	return channel
+}
+
+// YamlCollectorBuilder represent Builder object.
+type YamlCollectorBuilder struct {
+	reader     io.Reader
+	name       string
+	sourceType config.SourceType
+	revision   config.RevisionType
+	keepOrder  bool
+	data       []byte
+}
+
+// NewYamlCollectorBuilder returns new YamlCollectorBuilder object.
+func NewYamlCollectorBuilder(reader io.Reader) YamlCollectorBuilder {
+	return YamlCollectorBuilder{
+		reader:     reader,
+		name:       "yaml",
+		sourceType: config.UnknownSource,
+		revision:   "",
+		keepOrder:  false,
+		data:       nil,
+	}
+}
+
+// SetName sets a custom name for the collector.
+func (y YamlCollectorBuilder) SetName(name string) YamlCollectorBuilder {
+	y.name = name
+	return y
+}
+
+// SetSourceType sets the source type for the collector.
+func (y YamlCollectorBuilder) SetSourceType(source config.SourceType) YamlCollectorBuilder {
+	y.sourceType = source
+	return y
+}
+
+// SetRevision sets the revision for the collector.
+func (y YamlCollectorBuilder) SetRevision(rev config.RevisionType) YamlCollectorBuilder {
+	y.revision = rev
+	return y
+}
+
+// SetKeepOrder sets whether the collector preserves key order.
+func (y YamlCollectorBuilder) SetKeepOrder(keep bool) YamlCollectorBuilder {
+	y.keepOrder = keep
+	return y
+}
+
+// Build create YamlCollector.
+func (y YamlCollectorBuilder) Build() (*YamlCollector, error) {
+	data, err := io.ReadAll(y.reader)
+	if err != nil {
+		return nil, fmt.Errorf("%w", errReaderError)
+	}
+
+	return &YamlCollector{
+		name:       y.name,
+		sourceType: y.sourceType,
+		revision:   y.revision,
+		keepOrder:  y.keepOrder,
+		data:       data,
+	}, nil
 }
 
 func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,

@@ -2,6 +2,7 @@ package collectors
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -14,71 +15,90 @@ type FileCollector struct {
 	yc   YamlCollector
 }
 
-// NewFileCollector creates new FileCollector from the given file name.
-// The source type defaults to config.FileSource.
-func NewFileCollector(file string) *FileCollector {
-	data, err := os.ReadFile(filepath.Clean(file))
-	if err != nil {
-		return nil
-	}
+// Name implements the Collector interface.
+func (f *FileCollector) Name() string {
+	return f.yc.name
+}
 
-	return &FileCollector{
+// Source implements the Collector interface.
+func (f *FileCollector) Source() config.SourceType {
+	return f.yc.sourceType
+}
+
+// Revision implements the Collector interface.
+func (f *FileCollector) Revision() config.RevisionType {
+	return f.yc.revision
+}
+
+// KeepOrder implements the Collector interface.
+func (f *FileCollector) KeepOrder() bool {
+	return f.yc.keepOrder
+}
+
+// Read implements the Collector interface.
+func (f *FileCollector) Read(ctx context.Context) <-chan config.Value {
+	return f.yc.Read(ctx)
+}
+
+// FileCollectorBuilder represent Builder object.
+type FileCollectorBuilder struct {
+	file string
+	yc   YamlCollector
+}
+
+// NewFileCollectorBuilder returns new FileCollectorBuilder object.
+func NewFileCollectorBuilder(file string) FileCollectorBuilder {
+	return FileCollectorBuilder{
 		file: file,
 		yc: YamlCollector{
 			name:       "file",
 			sourceType: config.FileSource,
 			revision:   "",
 			keepOrder:  true,
-			data:       data,
+			data:       nil,
 		},
 	}
 }
 
-// WithName sets a custom name for the collector.
-func (fc *FileCollector) WithName(name string) *FileCollector {
-	fc.yc.name = name
-	return fc
+// SetName sets a custom name for the collector.
+func (fcb FileCollectorBuilder) SetName(name string) FileCollectorBuilder {
+	fcb.yc.name = name
+	return fcb
 }
 
-// WithSourceType sets the source type for the collector.
-func (fc *FileCollector) WithSourceType(source config.SourceType) *FileCollector {
-	fc.yc.sourceType = source
-	return fc
+// SetSourceType sets the source type for the collector.
+func (fcb FileCollectorBuilder) SetSourceType(source config.SourceType) FileCollectorBuilder {
+	fcb.yc.sourceType = source
+	return fcb
 }
 
-// WithRevision sets the revision for the collector.
-func (fc *FileCollector) WithRevision(rev config.RevisionType) *FileCollector {
-	fc.yc.revision = rev
-	return fc
+// SetRevision sets the revision for the collector.
+func (fcb FileCollectorBuilder) SetRevision(rev config.RevisionType) FileCollectorBuilder {
+	fcb.yc.revision = rev
+	return fcb
 }
 
-// WithKeepOrder sets whether the collector preserves key order.
-func (fc *FileCollector) WithKeepOrder(keep bool) *FileCollector {
-	fc.yc.keepOrder = keep
-	return fc
+// SetKeepOrder sets whether the collector preserves key order.
+func (fcb FileCollectorBuilder) SetKeepOrder(keep bool) FileCollectorBuilder {
+	fcb.yc.keepOrder = keep
+	return fcb
 }
 
-// Name implements the Collector interface.
-func (fc *FileCollector) Name() string {
-	return fc.yc.name
-}
+// Build creates new FileCollector from the given file name.
+func (fcb FileCollectorBuilder) Build() (*FileCollector, error) {
+	data, err := os.ReadFile(filepath.Clean(fcb.file))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", errFileError, fcb.file)
+	}
 
-// Source implements the Collector interface.
-func (fc *FileCollector) Source() config.SourceType {
-	return fc.yc.sourceType
-}
-
-// Revision implements the Collector interface.
-func (fc *FileCollector) Revision() config.RevisionType {
-	return fc.yc.revision
-}
-
-// KeepOrder implements the Collector interface.
-func (fc *FileCollector) KeepOrder() bool {
-	return fc.yc.keepOrder
-}
-
-// Read implements the Collector interface.
-func (fc *FileCollector) Read(ctx context.Context) <-chan config.Value {
-	return fc.yc.Read(ctx)
+	return &FileCollector{
+		file: fcb.file,
+		yc: YamlCollector{
+			name:       fcb.yc.name,
+			sourceType: fcb.yc.sourceType,
+			revision:   fcb.yc.revision,
+			keepOrder:  fcb.yc.keepOrder,
+			data:       data,
+		},
+	}, nil
 }

@@ -2,61 +2,66 @@ package collectors_test
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
-
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
 )
 
 const configFile = "testdata/config.yaml"
 
-func TestNewFile(t *testing.T) {
+func TestNewFileBuilder(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector(configFile)
-	must.NotNil(t, fc)
-	test.Eq(t, "file", fc.Name())
-	test.Eq(t, config.FileSource, fc.Source())
-	test.Eq(t, "", fc.Revision())
-	test.True(t, fc.KeepOrder())
+	fileCollector, err := collectors.NewFileCollectorBuilder(configFile).Build()
+	must.NotNil(t, fileCollector)
+	must.Nil(t, err)
+
+	test.Eq(t, "file", fileCollector.Name())
+	test.Eq(t, config.FileSource, fileCollector.Source())
+	test.Eq(t, "", fileCollector.Revision())
+	test.True(t, fileCollector.KeepOrder())
 }
 
-func TestNewFile_Unexist(t *testing.T) {
+func TestFile_Unexist(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector("unexist.file")
+	fc, err := collectors.NewFileCollectorBuilder("unexist.file").Build()
 	must.Nil(t, fc)
+	must.NotNil(t, err)
 }
 
-func TestFile_WithName(t *testing.T) {
+func TestFile_SetName(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector(configFile).WithName("custom")
+	fc, err := collectors.NewFileCollectorBuilder(configFile).SetName("custom").Build()
+	must.Nil(t, err)
 	test.Eq(t, "custom", fc.Name())
 }
 
-func TestFile_WithSourceType(t *testing.T) {
+func TestFile_SetSourceType(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector(configFile).WithSourceType(config.FileSource)
-	test.Eq(t, config.FileSource, fc.Source())
+	fc, err := collectors.NewFileCollectorBuilder(configFile).SetSourceType(config.UnknownSource).Build()
+	must.Nil(t, err)
+	test.Eq(t, config.UnknownSource, fc.Source())
 }
 
-func TestFile_WithRevision(t *testing.T) {
+func TestFile_SetRevision(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector(configFile).WithRevision("v1.0.0")
+	fc, err := collectors.NewFileCollectorBuilder(configFile).SetRevision("v1.0.0").Build()
+	must.Nil(t, err)
 	test.Eq(t, "v1.0.0", fc.Revision())
 }
 
-func TestFile_WithKeepOrder(t *testing.T) {
+func TestFile_SetKeepOrder(t *testing.T) {
 	t.Parallel()
 
-	fc := collectors.NewFileCollector(configFile).WithKeepOrder(false)
+	fc, err := collectors.NewFileCollectorBuilder(configFile).SetKeepOrder(false).Build()
+	must.Nil(t, err)
 	test.False(t, fc.KeepOrder())
 }
 
@@ -65,12 +70,13 @@ func TestFile_Read_Basic(t *testing.T) {
 
 	ctx := context.Background()
 
-	fc := collectors.NewFileCollector(configFile)
+	fc, err := collectors.NewFileCollectorBuilder(configFile).Build()
 	must.NotNil(t, fc)
+	must.Nil(t, err)
 
 	ch := fc.Read(ctx)
 
-	values := make([]config.Value, 0, 512)
+	values := make([]config.Value, 0, 32)
 	for val := range ch {
 		values = append(values, val)
 	}
@@ -84,12 +90,23 @@ func TestFile_Read_Basic(t *testing.T) {
 		err := val.Get(&dest)
 		must.NoError(t, err)
 
-		// Debug print.
-		log.Println(val.Meta().Key, dest)
-
 		length++
 	}
 
-	must.Eq(t, length, 39)
 	must.Len(t, length, values)
+
+	var dest any
+
+	must.Eq(t, values[3].Meta().Key.String(), "credentials/users/client/roles/2")
+
+	err = values[3].Get(&dest)
+	must.NoError(t, err)
+	must.Eq(t, dest, "paratrooper")
+
+	must.Eq(t, values[19].Meta().Key.String(),
+		"initial-settings/clusters/0/storage-connection/etcd-connection/endpoints/0")
+
+	err = values[19].Get(&dest)
+	must.NoError(t, err)
+	must.Eq(t, dest, "http://localhost:2379")
 }
