@@ -3,7 +3,7 @@ package config
 import (
 	"slices"
 
-	"github.com/tarantool/go-config/path"
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/tree"
 )
 
@@ -17,7 +17,7 @@ func (ctx *defaultMergerContext) Collector() Collector {
 	return ctx.collector
 }
 
-func (ctx *defaultMergerContext) RecordOrdering(parent path.KeyPath, child string) {
+func (ctx *defaultMergerContext) RecordOrdering(parent keypath.KeyPath, child string) {
 	if ctx.parentOrders == nil {
 		return
 	}
@@ -40,7 +40,7 @@ func (ctx *defaultMergerContext) ApplyOrdering(root *tree.Node) error {
 		if parentKey == "" {
 			parentNode = root
 		} else {
-			parentNode = root.Get(path.NewKeyPath(parentKey))
+			parentNode = root.Get(keypath.NewKeyPath(parentKey))
 		}
 
 		if parentNode == nil {
@@ -72,7 +72,7 @@ func (d *DefaultMerger) CreateContext(collector Collector) MergerContext {
 }
 
 // MergeValue merges a single value into the tree using the default merging logic.
-func (d *DefaultMerger) MergeValue(ctx MergerContext, root *tree.Node, keyPath path.KeyPath, value any) error {
+func (d *DefaultMerger) MergeValue(ctx MergerContext, root *tree.Node, keyPath keypath.KeyPath, value any) error {
 	col := ctx.Collector()
 	// Use internal mergeValue function.
 	mergeValue(root, keyPath, value, col)

@@ -3,8 +3,8 @@ package tree
 import (
 	"slices"
 
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/omap"
-	"github.com/tarantool/go-config/path"
 )
 
 // Value represents a configuration value.
@@ -103,7 +103,7 @@ func (n *Node) DeleteChild(key string) bool {
 }
 
 // Set sets the value at the given path, creating intermediate nodes as needed.
-func (n *Node) Set(path path.KeyPath, value Value) {
+func (n *Node) Set(path keypath.KeyPath, value Value) {
 	if len(path) == 0 {
 		n.Value = value
 		return
@@ -121,7 +121,7 @@ func (n *Node) Set(path path.KeyPath, value Value) {
 }
 
 // Get returns the node at the given path, or nil if not found.
-func (n *Node) Get(path path.KeyPath) *Node {
+func (n *Node) Get(path keypath.KeyPath) *Node {
 	if len(path) == 0 {
 		return n
 	}
@@ -137,7 +137,7 @@ func (n *Node) Get(path path.KeyPath) *Node {
 }
 
 // GetValue returns the value at the given path, or nil if not found or node is not a leaf.
-func (n *Node) GetValue(path path.KeyPath) Value {
+func (n *Node) GetValue(path keypath.KeyPath) Value {
 	node := n.Get(path)
 	if node == nil || !node.IsLeaf() {
 		return nil

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tarantool/go-config/path"
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/tree"
 )
 
@@ -59,7 +59,7 @@ func MergeCollectorWithMerger(root *tree.Node, col Collector, merger Merger) err
 }
 
 // mergeValue merges a single value into the tree at the specified path.
-func mergeValue(root *tree.Node, keyPath path.KeyPath, value any, col Collector) {
+func mergeValue(root *tree.Node, keyPath keypath.KeyPath, value any, col Collector) {
 	if len(keyPath) == 0 {
 		// Merge at root.
 		mergeNodeValue(root, value, col)
@@ -140,6 +140,7 @@ func mergeMapIntoNode(node *tree.Node, m map[string]any, col Collector) {
 			child = tree.New()
 			node.SetChild(key, child)
 		}
+
 		// Recurse for this child.
 		mergeNodeValue(child, val, col)
 	}

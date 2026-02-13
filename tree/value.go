@@ -8,22 +8,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/path"
 	"github.com/tarantool/go-config/value"
 )
 
 // valueImpl is the internal implementation of the value.Value interface.
 type valueImpl struct {
 	node    *Node
-	keyPath path.KeyPath
+	keyPath keypath.KeyPath
 	source  meta.SourceInfo
 	rev     meta.RevisionType
 }
 
 // NewValue creates a new value.Value from a tree node and its key path.
 // The source information and revision are extracted from the node.
-func NewValue(node *Node, keyPath path.KeyPath) value.Value {
+func NewValue(node *Node, keyPath keypath.KeyPath) value.Value {
 	var source meta.SourceInfo
 	if node.Source != "" {
 		source = meta.SourceInfo{
@@ -49,6 +49,7 @@ func (v *valueImpl) Get(dest any) error {
 	if destVal.Kind() != reflect.Ptr || destVal.IsNil() {
 		return ErrDestinationMustBePointer
 	}
+
 	// Convert the node to a generic value.
 	raw := nodeToValue(v.node)
 	// Decode raw into dest using reflection.
@@ -71,6 +72,7 @@ func nodeToValue(node *Node) any {
 	if node.IsLeaf() {
 		return node.Value
 	}
+
 	// Build map from children.
 	children := node.Children()
 	keys := node.ChildrenKeys()
@@ -91,6 +93,7 @@ func decode(src any, dst reflect.Value) error {
 		dst.Set(reflect.Zero(dst.Type()))
 		return nil
 	}
+
 	// Convert source to reflect.Value.
 	srcVal := reflect.ValueOf(src)
 	// If types are directly assignable, assign.
@@ -98,10 +101,12 @@ func decode(src any, dst reflect.Value) error {
 		dst.Set(srcVal)
 		return nil
 	}
+
 	// Check for time.Duration special case.
 	if dst.Type() == reflect.TypeFor[time.Duration]() {
 		return decodeDuration(src, dst)
 	}
+
 	// Perform type conversion based on destination kind.
 	switch dst.Kind() {
 	case reflect.Bool:
@@ -128,6 +133,7 @@ func decode(src any, dst reflect.Value) error {
 			dst.Set(srcVal)
 			return nil
 		}
+
 		// Otherwise, set as empty interface.
 		dst.Set(srcVal)
 
@@ -246,7 +252,7 @@ func safeUintToInt64(u uint) (int64, error) {
 		return 0, fmt.Errorf("%w: %d", ErrOverflow, u)
 	}
 
-	return int64(u), nil //nolint:gosec // conversion is safe due to the check above.
+	return int64(u), nil
 }
 
 func safeUint64ToInt64(uk uint64) (int64, error) {
@@ -312,6 +318,7 @@ func decodeInt(src any, dst reflect.Value) error {
 	default:
 		return fmt.Errorf("%w: %T", ErrConvertToInt, src)
 	}
+
 	// Check for overflow of the specific destination type.
 	switch dst.Kind() {
 	case reflect.Int8:
@@ -394,6 +401,7 @@ func decodeUint(src any, dst reflect.Value) error {
 	default:
 		return fmt.Errorf("%w: %T", ErrConvertToUint, src)
 	}
+
 	// Overflow check.
 	switch dst.Kind() {
 	case reflect.Uint8:
@@ -449,6 +457,7 @@ func decodeFloat(src any, dst reflect.Value) error {
 	default:
 		return fmt.Errorf("%w: %T", ErrConvertToFloat, src)
 	}
+
 	// Overflow check for float32.
 	if dst.Kind() == reflect.Float32 {
 		// Naive overflow check; not exhaustive.
@@ -509,10 +518,12 @@ func decodeMap(src any, dst reflect.Value) error {
 	if srcVal.Kind() != reflect.Map {
 		return fmt.Errorf("%w: %T", ErrSourceNotMap, src)
 	}
+
 	// Destination map must have string keys (as per configuration keys).
 	if dst.Type().Key().Kind() != reflect.String {
 		return fmt.Errorf("%w: %v", ErrDestinationMapStringKeys, dst.Type().Key())
 	}
+
 	// Create a new map.
 	mapType := dst.Type()
 	newMap := reflect.MakeMapWithSize(mapType, srcVal.Len())
@@ -523,6 +534,7 @@ func decodeMap(src any, dst reflect.Value) error {
 		if key.Kind() != reflect.String {
 			return fmt.Errorf("%w: %v", ErrSourceMapKeyNotString, key.Kind())
 		}
+
 		// Create a new value of the map's element type.
 		elem := reflect.New(mapType.Elem()).Elem()
 
@@ -550,6 +562,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 	if srcVal.Type().Key().Kind() != reflect.String {
 		return ErrSourceMapMustHaveStringKeys
 	}
+
 	// Iterate over struct fields.
 	dstType := dst.Type()
 	for i := range dstType.NumField() {
@@ -558,6 +571,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 		if !field.IsExported() {
 			continue
 		}
+
 		// Get yaml tag.
 		tag := field.Tag.Get("yaml")
 		if tag == "" {
@@ -569,6 +583,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 				tag = tag[:comma]
 			}
 		}
+
 		// Look up key in source map.
 		key := reflect.ValueOf(tag)
 
@@ -577,6 +592,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 			// Field not found; leave zero value.
 			continue
 		}
+
 		// Decode into field.
 		err := decode(val.Interface(), dst.Field(i))
 		if err != nil {
@@ -593,6 +609,7 @@ func decodePtr(src any, dst reflect.Value) error {
 	if dst.IsNil() {
 		dst.Set(reflect.New(dst.Type().Elem()))
 	}
+
 	// Dereference and decode.
 	return decode(src, dst.Elem())
 }
