@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tarantool/go-config/path"
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/tree"
 )
 
@@ -33,7 +33,7 @@ type MergerContext interface {
 	// The child parameter is the key of the child node to record.
 	//
 	// Implementations should store this information and apply it in ApplyOrdering.
-	RecordOrdering(parent path.KeyPath, child string)
+	RecordOrdering(parent keypath.KeyPath, child string)
 
 	// ApplyOrdering applies recorded ordering to the tree.
 	// Called after all values from the collector have been processed.
@@ -98,7 +98,7 @@ type Merger interface {
 	//
 	// The tree is modified in place. Multiple MergeValue calls may update the same
 	// nodes if paths overlap (e.g., "a.b" and "a.c" both create children under "a").
-	MergeValue(ctx MergerContext, root *tree.Node, path path.KeyPath, value any) error
+	MergeValue(ctx MergerContext, root *tree.Node, path keypath.KeyPath, value any) error
 }
 
 // Config provides access to the final configuration data.
@@ -149,6 +149,7 @@ func (c *Config) Stat(path KeyPath) (MetaInfo, bool) {
 	if node == nil {
 		return MetaInfo{Key: nil, Source: SourceInfo{Name: "", Type: UnknownSource}, Revision: ""}, false
 	}
+
 	// Create a temporary value to extract metadata.
 	val := tree.NewValue(node, path)
 
@@ -185,6 +186,7 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 	if depth == 0 {
 		return
 	}
+
 	// If node is leaf, send its value.
 	if node.IsLeaf() {
 		select {
@@ -195,6 +197,7 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 
 		return
 	}
+
 	// Otherwise, recurse into children.
 	for _, key := range node.ChildrenKeys() {
 		child := node.Child(key)
@@ -206,7 +209,7 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 	}
 }
 
-// Slice returns a slice of the original config that corresponds to the specified path.
+// Slice returns a slice of the original config that corresponds to the specified keypath.
 // Used to obtain a sub-configuration as a separate Config object.
 // If the path does not correspond to an object, returns an error.
 // If path is empty (or `nil`), returns a copy of the current Config object.

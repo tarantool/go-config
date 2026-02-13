@@ -5,8 +5,8 @@ import (
 
 	"github.com/shoenig/test"
 
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/path"
 )
 
 func TestSourceType_ConstantsExist(t *testing.T) {
@@ -44,7 +44,7 @@ func TestInfo_ZeroValue(t *testing.T) {
 	t.Parallel()
 
 	var info meta.Info
-	test.Eq(t, path.KeyPath(nil), info.Key)
+	test.Eq(t, keypath.KeyPath(nil), info.Key)
 	test.Eq(t, meta.SourceInfo{Name: "", Type: meta.UnknownSource}, info.Source)
 	test.Eq(t, meta.RevisionType(""), info.Revision)
 }
@@ -52,7 +52,7 @@ func TestInfo_ZeroValue(t *testing.T) {
 func TestInfo_WithKey(t *testing.T) {
 	t.Parallel()
 
-	key := path.NewKeyPath("a/b/c")
+	key := keypath.NewKeyPath("a/b/c")
 	info := meta.Info{
 		Key:      key,
 		Source:   meta.SourceInfo{Name: "", Type: meta.UnknownSource},
@@ -91,7 +91,7 @@ func TestInfo_WithRevision(t *testing.T) {
 func TestInfo_FullConstruction(t *testing.T) {
 	t.Parallel()
 
-	key := path.NewKeyPath("server/port")
+	key := keypath.NewKeyPath("server/port")
 	source := meta.SourceInfo{
 		Name: "config.yaml",
 		Type: meta.FileSource,

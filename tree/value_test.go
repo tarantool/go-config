@@ -10,8 +10,8 @@ import (
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
 
+	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/path"
 	"github.com/tarantool/go-config/tree"
 )
 
@@ -25,12 +25,12 @@ func TestValue_Get_Int(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("int"), 42)
+	root.Set(keypath.NewKeyPath("int"), 42)
 
-	node := root.Get(path.NewKeyPath("int"))
+	node := root.Get(keypath.NewKeyPath("int"))
 	must.NotNil(t, node)
 
-	val := tree.NewValue(node, path.NewKeyPath("int"))
+	val := tree.NewValue(node, keypath.NewKeyPath("int"))
 
 	var i int
 
@@ -43,12 +43,12 @@ func TestValue_Get_IntToStringConversion(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("int"), 42)
+	root.Set(keypath.NewKeyPath("int"), 42)
 
-	node := root.Get(path.NewKeyPath("int"))
+	node := root.Get(keypath.NewKeyPath("int"))
 	must.NotNil(t, node)
 
-	val := tree.NewValue(node, path.NewKeyPath("int"))
+	val := tree.NewValue(node, keypath.NewKeyPath("int"))
 
 	var s string
 
@@ -61,12 +61,12 @@ func TestValue_Get_String(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("str"), "hello")
+	root.Set(keypath.NewKeyPath("str"), "hello")
 
-	node := root.Get(path.NewKeyPath("str"))
+	node := root.Get(keypath.NewKeyPath("str"))
 	must.NotNil(t, node)
 
-	val := tree.NewValue(node, path.NewKeyPath("str"))
+	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	var str string
 
@@ -79,12 +79,12 @@ func TestValue_Get_Bool(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("bool"), true)
+	root.Set(keypath.NewKeyPath("bool"), true)
 
-	node := root.Get(path.NewKeyPath("bool"))
+	node := root.Get(keypath.NewKeyPath("bool"))
 	must.NotNil(t, node)
 
-	val := tree.NewValue(node, path.NewKeyPath("bool"))
+	val := tree.NewValue(node, keypath.NewKeyPath("bool"))
 
 	var b bool
 
@@ -97,12 +97,12 @@ func TestValue_Get_Float(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("float"), 3.14)
+	root.Set(keypath.NewKeyPath("float"), 3.14)
 
-	node := root.Get(path.NewKeyPath("float"))
+	node := root.Get(keypath.NewKeyPath("float"))
 	must.NotNil(t, node)
 
-	val := tree.NewValue(node, path.NewKeyPath("float"))
+	val := tree.NewValue(node, keypath.NewKeyPath("float"))
 
 	var f float64
 
@@ -115,10 +115,10 @@ func TestValue_Get_BoolFromString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("boolstr"), "true")
+	root.Set(keypath.NewKeyPath("boolstr"), "true")
 
-	node := root.Get(path.NewKeyPath("boolstr"))
-	val := tree.NewValue(node, path.NewKeyPath("boolstr"))
+	node := root.Get(keypath.NewKeyPath("boolstr"))
+	val := tree.NewValue(node, keypath.NewKeyPath("boolstr"))
 
 	var b bool
 
@@ -131,10 +131,10 @@ func TestValue_Get_BoolFromBool(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("booltrue"), true)
+	root.Set(keypath.NewKeyPath("booltrue"), true)
 
-	node := root.Get(path.NewKeyPath("booltrue"))
-	val := tree.NewValue(node, path.NewKeyPath("booltrue"))
+	node := root.Get(keypath.NewKeyPath("booltrue"))
+	val := tree.NewValue(node, keypath.NewKeyPath("booltrue"))
 
 	var got bool
 
@@ -142,10 +142,10 @@ func TestValue_Get_BoolFromBool(t *testing.T) {
 	must.NoError(t, err)
 	test.True(t, got)
 
-	root.Set(path.NewKeyPath("boolfalse"), false)
+	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
-	node = root.Get(path.NewKeyPath("boolfalse"))
-	val = tree.NewValue(node, path.NewKeyPath("boolfalse"))
+	node = root.Get(keypath.NewKeyPath("boolfalse"))
+	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
 	must.NoError(t, err)
@@ -156,10 +156,10 @@ func TestValue_Get_IntFromString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("intstr"), "123")
+	root.Set(keypath.NewKeyPath("intstr"), "123")
 
-	node := root.Get(path.NewKeyPath("intstr"))
-	val := tree.NewValue(node, path.NewKeyPath("intstr"))
+	node := root.Get(keypath.NewKeyPath("intstr"))
+	val := tree.NewValue(node, keypath.NewKeyPath("intstr"))
 
 	var i int
 
@@ -172,10 +172,10 @@ func TestValue_Get_FloatFromString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("floatstr"), "45.6")
+	root.Set(keypath.NewKeyPath("floatstr"), "45.6")
 
-	node := root.Get(path.NewKeyPath("floatstr"))
-	val := tree.NewValue(node, path.NewKeyPath("floatstr"))
+	node := root.Get(keypath.NewKeyPath("floatstr"))
+	val := tree.NewValue(node, keypath.NewKeyPath("floatstr"))
 
 	var f float64
 
@@ -188,10 +188,10 @@ func TestValue_Get_DurationFromString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("duration"), "5s")
+	root.Set(keypath.NewKeyPath("duration"), "5s")
 
-	node := root.Get(path.NewKeyPath("duration"))
-	val := tree.NewValue(node, path.NewKeyPath("duration"))
+	node := root.Get(keypath.NewKeyPath("duration"))
+	val := tree.NewValue(node, keypath.NewKeyPath("duration"))
 
 	var d time.Duration
 
@@ -205,11 +205,11 @@ func TestValue_Get_Slice(t *testing.T) {
 
 	root := tree.New()
 
-	root.Set(path.NewKeyPath("numbers"), []any{1, 2, 3})
-	root.Set(path.NewKeyPath("strings"), []any{"a", "b", "c"})
+	root.Set(keypath.NewKeyPath("numbers"), []any{1, 2, 3})
+	root.Set(keypath.NewKeyPath("strings"), []any{"a", "b", "c"})
 
-	node := root.Get(path.NewKeyPath("numbers"))
-	val := tree.NewValue(node, path.NewKeyPath("numbers"))
+	node := root.Get(keypath.NewKeyPath("numbers"))
+	val := tree.NewValue(node, keypath.NewKeyPath("numbers"))
 
 	var nums []int
 
@@ -217,8 +217,8 @@ func TestValue_Get_Slice(t *testing.T) {
 	must.NoError(t, err)
 	test.Eq(t, []int{1, 2, 3}, nums)
 
-	node = root.Get(path.NewKeyPath("strings"))
-	val = tree.NewValue(node, path.NewKeyPath("strings"))
+	node = root.Get(keypath.NewKeyPath("strings"))
+	val = tree.NewValue(node, keypath.NewKeyPath("strings"))
 
 	var strs []string
 
@@ -232,12 +232,12 @@ func TestValue_Get_Map(t *testing.T) {
 
 	root := tree.New()
 
-	root.Set(path.NewKeyPath("person/name"), "Alice")
-	root.Set(path.NewKeyPath("person/age"), 30)
-	root.Set(path.NewKeyPath("person/active"), true)
+	root.Set(keypath.NewKeyPath("person/name"), "Alice")
+	root.Set(keypath.NewKeyPath("person/age"), 30)
+	root.Set(keypath.NewKeyPath("person/active"), true)
 
-	node := root.Get(path.NewKeyPath("person"))
-	val := tree.NewValue(node, path.NewKeyPath("person"))
+	node := root.Get(keypath.NewKeyPath("person"))
+	val := tree.NewValue(node, keypath.NewKeyPath("person"))
 
 	var m map[string]any
 
@@ -259,13 +259,13 @@ func TestValue_Get_Struct(t *testing.T) {
 	}
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("person/name"), "Bob")
-	root.Set(path.NewKeyPath("person/age"), 25)
-	root.Set(path.NewKeyPath("person/active"), false)
-	root.Set(path.NewKeyPath("person/Extra"), "something")
+	root.Set(keypath.NewKeyPath("person/name"), "Bob")
+	root.Set(keypath.NewKeyPath("person/age"), 25)
+	root.Set(keypath.NewKeyPath("person/active"), false)
+	root.Set(keypath.NewKeyPath("person/Extra"), "something")
 
-	node := root.Get(path.NewKeyPath("person"))
-	val := tree.NewValue(node, path.NewKeyPath("person"))
+	node := root.Get(keypath.NewKeyPath("person"))
+	val := tree.NewValue(node, keypath.NewKeyPath("person"))
 
 	var person Person
 
@@ -291,12 +291,12 @@ func TestValue_Get_NestedStruct(t *testing.T) {
 	}
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("user/name"), "Charlie")
-	root.Set(path.NewKeyPath("user/address/city"), "Moscow")
-	root.Set(path.NewKeyPath("user/address/zip"), 123456)
+	root.Set(keypath.NewKeyPath("user/name"), "Charlie")
+	root.Set(keypath.NewKeyPath("user/address/city"), "Moscow")
+	root.Set(keypath.NewKeyPath("user/address/zip"), 123456)
 
-	node := root.Get(path.NewKeyPath("user"))
-	val := tree.NewValue(node, path.NewKeyPath("user"))
+	node := root.Get(keypath.NewKeyPath("user"))
+	val := tree.NewValue(node, keypath.NewKeyPath("user"))
 
 	var user User
 
@@ -311,10 +311,10 @@ func TestValue_Get_Pointer(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("value"), "pointer test")
+	root.Set(keypath.NewKeyPath("value"), "pointer test")
 
-	node := root.Get(path.NewKeyPath("value"))
-	val := tree.NewValue(node, path.NewKeyPath("value"))
+	node := root.Get(keypath.NewKeyPath("value"))
+	val := tree.NewValue(node, keypath.NewKeyPath("value"))
 
 	var ptr *string
 
@@ -328,10 +328,10 @@ func TestValue_Get_NonPointerError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("str"), "hello")
+	root.Set(keypath.NewKeyPath("str"), "hello")
 
-	node := root.Get(path.NewKeyPath("str"))
-	val := tree.NewValue(node, path.NewKeyPath("str"))
+	node := root.Get(keypath.NewKeyPath("str"))
+	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	var s string
 
@@ -344,10 +344,10 @@ func TestValue_Get_NilPointerError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("str"), "hello")
+	root.Set(keypath.NewKeyPath("str"), "hello")
 
-	node := root.Get(path.NewKeyPath("str"))
-	val := tree.NewValue(node, path.NewKeyPath("str"))
+	node := root.Get(keypath.NewKeyPath("str"))
+	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	err := val.Get(nil)
 	must.Error(t, err)
@@ -358,10 +358,10 @@ func TestValue_Get_TypeMismatchError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("str"), "hello")
+	root.Set(keypath.NewKeyPath("str"), "hello")
 
-	node := root.Get(path.NewKeyPath("str"))
-	val := tree.NewValue(node, path.NewKeyPath("str"))
+	node := root.Get(keypath.NewKeyPath("str"))
+	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	var i int
 
@@ -374,10 +374,10 @@ func TestValue_Get_IntFromInvalidString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notint"), "abc")
+	root.Set(keypath.NewKeyPath("notint"), "abc")
 
-	node := root.Get(path.NewKeyPath("notint"))
-	val := tree.NewValue(node, path.NewKeyPath("notint"))
+	node := root.Get(keypath.NewKeyPath("notint"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notint"))
 
 	var i int
 
@@ -390,10 +390,10 @@ func TestValue_Get_FloatFromInvalidString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notfloat"), "xyz")
+	root.Set(keypath.NewKeyPath("notfloat"), "xyz")
 
-	node := root.Get(path.NewKeyPath("notfloat"))
-	val := tree.NewValue(node, path.NewKeyPath("notfloat"))
+	node := root.Get(keypath.NewKeyPath("notfloat"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notfloat"))
 
 	var f float64
 
@@ -425,10 +425,10 @@ func TestValue_Get_FloatFromVariousTypes(t *testing.T) {
 			t.Parallel()
 
 			root := tree.New()
-			root.Set(path.NewKeyPath("val"), tt.src)
+			root.Set(keypath.NewKeyPath("val"), tt.src)
 
-			node := root.Get(path.NewKeyPath("val"))
-			val := tree.NewValue(node, path.NewKeyPath("val"))
+			node := root.Get(keypath.NewKeyPath("val"))
+			val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 			var got float64
 
@@ -443,10 +443,10 @@ func TestValue_Get_BoolFromInvalidString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notbool"), "maybe")
+	root.Set(keypath.NewKeyPath("notbool"), "maybe")
 
-	node := root.Get(path.NewKeyPath("notbool"))
-	val := tree.NewValue(node, path.NewKeyPath("notbool"))
+	node := root.Get(keypath.NewKeyPath("notbool"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notbool"))
 
 	var b bool
 
@@ -459,10 +459,10 @@ func TestValue_Get_DurationFromInvalidString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notduration"), "10x")
+	root.Set(keypath.NewKeyPath("notduration"), "10x")
 
-	node := root.Get(path.NewKeyPath("notduration"))
-	val := tree.NewValue(node, path.NewKeyPath("notduration"))
+	node := root.Get(keypath.NewKeyPath("notduration"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notduration"))
 
 	var d time.Duration
 
@@ -475,10 +475,10 @@ func TestValue_Get_UintFromNegativeFloatString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("negfloat"), "-1.5")
+	root.Set(keypath.NewKeyPath("negfloat"), "-1.5")
 
-	node := root.Get(path.NewKeyPath("negfloat"))
-	val := tree.NewValue(node, path.NewKeyPath("negfloat"))
+	node := root.Get(keypath.NewKeyPath("negfloat"))
+	val := tree.NewValue(node, keypath.NewKeyPath("negfloat"))
 
 	var u uint
 
@@ -491,10 +491,10 @@ func TestValue_Get_DurationFromUnsupportedType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notduration"), []any{1, 2})
+	root.Set(keypath.NewKeyPath("notduration"), []any{1, 2})
 
-	node := root.Get(path.NewKeyPath("notduration"))
-	val := tree.NewValue(node, path.NewKeyPath("notduration"))
+	node := root.Get(keypath.NewKeyPath("notduration"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notduration"))
 
 	var dur time.Duration
 
@@ -507,10 +507,10 @@ func TestValue_Get_Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("big"), 1000)
+	root.Set(keypath.NewKeyPath("big"), 1000)
 
-	node := root.Get(path.NewKeyPath("big"))
-	val := tree.NewValue(node, path.NewKeyPath("big"))
+	node := root.Get(keypath.NewKeyPath("big"))
+	val := tree.NewValue(node, keypath.NewKeyPath("big"))
 
 	var u8 uint8
 
@@ -524,10 +524,10 @@ func TestValue_Get_Overflow(t *testing.T) {
 	must.Error(t, err)
 	test.StrContains(t, err.Error(), "overflow")
 
-	root.Set(path.NewKeyPath("huge"), 1e50)
+	root.Set(keypath.NewKeyPath("huge"), 1e50)
 
-	node = root.Get(path.NewKeyPath("huge"))
-	val = tree.NewValue(node, path.NewKeyPath("huge"))
+	node = root.Get(keypath.NewKeyPath("huge"))
+	val = tree.NewValue(node, keypath.NewKeyPath("huge"))
 
 	var f32 float32
 
@@ -540,12 +540,12 @@ func TestValue_Get_MapToStringConversion(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("map/str"), "hello")
-	root.Set(path.NewKeyPath("map/num"), "42")
-	root.Set(path.NewKeyPath("map/bool"), "true")
+	root.Set(keypath.NewKeyPath("map/str"), "hello")
+	root.Set(keypath.NewKeyPath("map/num"), "42")
+	root.Set(keypath.NewKeyPath("map/bool"), "true")
 
-	node := root.Get(path.NewKeyPath("map"))
-	val := tree.NewValue(node, path.NewKeyPath("map"))
+	node := root.Get(keypath.NewKeyPath("map"))
+	val := tree.NewValue(node, keypath.NewKeyPath("map"))
 
 	var m map[string]string
 
@@ -560,12 +560,12 @@ func TestValue_Get_MapToIntConversionError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("map/str"), "hello")
-	root.Set(path.NewKeyPath("map/num"), "42")
-	root.Set(path.NewKeyPath("map/bool"), "true")
+	root.Set(keypath.NewKeyPath("map/str"), "hello")
+	root.Set(keypath.NewKeyPath("map/num"), "42")
+	root.Set(keypath.NewKeyPath("map/bool"), "true")
 
-	node := root.Get(path.NewKeyPath("map"))
-	val := tree.NewValue(node, path.NewKeyPath("map"))
+	node := root.Get(keypath.NewKeyPath("map"))
+	val := tree.NewValue(node, keypath.NewKeyPath("map"))
 
 	var m map[string]int
 
@@ -578,10 +578,10 @@ func TestValue_Get_MapFromSliceError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notmap"), []any{1, 2, 3})
+	root.Set(keypath.NewKeyPath("notmap"), []any{1, 2, 3})
 
-	node := root.Get(path.NewKeyPath("notmap"))
-	val := tree.NewValue(node, path.NewKeyPath("notmap"))
+	node := root.Get(keypath.NewKeyPath("notmap"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notmap"))
 
 	var m map[string]any
 
@@ -594,10 +594,10 @@ func TestValue_Get_MapWithNonStringKeyError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("goodmap/foo"), "bar")
+	root.Set(keypath.NewKeyPath("goodmap/foo"), "bar")
 
-	node := root.Get(path.NewKeyPath("goodmap"))
-	val := tree.NewValue(node, path.NewKeyPath("goodmap"))
+	node := root.Get(keypath.NewKeyPath("goodmap"))
+	val := tree.NewValue(node, keypath.NewKeyPath("goodmap"))
 
 	var badMap map[int]string
 
@@ -610,10 +610,10 @@ func TestValue_Get_Int8ToIntConversion(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), int8(42))
+	root.Set(keypath.NewKeyPath("val"), int8(42))
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var i int
 
@@ -626,10 +626,10 @@ func TestValue_Get_Int16(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val16"), int16(1000))
+	root.Set(keypath.NewKeyPath("val16"), int16(1000))
 
-	node := root.Get(path.NewKeyPath("val16"))
-	val := tree.NewValue(node, path.NewKeyPath("val16"))
+	node := root.Get(keypath.NewKeyPath("val16"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val16"))
 
 	var i16 int16
 
@@ -642,10 +642,10 @@ func TestValue_Get_Int32(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val32"), int32(100000))
+	root.Set(keypath.NewKeyPath("val32"), int32(100000))
 
-	node := root.Get(path.NewKeyPath("val32"))
-	val := tree.NewValue(node, path.NewKeyPath("val32"))
+	node := root.Get(keypath.NewKeyPath("val32"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val32"))
 
 	var i32 int32
 
@@ -658,10 +658,10 @@ func TestValue_Get_Uint8(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("valu8"), uint8(200))
+	root.Set(keypath.NewKeyPath("valu8"), uint8(200))
 
-	node := root.Get(path.NewKeyPath("valu8"))
-	val := tree.NewValue(node, path.NewKeyPath("valu8"))
+	node := root.Get(keypath.NewKeyPath("valu8"))
+	val := tree.NewValue(node, keypath.NewKeyPath("valu8"))
 
 	var u8 uint8
 
@@ -674,10 +674,10 @@ func TestValue_Get_Uint16(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("valu16"), uint16(50000))
+	root.Set(keypath.NewKeyPath("valu16"), uint16(50000))
 
-	node := root.Get(path.NewKeyPath("valu16"))
-	val := tree.NewValue(node, path.NewKeyPath("valu16"))
+	node := root.Get(keypath.NewKeyPath("valu16"))
+	val := tree.NewValue(node, keypath.NewKeyPath("valu16"))
 
 	var u16 uint16
 
@@ -690,10 +690,10 @@ func TestValue_Get_Uint32(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("valu32"), uint32(3000000000))
+	root.Set(keypath.NewKeyPath("valu32"), uint32(3000000000))
 
-	node := root.Get(path.NewKeyPath("valu32"))
-	val := tree.NewValue(node, path.NewKeyPath("valu32"))
+	node := root.Get(keypath.NewKeyPath("valu32"))
+	val := tree.NewValue(node, keypath.NewKeyPath("valu32"))
 
 	var u32 uint32
 
@@ -706,10 +706,10 @@ func TestValue_Get_DurationFromInt64(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("sec"), int64(5))
+	root.Set(keypath.NewKeyPath("sec"), int64(5))
 
-	node := root.Get(path.NewKeyPath("sec"))
-	val := tree.NewValue(node, path.NewKeyPath("sec"))
+	node := root.Get(keypath.NewKeyPath("sec"))
+	val := tree.NewValue(node, keypath.NewKeyPath("sec"))
 
 	var d time.Duration
 
@@ -722,10 +722,10 @@ func TestValue_Get_DurationFromUint64(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("usec"), uint64(5))
+	root.Set(keypath.NewKeyPath("usec"), uint64(5))
 
-	node := root.Get(path.NewKeyPath("usec"))
-	val := tree.NewValue(node, path.NewKeyPath("usec"))
+	node := root.Get(keypath.NewKeyPath("usec"))
+	val := tree.NewValue(node, keypath.NewKeyPath("usec"))
 
 	var d time.Duration
 
@@ -738,10 +738,10 @@ func TestValue_Get_DurationFromFloat(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("floatsec"), 2.5)
+	root.Set(keypath.NewKeyPath("floatsec"), 2.5)
 
-	node := root.Get(path.NewKeyPath("floatsec"))
-	val := tree.NewValue(node, path.NewKeyPath("floatsec"))
+	node := root.Get(keypath.NewKeyPath("floatsec"))
+	val := tree.NewValue(node, keypath.NewKeyPath("floatsec"))
 
 	var d time.Duration
 
@@ -754,10 +754,10 @@ func TestValue_Get_StringFromBytes(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("bytes"), []byte("hello bytes"))
+	root.Set(keypath.NewKeyPath("bytes"), []byte("hello bytes"))
 
-	node := root.Get(path.NewKeyPath("bytes"))
-	val := tree.NewValue(node, path.NewKeyPath("bytes"))
+	node := root.Get(keypath.NewKeyPath("bytes"))
+	val := tree.NewValue(node, keypath.NewKeyPath("bytes"))
 
 	var s string
 
@@ -770,10 +770,10 @@ func TestValue_Get_StringFromStringer(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("stringer"), testStringer{})
+	root.Set(keypath.NewKeyPath("stringer"), testStringer{})
 
-	node := root.Get(path.NewKeyPath("stringer"))
-	val := tree.NewValue(node, path.NewKeyPath("stringer"))
+	node := root.Get(keypath.NewKeyPath("stringer"))
+	val := tree.NewValue(node, keypath.NewKeyPath("stringer"))
 
 	var s string
 
@@ -786,10 +786,10 @@ func TestValue_Get_StringFromInt(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("int"), 123)
+	root.Set(keypath.NewKeyPath("int"), 123)
 
-	node := root.Get(path.NewKeyPath("int"))
-	val := tree.NewValue(node, path.NewKeyPath("int"))
+	node := root.Get(keypath.NewKeyPath("int"))
+	val := tree.NewValue(node, keypath.NewKeyPath("int"))
 
 	var s string
 
@@ -802,10 +802,10 @@ func TestValue_Get_BoolFromZero(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("zero"), 0)
+	root.Set(keypath.NewKeyPath("zero"), 0)
 
-	node := root.Get(path.NewKeyPath("zero"))
-	val := tree.NewValue(node, path.NewKeyPath("zero"))
+	node := root.Get(keypath.NewKeyPath("zero"))
+	val := tree.NewValue(node, keypath.NewKeyPath("zero"))
 
 	var b bool
 
@@ -818,10 +818,10 @@ func TestValue_Get_BoolFromOne(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("one"), 1)
+	root.Set(keypath.NewKeyPath("one"), 1)
 
-	node := root.Get(path.NewKeyPath("one"))
-	val := tree.NewValue(node, path.NewKeyPath("one"))
+	node := root.Get(keypath.NewKeyPath("one"))
+	val := tree.NewValue(node, keypath.NewKeyPath("one"))
 
 	var b bool
 
@@ -834,10 +834,10 @@ func TestValue_Get_BoolFromNegative(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("neg"), -5)
+	root.Set(keypath.NewKeyPath("neg"), -5)
 
-	node := root.Get(path.NewKeyPath("neg"))
-	val := tree.NewValue(node, path.NewKeyPath("neg"))
+	node := root.Get(keypath.NewKeyPath("neg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("neg"))
 
 	var b bool
 
@@ -850,10 +850,10 @@ func TestValue_Get_BoolFromUint(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("uintval"), uint(10))
+	root.Set(keypath.NewKeyPath("uintval"), uint(10))
 
-	node := root.Get(path.NewKeyPath("uintval"))
-	val := tree.NewValue(node, path.NewKeyPath("uintval"))
+	node := root.Get(keypath.NewKeyPath("uintval"))
+	val := tree.NewValue(node, keypath.NewKeyPath("uintval"))
 
 	var b bool
 
@@ -866,10 +866,10 @@ func TestValue_Get_NilSource(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("nilval"), nil)
+	root.Set(keypath.NewKeyPath("nilval"), nil)
 
-	node := root.Get(path.NewKeyPath("nilval"))
-	val := tree.NewValue(node, path.NewKeyPath("nilval"))
+	node := root.Get(keypath.NewKeyPath("nilval"))
+	val := tree.NewValue(node, keypath.NewKeyPath("nilval"))
 
 	var s string
 
@@ -894,17 +894,17 @@ func TestValue_Meta(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("test"), "value")
+	root.Set(keypath.NewKeyPath("test"), "value")
 
-	node := root.Get(path.NewKeyPath("test"))
+	node := root.Get(keypath.NewKeyPath("test"))
 	must.NotNil(t, node)
 
 	node.Source = "file.yaml"
 	node.Revision = "42"
 
-	val := tree.NewValue(node, path.NewKeyPath("test"))
+	val := tree.NewValue(node, keypath.NewKeyPath("test"))
 	mi := val.Meta()
-	test.Eq(t, path.NewKeyPath("test"), mi.Key)
+	test.Eq(t, keypath.NewKeyPath("test"), mi.Key)
 	test.Eq(t, "file.yaml", mi.Source.Name)
 	test.Eq(t, meta.UnknownSource, mi.Source.Type)
 	test.Eq(t, "42", mi.Revision)
@@ -914,10 +914,10 @@ func TestValue_Get_Uint64ToInt64Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), uint64(1<<63))
+	root.Set(keypath.NewKeyPath("large"), uint64(1<<63))
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var i64 int64
 
@@ -930,10 +930,10 @@ func TestValue_Get_UintToIntOverflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), uint(1<<63))
+	root.Set(keypath.NewKeyPath("large"), uint(1<<63))
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var i int
 
@@ -946,10 +946,10 @@ func TestValue_Get_IntFromBool(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("booltrue"), true)
+	root.Set(keypath.NewKeyPath("booltrue"), true)
 
-	node := root.Get(path.NewKeyPath("booltrue"))
-	val := tree.NewValue(node, path.NewKeyPath("booltrue"))
+	node := root.Get(keypath.NewKeyPath("booltrue"))
+	val := tree.NewValue(node, keypath.NewKeyPath("booltrue"))
 
 	var got int
 
@@ -957,10 +957,10 @@ func TestValue_Get_IntFromBool(t *testing.T) {
 	must.NoError(t, err)
 	test.Eq(t, 1, got)
 
-	root.Set(path.NewKeyPath("boolfalse"), false)
+	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
-	node = root.Get(path.NewKeyPath("boolfalse"))
-	val = tree.NewValue(node, path.NewKeyPath("boolfalse"))
+	node = root.Get(keypath.NewKeyPath("boolfalse"))
+	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
 	must.NoError(t, err)
@@ -971,10 +971,10 @@ func TestValue_Get_Int16Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), 32768)
+	root.Set(keypath.NewKeyPath("large"), 32768)
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var i16 int16
 
@@ -982,10 +982,10 @@ func TestValue_Get_Int16Overflow(t *testing.T) {
 	must.Error(t, err)
 	test.StrContains(t, err.Error(), "overflow")
 
-	root.Set(path.NewKeyPath("small"), -32769)
+	root.Set(keypath.NewKeyPath("small"), -32769)
 
-	node = root.Get(path.NewKeyPath("small"))
-	val = tree.NewValue(node, path.NewKeyPath("small"))
+	node = root.Get(keypath.NewKeyPath("small"))
+	val = tree.NewValue(node, keypath.NewKeyPath("small"))
 
 	err = val.Get(&i16)
 	must.Error(t, err)
@@ -996,10 +996,10 @@ func TestValue_Get_Int32Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), int64(2147483648))
+	root.Set(keypath.NewKeyPath("large"), int64(2147483648))
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var i32 int32
 
@@ -1007,10 +1007,10 @@ func TestValue_Get_Int32Overflow(t *testing.T) {
 	must.Error(t, err)
 	test.StrContains(t, err.Error(), "overflow")
 
-	root.Set(path.NewKeyPath("small"), int64(-2147483649))
+	root.Set(keypath.NewKeyPath("small"), int64(-2147483649))
 
-	node = root.Get(path.NewKeyPath("small"))
-	val = tree.NewValue(node, path.NewKeyPath("small"))
+	node = root.Get(keypath.NewKeyPath("small"))
+	val = tree.NewValue(node, keypath.NewKeyPath("small"))
 
 	err = val.Get(&i32)
 	must.Error(t, err)
@@ -1021,10 +1021,10 @@ func TestValue_Get_UintFromNegativeInt(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("neg"), -5)
+	root.Set(keypath.NewKeyPath("neg"), -5)
 
-	node := root.Get(path.NewKeyPath("neg"))
-	val := tree.NewValue(node, path.NewKeyPath("neg"))
+	node := root.Get(keypath.NewKeyPath("neg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("neg"))
 
 	var u uint
 
@@ -1037,10 +1037,10 @@ func TestValue_Get_UintFromNegativeFloat(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("neg"), -3.14)
+	root.Set(keypath.NewKeyPath("neg"), -3.14)
 
-	node := root.Get(path.NewKeyPath("neg"))
-	val := tree.NewValue(node, path.NewKeyPath("neg"))
+	node := root.Get(keypath.NewKeyPath("neg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("neg"))
 
 	var u uint
 
@@ -1053,10 +1053,10 @@ func TestValue_Get_UintFromNegativeFloat32(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("neg"), float32(-3.14))
+	root.Set(keypath.NewKeyPath("neg"), float32(-3.14))
 
-	node := root.Get(path.NewKeyPath("neg"))
-	val := tree.NewValue(node, path.NewKeyPath("neg"))
+	node := root.Get(keypath.NewKeyPath("neg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("neg"))
 
 	var u uint
 
@@ -1069,10 +1069,10 @@ func TestValue_Get_Uint16Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), 65536)
+	root.Set(keypath.NewKeyPath("large"), 65536)
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var u16 uint16
 
@@ -1085,10 +1085,10 @@ func TestValue_Get_Uint32Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), uint64(4294967296))
+	root.Set(keypath.NewKeyPath("large"), uint64(4294967296))
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var u32 uint32
 
@@ -1101,10 +1101,10 @@ func TestValue_Get_UintFromBool(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("booltrue"), true)
+	root.Set(keypath.NewKeyPath("booltrue"), true)
 
-	node := root.Get(path.NewKeyPath("booltrue"))
-	val := tree.NewValue(node, path.NewKeyPath("booltrue"))
+	node := root.Get(keypath.NewKeyPath("booltrue"))
+	val := tree.NewValue(node, keypath.NewKeyPath("booltrue"))
 
 	var got uint
 
@@ -1112,10 +1112,10 @@ func TestValue_Get_UintFromBool(t *testing.T) {
 	must.NoError(t, err)
 	test.Eq(t, uint(1), got)
 
-	root.Set(path.NewKeyPath("boolfalse"), false)
+	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
-	node = root.Get(path.NewKeyPath("boolfalse"))
-	val = tree.NewValue(node, path.NewKeyPath("boolfalse"))
+	node = root.Get(keypath.NewKeyPath("boolfalse"))
+	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
 	must.NoError(t, err)
@@ -1126,10 +1126,10 @@ func TestValue_Get_UintFromInvalidString(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("invalid"), "abc")
+	root.Set(keypath.NewKeyPath("invalid"), "abc")
 
-	node := root.Get(path.NewKeyPath("invalid"))
-	val := tree.NewValue(node, path.NewKeyPath("invalid"))
+	node := root.Get(keypath.NewKeyPath("invalid"))
+	val := tree.NewValue(node, keypath.NewKeyPath("invalid"))
 
 	var u uint
 
@@ -1159,10 +1159,10 @@ func TestValue_Get_UintFromVariousTypes(t *testing.T) {
 			t.Parallel()
 
 			root := tree.New()
-			root.Set(path.NewKeyPath("val"), tt.src)
+			root.Set(keypath.NewKeyPath("val"), tt.src)
 
-			node := root.Get(path.NewKeyPath("val"))
-			val := tree.NewValue(node, path.NewKeyPath("val"))
+			node := root.Get(keypath.NewKeyPath("val"))
+			val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 			var got uint64
 
@@ -1177,10 +1177,10 @@ func TestValue_Get_UintFromUnsupportedType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), []int{1, 2, 3})
+	root.Set(keypath.NewKeyPath("val"), []int{1, 2, 3})
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var u uint
 
@@ -1193,10 +1193,10 @@ func TestValue_Get_Float32Overflow(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("huge"), 1e100)
+	root.Set(keypath.NewKeyPath("huge"), 1e100)
 
-	node := root.Get(path.NewKeyPath("huge"))
-	val := tree.NewValue(node, path.NewKeyPath("huge"))
+	node := root.Get(keypath.NewKeyPath("huge"))
+	val := tree.NewValue(node, keypath.NewKeyPath("huge"))
 
 	var f32 float32
 
@@ -1204,10 +1204,10 @@ func TestValue_Get_Float32Overflow(t *testing.T) {
 	must.Error(t, err)
 	test.StrContains(t, err.Error(), "overflow")
 
-	root.Set(path.NewKeyPath("negHuge"), -1e100)
+	root.Set(keypath.NewKeyPath("negHuge"), -1e100)
 
-	node = root.Get(path.NewKeyPath("negHuge"))
-	val = tree.NewValue(node, path.NewKeyPath("negHuge"))
+	node = root.Get(keypath.NewKeyPath("negHuge"))
+	val = tree.NewValue(node, keypath.NewKeyPath("negHuge"))
 
 	err = val.Get(&f32)
 	must.Error(t, err)
@@ -1218,10 +1218,10 @@ func TestValue_Get_FloatFromUnsupportedType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("unsupported"), []any{1, 2})
+	root.Set(keypath.NewKeyPath("unsupported"), []any{1, 2})
 
-	node := root.Get(path.NewKeyPath("unsupported"))
-	val := tree.NewValue(node, path.NewKeyPath("unsupported"))
+	node := root.Get(keypath.NewKeyPath("unsupported"))
+	val := tree.NewValue(node, keypath.NewKeyPath("unsupported"))
 
 	var f float64
 
@@ -1234,10 +1234,10 @@ func TestValue_Get_BoolFromUnsupportedType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("unsupported"), []any{1, 2})
+	root.Set(keypath.NewKeyPath("unsupported"), []any{1, 2})
 
-	node := root.Get(path.NewKeyPath("unsupported"))
-	val := tree.NewValue(node, path.NewKeyPath("unsupported"))
+	node := root.Get(keypath.NewKeyPath("unsupported"))
+	val := tree.NewValue(node, keypath.NewKeyPath("unsupported"))
 
 	var b bool
 
@@ -1250,10 +1250,10 @@ func TestValue_Get_SliceFromNonSliceError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notslice"), "string")
+	root.Set(keypath.NewKeyPath("notslice"), "string")
 
-	node := root.Get(path.NewKeyPath("notslice"))
-	val := tree.NewValue(node, path.NewKeyPath("notslice"))
+	node := root.Get(keypath.NewKeyPath("notslice"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notslice"))
 
 	var s []int
 
@@ -1266,10 +1266,10 @@ func TestValue_Get_MapKeyNotStringError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("badmap"), map[int]string{1: "foo"})
+	root.Set(keypath.NewKeyPath("badmap"), map[int]string{1: "foo"})
 
-	node := root.Get(path.NewKeyPath("badmap"))
-	val := tree.NewValue(node, path.NewKeyPath("badmap"))
+	node := root.Get(keypath.NewKeyPath("badmap"))
+	val := tree.NewValue(node, keypath.NewKeyPath("badmap"))
 
 	var m map[string]string
 
@@ -1282,10 +1282,10 @@ func TestValue_Get_StructSourceNotMapError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("notmap"), "string")
+	root.Set(keypath.NewKeyPath("notmap"), "string")
 
-	node := root.Get(path.NewKeyPath("notmap"))
-	val := tree.NewValue(node, path.NewKeyPath("notmap"))
+	node := root.Get(keypath.NewKeyPath("notmap"))
+	val := tree.NewValue(node, keypath.NewKeyPath("notmap"))
 
 	type S struct {
 		Field string `yaml:"field"`
@@ -1302,10 +1302,10 @@ func TestValue_Get_StructMapKeyNotStringError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("badmap"), map[int]string{1: "foo"})
+	root.Set(keypath.NewKeyPath("badmap"), map[int]string{1: "foo"})
 
-	node := root.Get(path.NewKeyPath("badmap"))
-	val := tree.NewValue(node, path.NewKeyPath("badmap"))
+	node := root.Get(keypath.NewKeyPath("badmap"))
+	val := tree.NewValue(node, keypath.NewKeyPath("badmap"))
 
 	type S struct {
 		Field string `yaml:"field"`
@@ -1322,10 +1322,10 @@ func TestValue_Get_StructFieldDecodeError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("struct/int"), "abc")
+	root.Set(keypath.NewKeyPath("struct/int"), "abc")
 
-	node := root.Get(path.NewKeyPath("struct"))
-	val := tree.NewValue(node, path.NewKeyPath("struct"))
+	node := root.Get(keypath.NewKeyPath("struct"))
+	val := tree.NewValue(node, keypath.NewKeyPath("struct"))
 
 	type S struct {
 		Int int `yaml:"int"`
@@ -1342,11 +1342,11 @@ func TestValue_Get_StructUnexportedField(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("struct/exported"), "hello")
-	root.Set(path.NewKeyPath("struct/unexported"), "world")
+	root.Set(keypath.NewKeyPath("struct/exported"), "hello")
+	root.Set(keypath.NewKeyPath("struct/unexported"), "world")
 
-	node := root.Get(path.NewKeyPath("struct"))
-	val := tree.NewValue(node, path.NewKeyPath("struct"))
+	node := root.Get(keypath.NewKeyPath("struct"))
+	val := tree.NewValue(node, keypath.NewKeyPath("struct"))
 
 	type S struct {
 		Exported   string `yaml:"exported"`
@@ -1365,10 +1365,10 @@ func TestValue_Get_StructYamlTagComma(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("struct/myfield"), "value")
+	root.Set(keypath.NewKeyPath("struct/myfield"), "value")
 
-	node := root.Get(path.NewKeyPath("struct"))
-	val := tree.NewValue(node, path.NewKeyPath("struct"))
+	node := root.Get(keypath.NewKeyPath("struct"))
+	val := tree.NewValue(node, keypath.NewKeyPath("struct"))
 
 	type S struct {
 		Field string `yaml:"myfield,omitempty"`
@@ -1385,10 +1385,10 @@ func TestValue_Get_StructMissingField(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("struct/present"), "hello")
+	root.Set(keypath.NewKeyPath("struct/present"), "hello")
 
-	node := root.Get(path.NewKeyPath("struct"))
-	val := tree.NewValue(node, path.NewKeyPath("struct"))
+	node := root.Get(keypath.NewKeyPath("struct"))
+	val := tree.NewValue(node, keypath.NewKeyPath("struct"))
 
 	type S struct {
 		Present string `yaml:"present"`
@@ -1408,10 +1408,10 @@ func TestValue_Get_DurationOverflowInt64(t *testing.T) {
 
 	maxSafeSeconds := math.MaxInt64 / int64(time.Second)
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), maxSafeSeconds+1)
+	root.Set(keypath.NewKeyPath("large"), maxSafeSeconds+1)
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var d time.Duration
 
@@ -1425,10 +1425,10 @@ func TestValue_Get_DurationOverflowUint64(t *testing.T) {
 
 	maxSafeUintSeconds := uint64(math.MaxInt64 / int64(time.Second))
 	root := tree.New()
-	root.Set(path.NewKeyPath("large"), maxSafeUintSeconds+1)
+	root.Set(keypath.NewKeyPath("large"), maxSafeUintSeconds+1)
 
-	node := root.Get(path.NewKeyPath("large"))
-	val := tree.NewValue(node, path.NewKeyPath("large"))
+	node := root.Get(keypath.NewKeyPath("large"))
+	val := tree.NewValue(node, keypath.NewKeyPath("large"))
 
 	var d time.Duration
 
@@ -1441,10 +1441,10 @@ func TestValue_Get_UnsupportedDestinationType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), 123)
+	root.Set(keypath.NewKeyPath("val"), 123)
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var c complex64
 
@@ -1457,10 +1457,10 @@ func TestValue_Get_InterfaceImplemented(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("stringer"), testStringer{})
+	root.Set(keypath.NewKeyPath("stringer"), testStringer{})
 
-	node := root.Get(path.NewKeyPath("stringer"))
-	val := tree.NewValue(node, path.NewKeyPath("stringer"))
+	node := root.Get(keypath.NewKeyPath("stringer"))
+	val := tree.NewValue(node, keypath.NewKeyPath("stringer"))
 
 	var iface fmt.Stringer
 
@@ -1473,10 +1473,10 @@ func TestValue_Get_InterfaceEmpty(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), 42)
+	root.Set(keypath.NewKeyPath("val"), 42)
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var iface any
 
@@ -1489,10 +1489,10 @@ func TestValue_Get_IntFromUint(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), uint(42))
+	root.Set(keypath.NewKeyPath("val"), uint(42))
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var i int
 
@@ -1505,10 +1505,10 @@ func TestValue_Get_Int64FromUint64(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), uint64(1234567890))
+	root.Set(keypath.NewKeyPath("val"), uint64(1234567890))
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var i64 int64
 
@@ -1521,10 +1521,10 @@ func TestValue_Get_IntFromFloat(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), 3.0)
+	root.Set(keypath.NewKeyPath("val"), 3.0)
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var i int
 
@@ -1537,10 +1537,10 @@ func TestValue_Get_UintFromFloat(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), 5.0)
+	root.Set(keypath.NewKeyPath("val"), 5.0)
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var u uint
 
@@ -1572,10 +1572,10 @@ func TestValue_Get_IntFromVariousTypes(t *testing.T) {
 			t.Parallel()
 
 			root := tree.New()
-			root.Set(path.NewKeyPath("val"), tt.src)
+			root.Set(keypath.NewKeyPath("val"), tt.src)
 
-			node := root.Get(path.NewKeyPath("val"))
-			val := tree.NewValue(node, path.NewKeyPath("val"))
+			node := root.Get(keypath.NewKeyPath("val"))
+			val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 			var got int64
 
@@ -1590,10 +1590,10 @@ func TestValue_Get_IntFromUnsupportedType(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), []int{1, 2, 3})
+	root.Set(keypath.NewKeyPath("val"), []int{1, 2, 3})
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var i int
 
@@ -1633,10 +1633,10 @@ func TestValue_Get_BoolFromNumericTypes(t *testing.T) {
 			t.Parallel()
 
 			root := tree.New()
-			root.Set(path.NewKeyPath("val"), tt.val)
+			root.Set(keypath.NewKeyPath("val"), tt.val)
 
-			node := root.Get(path.NewKeyPath("val"))
-			val := tree.NewValue(node, path.NewKeyPath("val"))
+			node := root.Get(keypath.NewKeyPath("val"))
+			val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 			var b bool
 
@@ -1651,10 +1651,10 @@ func TestValue_Get_SliceElementConversionError(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("slice"), []any{1, "abc", 3})
+	root.Set(keypath.NewKeyPath("slice"), []any{1, "abc", 3})
 
-	node := root.Get(path.NewKeyPath("slice"))
-	val := tree.NewValue(node, path.NewKeyPath("slice"))
+	node := root.Get(keypath.NewKeyPath("slice"))
+	val := tree.NewValue(node, keypath.NewKeyPath("slice"))
 
 	var s []int
 
@@ -1667,10 +1667,10 @@ func TestValue_Get_UnsupportedDestinationKinds(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
-	root.Set(path.NewKeyPath("val"), 123)
+	root.Set(keypath.NewKeyPath("val"), 123)
 
-	node := root.Get(path.NewKeyPath("val"))
-	val := tree.NewValue(node, path.NewKeyPath("val"))
+	node := root.Get(keypath.NewKeyPath("val"))
+	val := tree.NewValue(node, keypath.NewKeyPath("val"))
 
 	var arr [1]int
 
