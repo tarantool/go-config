@@ -184,12 +184,12 @@ func TestMergeCollectorWithMerger_ErrorInMergeValue(t *testing.T) {
 	merger := &errorMerger{err: errors.New("merge failed")} //nolint:err113
 	err := config.MergeCollectorWithMerger(root, col, merger)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "collector test: merge value at key: merge failed")
+	require.ErrorContains(t, err, "collector test: merge value at key: merge failed")
 
 	var collectorErr *config.CollectorError
 	require.ErrorAs(t, err, &collectorErr)
 	assert.Equal(t, "test", collectorErr.CollectorName)
-	assert.Equal(t, "merge value at key: merge failed", collectorErr.Unwrap().Error())
+	require.ErrorContains(t, collectorErr.Unwrap(), "merge value at key: merge failed")
 }
 
 func TestMergeCollectorWithMerger_ApplyOrderingError(t *testing.T) {
@@ -204,7 +204,7 @@ func TestMergeCollectorWithMerger_ApplyOrderingError(t *testing.T) {
 	merger := &orderingErrorMerger{}
 	err := config.MergeCollectorWithMerger(root, col, merger)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "collector test: apply ordering: ordering failed")
+	require.ErrorContains(t, err, "collector test: apply ordering: ordering failed")
 
 	var collectorErr *config.CollectorError
 	require.ErrorAs(t, err, &collectorErr)
@@ -226,8 +226,8 @@ func TestMergeCollectorWithMerger_MultipleErrors(t *testing.T) {
 
 	err := config.MergeCollector(root, col)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "collector multi: failed to get raw value for key key0: first error")
-	assert.Contains(t, err.Error(), "failed to get raw value for key key1: second error")
+	require.ErrorContains(t, err, "collector multi: failed to get raw value for key key0: first error")
+	require.ErrorContains(t, err, "failed to get raw value for key key1: second error")
 
 	var collectorErr *config.CollectorError
 	require.ErrorAs(t, err, &collectorErr)
