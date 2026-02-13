@@ -96,9 +96,9 @@ func TestString(t *testing.T) {
 func TestMakeString(t *testing.T) {
 	t.Parallel()
 
-	path := config.KeyPath{"a", "b", "c"}
-	test.Eq(t, "a.b.c", path.MakeString("."))
-	test.Eq(t, "a|b|c", path.MakeString("|"))
+	keypath := config.KeyPath{"a", "b", "c"}
+	test.Eq(t, "a.b.c", keypath.MakeString("."))
+	test.Eq(t, "a|b|c", keypath.MakeString("|"))
 }
 
 func TestParent(t *testing.T) {
@@ -210,7 +210,7 @@ func TestMatch(t *testing.T) {
 		{config.KeyPath{"a", "b", "c", "d"}, config.KeyPath{"a", "*"}, true},
 		{config.KeyPath{"a", "b", "c", "d"}, config.KeyPath{"*", "b"}, true},
 		{config.KeyPath{"a", "b", "c", "d"}, config.KeyPath{"a", "*", "c"}, true},
-		// Length mismatch: pattern longer than path.
+		// Length mismatch: pattern longer than keypath.
 		{config.KeyPath{"a", "b"}, config.KeyPath{"a", "b", "c"}, false},
 		{config.KeyPath{"a", "b"}, config.KeyPath{"a", "b", "*"}, false},
 		// Multiple wildcards.
