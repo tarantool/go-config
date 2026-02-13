@@ -1,2 +1,2 @@
-// Package path provides key path manipulation for configuration hierarchy.
-package path
+// Package keypath provides key path manipulation for configuration hierarchy.
+package keypath

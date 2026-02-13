@@ -97,6 +97,7 @@ func (mc *Mock) Read(ctx context.Context) <-chan config.Value {
 				node.Revision = string(mc.revision)
 			}
 		}
+
 		// Walk the tree and send leaf values.
 		walkTree(ctx, root, config.NewKeyPath(""), valueCh)
 	}()

@@ -42,6 +42,7 @@ func TestParseAll(t *testing.T) {
 	for range iter {
 		count++
 	}
+
 	// At least zero entries (possible in empty environment).
 	// We just ensure we can iterate.
 	test.True(t, count >= 0)
