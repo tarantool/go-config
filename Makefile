@@ -45,3 +45,13 @@ lint:
 	@go mod tidy
 	@go mod vendor
 	@golangci-lint run --config=./.golangci.yml --modules-download-mode vendor
+
+.PHONY: govulncheck-deps
+govulncheck-deps:
+	@echo "Installing govulncheck"
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+
+.PHONY: govulncheck
+govulncheck:
+	@echo "Running govulncheck"
+	@govulncheck ./...
