@@ -46,7 +46,7 @@ func NewValue(node *Node, keyPath keypath.KeyPath) value.Value {
 func (v *valueImpl) Get(dest any) error {
 	// Ensure dest is a pointer.
 	destVal := reflect.ValueOf(dest)
-	if destVal.Kind() != reflect.Ptr || destVal.IsNil() {
+	if destVal.Kind() != reflect.Pointer || destVal.IsNil() {
 		return ErrDestinationMustBePointer
 	}
 
@@ -125,7 +125,7 @@ func decode(src any, dst reflect.Value) error {
 		return decodeMap(src, dst)
 	case reflect.Struct:
 		return decodeStruct(src, dst)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return decodePtr(src, dst)
 	case reflect.Interface:
 		// Assign directly if src type implements the interface.
@@ -341,7 +341,7 @@ func decodeInt(src any, dst reflect.Value) error {
 		reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64, reflect.Complex64,
 		reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice,
+		reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
 		reflect.String, reflect.Struct, reflect.UnsafePointer:
 		// Unreachable because decodeInt is only called for signed integer kinds.
 	}
@@ -424,7 +424,7 @@ func decodeUint(src any, dst reflect.Value) error {
 		reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64, reflect.Complex64,
 		reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func,
-		reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice,
+		reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
 		reflect.String, reflect.Struct, reflect.UnsafePointer:
 		// Unreachable because decodeUint is only called for unsigned integer kinds.
 	}

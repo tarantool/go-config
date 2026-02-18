@@ -19,15 +19,15 @@ type Builder struct {
 	collectors []Collector
 	// Validator for validation of the final configuration.
 	validator validator.Validator
-	// Inheritance zones and their default values.
-	scopes map[string]DefaultsType
+	// Inheritance hierarchies for configuration inheritance.
+	inheritances []inheritanceConfig
 	// Merger defines how values are merged into the configuration tree.
 	merger Merger
 }
 
 // NewBuilder creates a new instance of Builder.
 func NewBuilder() Builder {
-	return Builder{collectors: nil, validator: nil, scopes: nil, merger: nil}
+	return Builder{collectors: nil, validator: nil, inheritances: nil, merger: nil}
 }
 
 // AddCollector adds a new data source to the build pipeline.
@@ -69,34 +69,36 @@ func (b *Builder) MustWithJSONSchema(schema io.Reader) Builder {
 	return result
 }
 
-// AddScope adds an inheritance zone.
-//
-// For example, the path "/groups/*/replicasets/*/instances" indicates that for
-// elements located in instance, inheritance is allowed, along the chain, of
-// their properties from higher "parent" branches of the configuration, up to
-// the top (global) level.
-//
-// Multiple different inheritance branches can be added to the config.
-//
-// Additionally, for each inheritance zone, default values can be specified,
-// which have the lowest priority and are used only if values are not explicitly
-// set in the configuration.
-//
-// Passing `nil` means that default values are not required.
-func (b *Builder) AddScope(scopes KeyPath, defaults DefaultsType) Builder {
-	if b.scopes == nil {
-		b.scopes = make(map[string]DefaultsType)
-	}
-
-	b.scopes[scopes.String()] = defaults
-
-	return *b
-}
-
 // WithMerger sets a custom merger for the configuration assembly.
 // If not set, the default merging logic is used.
 func (b *Builder) WithMerger(merger Merger) Builder {
 	b.merger = merger
+	return *b
+}
+
+// WithInheritance registers a hierarchy for inheritance resolution.
+// Multiple hierarchies can be registered (e.g., groups and buckets).
+//
+// The levels parameter defines the structural keys (use Levels() to create).
+// Options configure exclusions, defaults, and merge strategies.
+//
+// Inheritance is resolved during Build(), after collector merging
+// but before validation. This ensures the validator sees the effective
+// (fully resolved) config for each leaf entity.
+func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Builder {
+	inheritanceCfg := inheritanceConfig{
+		levels:          levels,
+		defaults:        nil,
+		noInherit:       nil,
+		noInheritFrom:   nil,
+		mergeStrategies: nil,
+	}
+	for _, opt := range opts {
+		opt(&inheritanceCfg)
+	}
+
+	b.inheritances = append(b.inheritances, inheritanceCfg)
+
 	return *b
 }
 
@@ -121,7 +123,7 @@ func (b *Builder) Build() (Config, []error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil}, errs
+		return Config{root: nil, inheritances: nil}, errs
 	}
 
 	if b.validator != nil {
@@ -132,10 +134,10 @@ func (b *Builder) Build() (Config, []error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil}, errs
+		return Config{root: nil, inheritances: nil}, errs
 	}
 
-	return newConfig(root), nil
+	return newConfig(root, b.inheritances), nil
 }
 
 // BuildMutable starts the configuration assembly process but returns
@@ -143,7 +145,7 @@ func (b *Builder) Build() (Config, []error) {
 func (b *Builder) BuildMutable() (MutableConfig, []error) {
 	cfg, errs := b.Build()
 	if len(errs) > 0 {
-		return MutableConfig{Config: Config{root: nil}, mu: sync.RWMutex{}, validator: nil}, errs
+		return MutableConfig{Config: Config{root: nil, inheritances: nil}, mu: sync.RWMutex{}, validator: nil}, errs
 	}
 
 	return MutableConfig{Config: cfg, mu: sync.RWMutex{}, validator: b.validator}, nil

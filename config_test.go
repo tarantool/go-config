@@ -177,7 +177,7 @@ func TestConfig_Walk_RootAllValues(t *testing.T) {
 		must.NoError(t, err)
 	}
 
-	test.Eq(t, 3, count) // Values: a, b, c.d.
+	test.Eq(t, 3, count)
 }
 
 func TestConfig_Walk_WithDepthLimit(t *testing.T) {
@@ -207,7 +207,7 @@ func TestConfig_Walk_WithDepthLimit(t *testing.T) {
 		count++
 	}
 
-	test.Eq(t, 0, count) // Depth 1 means only root node, which is not a leaf.
+	test.Eq(t, 0, count)
 }
 
 func TestConfig_Walk_FromSubPath(t *testing.T) {
@@ -241,7 +241,7 @@ func TestConfig_Walk_FromSubPath(t *testing.T) {
 		must.NoError(t, err)
 	}
 
-	test.Eq(t, 2, count) // Values: child1, child2.
+	test.Eq(t, 2, count)
 }
 
 func TestConfig_String_ReturnsEmpty(t *testing.T) {
@@ -289,7 +289,7 @@ func TestMutableConfig_Set_NotImplemented(t *testing.T) {
 	must.SliceEmpty(t, errs)
 
 	err := cfg.Set(config.NewKeyPath("key"), "value")
-	must.NoError(t, err) // Returns nil because not implemented.
+	must.NoError(t, err)
 }
 
 func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
@@ -338,16 +338,4 @@ func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
 
 	deleted := cfg.Delete(config.NewKeyPath("key"))
 	test.False(t, deleted)
-}
-
-func TestBuilder_AddScope_Noop(t *testing.T) {
-	t.Parallel()
-
-	builder := config.NewBuilder()
-
-	builder = builder.AddScope(config.NewKeyPath("/path/*"), config.DefaultsType{})
-	// Just verify it doesn't panic.
-	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
-	test.NotNil(t, cfg)
 }
