@@ -34,10 +34,12 @@ coveralls-deps:
 	@go get github.com/mattn/goveralls
 	@go install github.com/mattn/goveralls
 
-.PHONY: lint-deps
-lint-deps:
+.PHONY: deps
+deps:
 	@echo "Installing lint deps"
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+	@echo "Installing govulncheck"
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
 
 .PHONY: lint
 lint:
@@ -45,3 +47,8 @@ lint:
 	@go mod tidy
 	@go mod vendor
 	@golangci-lint run --config=./.golangci.yml --modules-download-mode vendor
+
+.PHONY: govulncheck
+govulncheck:
+	@echo "Running govulncheck"
+	@govulncheck ./...
