@@ -1,5 +1,5 @@
 <a href="http://tarantool.org">
-	<img src="https://avatars2.githubusercontent.com/u/2344919?v=2&s=250" align="right">
+ <img src="https://avatars2.githubusercontent.com/u/2344919?v=2&s=250" align="right">
 </a>
 
 [![Go Reference][godoc-badge]][godoc-url]
@@ -17,4 +17,3 @@
 [telegram-badge]: https://img.shields.io/badge/Telegram-join%20chat-blue.svg
 [telegram-en-url]: http://telegram.me/tarantool
 [telegram-ru-url]: http://telegram.me/tarantoolru
-

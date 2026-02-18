@@ -106,11 +106,13 @@ type Merger interface {
 type Config struct {
 	// root is the internal tree representation of the configuration.
 	root *tree.Node
+	// inheritances holds inheritance configurations for lazy resolution.
+	inheritances []inheritanceConfig
 }
 
 // newConfig creates a Config from a tree node.
-func newConfig(root *tree.Node) Config {
-	return Config{root: root}
+func newConfig(root *tree.Node, inheritances []inheritanceConfig) Config {
+	return Config{root: root, inheritances: inheritances}
 }
 
 // Get is the primary, most convenient method for retrieving a value.
@@ -196,6 +198,12 @@ func (c *Config) Walk(ctx context.Context, path KeyPath, depth int) (<-chan Valu
 
 // walkNodes recursively sends values for leaf nodes.
 func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, valueCh chan<- Value) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	switch {
 	case depth == 0:
 		return
@@ -210,6 +218,12 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 	}
 
 	for _, key := range node.ChildrenKeys() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		child := node.Child(key)
 		if child == nil {
 			continue
@@ -226,14 +240,14 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 func (c *Config) Slice(path KeyPath) (Config, error) {
 	if c.root == nil {
 		if len(path) == 0 {
-			return newConfig(nil), nil
+			return newConfig(nil, c.inheritances), nil
 		}
 
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
 	if len(path) == 0 {
-		return newConfig(c.root), nil
+		return newConfig(c.root, c.inheritances), nil
 	}
 
 	root := c.root.Get(path)
@@ -241,7 +255,63 @@ func (c *Config) Slice(path KeyPath) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
-	return newConfig(root), nil
+	return newConfig(root, c.inheritances), nil
+}
+
+// Effective returns the resolved (post-inheritance) config for a specific
+// leaf entity. The path must point to a concrete leaf entity in the hierarchy
+// (e.g., "groups/storages/replicasets/s-001/instances/s-001-a").
+//
+// If no inheritance was configured in the Builder, returns the raw subtree
+// at the given path as a Config.
+//
+// The returned Config contains only config keys (no structural keys like
+// "groups", "replicasets", "instances").
+func (c *Config) Effective(path KeyPath) (Config, error) {
+	if c.root == nil {
+		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
+	}
+
+	// Try each registered hierarchy.
+	for i := range c.inheritances {
+		inheritanceCfg := &c.inheritances[i]
+
+		layers, ok := matchHierarchy(c.root, inheritanceCfg, path)
+		if !ok {
+			continue
+		}
+
+		result := resolveEffective(layers, inheritanceCfg)
+
+		return newConfig(result, c.inheritances), nil
+	}
+
+	// No hierarchy matched — fall back to raw subtree.
+	node := c.root.Get(path)
+	if node == nil {
+		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
+	}
+
+	return newConfig(cloneNode(node), c.inheritances), nil
+}
+
+// EffectiveAll returns resolved configs for ALL leaf entities found in the
+// hierarchy. The returned map keys are full paths to each leaf entity.
+//
+// If no inheritance was configured, returns an error.
+func (c *Config) EffectiveAll() (map[string]Config, error) {
+	if len(c.inheritances) == 0 {
+		return nil, ErrNoInheritance
+	}
+
+	result := make(map[string]Config)
+
+	for i := range c.inheritances {
+		inheritanceCfg := &c.inheritances[i]
+		c.collectLeafEntities(inheritanceCfg, c.root, nil, 0, result)
+	}
+
+	return result, nil
 }
 
 // String returns a string with the current representation of the configuration according to the YAML format.
@@ -257,6 +327,63 @@ func (c *Config) MarshalYAML() ([]byte, error) {
 	//nolint:godox
 	// TODO: implement YAML marshaling.
 	return nil, nil
+}
+
+// collectLeafEntities recursively finds all leaf entities in the hierarchy
+// and resolves their effective config.
+//
+// levelIdx: current level in the hierarchy (0 = global).
+// currentPath: accumulated path segments so far.
+func (c *Config) collectLeafEntities(
+	inheritanceCfg *inheritanceConfig,
+	node *tree.Node,
+	currentPath keypath.KeyPath,
+	levelIdx int,
+	result map[string]Config,
+) {
+	// Determine if the next level is the leaf structural level.
+	nextLevel := levelIdx + 1
+	if nextLevel >= len(inheritanceCfg.levels) {
+		// Should not happen because levelIdx starts at 0 and increments.
+		return
+	}
+
+	structKey := inheritanceCfg.levels[nextLevel]
+
+	structNode := node.Child(structKey)
+	if structNode == nil {
+		return
+	}
+
+	if nextLevel == len(inheritanceCfg.levels)-1 {
+		// The next level is the leaf structural level.
+		// Its named children are leaf entities.
+		for _, name := range structNode.ChildrenKeys() {
+			entityPath := currentPath.Append(structKey, name)
+
+			layers, ok := matchHierarchy(c.root, inheritanceCfg, entityPath)
+			if !ok {
+				continue
+			}
+
+			resolved := resolveEffective(layers, inheritanceCfg)
+
+			result[entityPath.String()] = newConfig(resolved, c.inheritances)
+		}
+
+		return
+	}
+
+	// Not leaf level; recurse into named children.
+	for _, name := range structNode.ChildrenKeys() {
+		namedNode := structNode.Child(name)
+		if namedNode == nil {
+			continue
+		}
+
+		childPath := currentPath.Append(structKey, name)
+		c.collectLeafEntities(inheritanceCfg, namedNode, childPath, nextLevel, result)
+	}
 }
 
 // MutableConfig is an extension of Config that allows safe runtime modifications.
