@@ -41,7 +41,6 @@ func (m *maxKeysValidator) Validate(root *tree.Node) []validator.ValidationError
 		return nil
 	}
 
-	// Count immediate children (flat map assumption for test).
 	if len(root.Children()) > m.maxKeys {
 		return []validator.ValidationError{
 			{
@@ -70,11 +69,9 @@ func (v *valueChangeValidator) Validate(root *tree.Node) []validator.ValidationE
 
 	child := root.Child("key")
 	if child == nil {
-		// Key not present, validation passes (or could fail).
 		return nil
 	}
 
-	// child.Value is exported field.
 	if child.Value != "original" {
 		return []validator.ValidationError{
 			{
@@ -118,7 +115,7 @@ func TestConfig_Get_TypeMismatchError(t *testing.T) {
 	t.Parallel()
 
 	data := map[string]any{
-		"port": []any{1, 2}, // slice, not int - should cause conversion error.
+		"port": []any{1, 2},
 	}
 	col := collectors.NewMap(data)
 	builder := config.NewBuilder()
@@ -138,7 +135,6 @@ func TestConfig_Get_TypeMismatchError(t *testing.T) {
 func TestConfig_Stat_NilRoot(t *testing.T) {
 	t.Parallel()
 
-	// Create a config with nil root (validation failure).
 	validator := &alwaysFailingValidator{}
 	data := map[string]any{"x": 1}
 	col := collectors.NewMap(data)
@@ -148,8 +144,8 @@ func TestConfig_Stat_NilRoot(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	require.NotNil(t, errs) // Validation errors.
-	// Root should be nil.
+	require.NotNil(t, errs)
+
 	meta, ok := cfg.Stat(config.NewKeyPath("any"))
 	assert.False(t, ok)
 	assert.Empty(t, meta.Source.Name)
@@ -325,6 +321,69 @@ func TestMutableConfig_Update_WalkError(t *testing.T) {
 
 	// Update should fail because Walk on invalid config returns error.
 	err := mcfg.Update(&invalidCfg)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "path not found")
+}
+
+func TestConfig_Walk_NonExistentPath(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.Build()
+	require.Empty(t, errs)
+
+	ctx := context.Background()
+	_, err := cfg.Walk(ctx, config.NewKeyPath("nonexistent"), -1)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "path not found")
+}
+
+// TestConfig_Walk_CtxCancelled removed; see TestWalkNodes_CtxCancelled in inheritance_internal_test.go.
+
+func TestConfig_Slice_NilRootEmptyPath(t *testing.T) {
+	t.Parallel()
+
+	// Create config with nil root (validation failure).
+	validator := &alwaysFailingValidator{}
+	data := map[string]any{"x": 1}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(validator)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.Build()
+	require.NotNil(t, errs) // Validation errors, root is nil.
+
+	// Slice with empty path should return config with nil root (no error).
+	sliced, err := cfg.Slice(config.NewKeyPath(""))
+	require.NoError(t, err)
+	// Attempt to get a value from sliced config (should return not found).
+	_, ok := sliced.Lookup(config.NewKeyPath("any"))
+	assert.False(t, ok)
+}
+
+func TestConfig_Effective_NilRoot(t *testing.T) {
+	t.Parallel()
+
+	// Config with nil root.
+	validator := &alwaysFailingValidator{}
+	data := map[string]any{"x": 1}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(validator)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.Build()
+	require.NotNil(t, errs) // Validation errors, root is nil.
+
+	_, err := cfg.Effective(config.NewKeyPath("any"))
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "path not found")
 }

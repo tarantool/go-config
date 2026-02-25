@@ -14,6 +14,10 @@ var (
 	ErrValidationFailed = errors.New("validation failed")
 	// ErrSchemaInvalid is returned when schema parsing fails.
 	ErrSchemaInvalid = errors.New("schema invalid")
+	// ErrNoInheritance is returned by EffectiveAll() when no inheritance hierarchy is configured.
+	ErrNoInheritance = errors.New("no inheritance hierarchy configured")
+	// ErrHierarchyMismatch is returned by Effective() when path doesn't match any hierarchy.
+	ErrHierarchyMismatch = errors.New("path does not match any inheritance hierarchy")
 )
 
 // CollectorError wraps an error that occurred while processing a collector,
