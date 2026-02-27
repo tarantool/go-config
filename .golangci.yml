@@ -68,7 +68,7 @@ linters:
             - "!$test"
           allow:
             - $gostd
-            - "github.com/shoenig/test"
+            - "github.com/stretchr/testify"
             - "go.yaml.in/yaml/v3"
             - "github.com/tarantool/go-config"
             - "github.com/kaptinlin/jsonschema"
@@ -77,7 +77,6 @@ linters:
             - "$test"
           allow:
             - $gostd
-            - "github.com/shoenig/test"
             - "github.com/stretchr/testify"
             - "github.com/tarantool/go-config"
             - "github.com/kaptinlin/jsonschema"
