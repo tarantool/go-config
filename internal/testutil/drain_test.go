@@ -5,7 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/shoenig/test"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/tarantool/go-config/internal/testutil"
 )
@@ -16,7 +16,6 @@ func TestDrain_ClosedChannel(t *testing.T) {
 	channel := make(chan int)
 	close(channel)
 
-	// Should not panic or fail.
 	testutil.Drain(t, channel)
 }
 
@@ -28,12 +27,10 @@ func TestDrain_ValueReady(t *testing.T) {
 
 	close(channel)
 
-	// Should read the value and not fail.
 	testutil.Drain(t, channel)
 
-	// Channel is closed, reading returns zero value.
 	_, ok := <-channel
-	test.False(t, ok)
+	assert.False(t, ok)
 }
 
 func TestDrain_GenericTypes(t *testing.T) {
@@ -75,7 +72,6 @@ func TestDrain_WithTimeout(t *testing.T) {
 
 			close(channel)
 
-			// Should succeed with custom timeout.
 			testutil.Drain(t, channel, testutil.WithTimeout(100*time.Millisecond))
 		})
 	})
@@ -88,7 +84,6 @@ func TestDrain_WithTimeout(t *testing.T) {
 
 			close(channel)
 
-			// Multiple options (though only one is defined) should work.
 			testutil.Drain(t, channel, testutil.WithTimeout(50*time.Millisecond))
 		})
 	})
@@ -109,7 +104,6 @@ func TestDrain_MultipleValues(t *testing.T) {
 
 			close(channel)
 
-			// Should drain all three values.
 			testutil.Drain(t, channel)
 		})
 	})
@@ -129,13 +123,11 @@ func TestDrain_MultipleValues(t *testing.T) {
 				close(channel)
 			}()
 
-			// Should drain all three values.
 			testutil.Drain(t, channel)
 		})
 	})
 }
 
-// mockTB implements test.T for testing Drain's error reporting.
 type mockTB struct {
 	helperCalled bool
 	errorfCalled bool
@@ -171,21 +163,13 @@ func TestDrain_TimeoutBehavior(t *testing.T) {
 		mock := newMockTB()
 
 		synctest.Test(t, func(_ *testing.T) {
-			channel := make(chan int) // unbuffered, no sender, not closed.
+			channel := make(chan int)
 			testutil.Drain(mock, channel)
 		})
 
-		if !mock.helperCalled {
-			t.Error("Helper should have been called")
-		}
-
-		if !mock.errorfCalled {
-			t.Error("Errorf should have been called for timeout")
-		}
-
-		if mock.errorfFormat == "" {
-			t.Error("error message should not be empty")
-		}
+		assert.True(t, mock.helperCalled, "Helper should have been called")
+		assert.True(t, mock.errorfCalled, "Errorf should have been called for timeout")
+		assert.NotEmpty(t, mock.errorfFormat, "error message should not be empty")
 	})
 
 	t.Run("timeout_after_partial_drain", func(t *testing.T) {
@@ -198,17 +182,12 @@ func TestDrain_TimeoutBehavior(t *testing.T) {
 			channel <- 1
 
 			channel <- 2
-			// Not closed - Drain will read 2 values then timeout waiting for more.
+
 			testutil.Drain(mock, channel)
 		})
 
-		if !mock.helperCalled {
-			t.Error("Helper should have been called")
-		}
-
-		if !mock.errorfCalled {
-			t.Error("Errorf should have been called for timeout")
-		}
+		assert.True(t, mock.helperCalled, "Helper should have been called")
+		assert.True(t, mock.errorfCalled, "Errorf should have been called for timeout")
 	})
 
 	t.Run("zero_timeout_fails_immediately", func(t *testing.T) {
@@ -217,12 +196,10 @@ func TestDrain_TimeoutBehavior(t *testing.T) {
 		mock := newMockTB()
 
 		synctest.Test(t, func(_ *testing.T) {
-			channel := make(chan int) // never closed.
+			channel := make(chan int)
 			testutil.Drain(mock, channel, testutil.WithTimeout(0))
 		})
 
-		if !mock.errorfCalled {
-			t.Error("Errorf should have been called with zero timeout")
-		}
+		assert.True(t, mock.errorfCalled, "Errorf should have been called with zero timeout")
 	})
 }

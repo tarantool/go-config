@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shoenig/test"
-	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
@@ -26,12 +26,12 @@ func TestConfig_Stat_ExistingKey(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("server/port"))
-	must.True(t, ok)
-	test.Eq(t, "test", meta.Source.Name)
-	test.Eq(t, config.UnknownSource, meta.Source.Type)
+	require.True(t, ok)
+	assert.Equal(t, "test", meta.Source.Name)
+	assert.Equal(t, config.UnknownSource, meta.Source.Type)
 }
 
 func TestConfig_Stat_NonExistentKey(t *testing.T) {
@@ -44,12 +44,12 @@ func TestConfig_Stat_NonExistentKey(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("missing"))
-	test.False(t, ok)
-	test.Eq(t, "", meta.Source.Name)
-	test.Eq(t, config.UnknownSource, meta.Source.Type)
+	assert.False(t, ok)
+	assert.Empty(t, meta.Source.Name)
+	assert.Equal(t, config.UnknownSource, meta.Source.Type)
 }
 
 func TestConfig_Stat_NestedKey(t *testing.T) {
@@ -68,11 +68,11 @@ func TestConfig_Stat_NestedKey(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("a/b/c"))
-	must.True(t, ok)
-	test.Eq(t, "nested", meta.Source.Name)
+	require.True(t, ok)
+	assert.Equal(t, "nested", meta.Source.Name)
 }
 
 func TestConfig_Slice_Root(t *testing.T) {
@@ -87,16 +87,16 @@ func TestConfig_Slice_Root(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	sliced, err := cfg.Slice(config.NewKeyPath(""))
-	must.NoError(t, err)
+	require.NoError(t, err)
 
 	var val string
 
 	_, err = sliced.Get(config.NewKeyPath("key"), &val)
-	must.NoError(t, err)
-	test.Eq(t, "value", val)
+	require.NoError(t, err)
+	assert.Equal(t, "value", val)
 }
 
 func TestConfig_Slice_ValidPath(t *testing.T) {
@@ -115,16 +115,16 @@ func TestConfig_Slice_ValidPath(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	sliced, err := cfg.Slice(config.NewKeyPath("parent/child"))
-	must.NoError(t, err)
+	require.NoError(t, err)
 
 	var val int
 
 	_, err = sliced.Get(config.NewKeyPath("grandchild"), &val)
-	must.NoError(t, err)
-	test.Eq(t, 42, val)
+	require.NoError(t, err)
+	assert.Equal(t, 42, val)
 }
 
 func TestConfig_Slice_NonExistentPath(t *testing.T) {
@@ -139,10 +139,10 @@ func TestConfig_Slice_NonExistentPath(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	_, err := cfg.Slice(config.NewKeyPath("nonexistent"))
-	test.Error(t, err)
+	assert.Error(t, err)
 }
 
 func TestConfig_Walk_RootAllValues(t *testing.T) {
@@ -162,10 +162,10 @@ func TestConfig_Walk_RootAllValues(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath(""), -1)
-	must.NoError(t, err)
+	require.NoError(t, err)
 
 	count := 0
 	for v := range ch {
@@ -174,10 +174,10 @@ func TestConfig_Walk_RootAllValues(t *testing.T) {
 		var dest any
 
 		err := v.Get(&dest)
-		must.NoError(t, err)
+		require.NoError(t, err)
 	}
 
-	test.Eq(t, 3, count) // Values: a, b, c.d.
+	assert.Equal(t, 3, count)
 }
 
 func TestConfig_Walk_WithDepthLimit(t *testing.T) {
@@ -197,17 +197,17 @@ func TestConfig_Walk_WithDepthLimit(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath(""), 1)
-	must.NoError(t, err)
+	require.NoError(t, err)
 
 	count := 0
 	for range ch {
 		count++
 	}
 
-	test.Eq(t, 0, count) // Depth 1 means only root node, which is not a leaf.
+	assert.Equal(t, 0, count)
 }
 
 func TestConfig_Walk_FromSubPath(t *testing.T) {
@@ -226,10 +226,10 @@ func TestConfig_Walk_FromSubPath(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath("parent"), -1)
-	must.NoError(t, err)
+	require.NoError(t, err)
 
 	count := 0
 	for v := range ch {
@@ -238,10 +238,10 @@ func TestConfig_Walk_FromSubPath(t *testing.T) {
 		var dest any
 
 		err := v.Get(&dest)
-		must.NoError(t, err)
+		require.NoError(t, err)
 	}
 
-	test.Eq(t, 2, count) // Values: child1, child2.
+	assert.Equal(t, 2, count)
 }
 
 func TestConfig_String_ReturnsEmpty(t *testing.T) {
@@ -254,9 +254,9 @@ func TestConfig_String_ReturnsEmpty(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
-	test.Eq(t, "", cfg.String())
+	assert.Empty(t, cfg.String())
 }
 
 func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
@@ -269,11 +269,11 @@ func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	bytes, err := cfg.MarshalYAML()
-	must.NoError(t, err)
-	test.Nil(t, bytes)
+	require.NoError(t, err)
+	assert.Nil(t, bytes)
 }
 
 func TestMutableConfig_Set_NotImplemented(t *testing.T) {
@@ -286,10 +286,10 @@ func TestMutableConfig_Set_NotImplemented(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.BuildMutable()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	err := cfg.Set(config.NewKeyPath("key"), "value")
-	must.NoError(t, err) // Returns nil because not implemented.
+	require.NoError(t, err)
 }
 
 func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
@@ -302,10 +302,10 @@ func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.BuildMutable()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	err := cfg.Merge(&cfg.Config)
-	must.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestMutableConfig_Update_NotImplemented(t *testing.T) {
@@ -318,10 +318,10 @@ func TestMutableConfig_Update_NotImplemented(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.BuildMutable()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	err := cfg.Update(&cfg.Config)
-	must.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
@@ -334,10 +334,10 @@ func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.BuildMutable()
-	must.SliceEmpty(t, errs)
+	require.Empty(t, errs)
 
 	deleted := cfg.Delete(config.NewKeyPath("key"))
-	test.False(t, deleted)
+	assert.False(t, deleted)
 }
 
 func TestBuilder_AddScope_Noop(t *testing.T) {
@@ -346,8 +346,9 @@ func TestBuilder_AddScope_Noop(t *testing.T) {
 	builder := config.NewBuilder()
 
 	builder = builder.AddScope(config.NewKeyPath("/path/*"), config.DefaultsType{})
-	// Just verify it doesn't panic.
+
 	cfg, errs := builder.Build()
-	must.SliceEmpty(t, errs)
-	test.NotNil(t, cfg)
+
+	require.Empty(t, errs)
+	assert.NotNil(t, cfg)
 }

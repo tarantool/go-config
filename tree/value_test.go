@@ -7,8 +7,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/shoenig/test"
-	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/meta"
@@ -28,15 +28,15 @@ func TestValue_Get_Int(t *testing.T) {
 	root.Set(keypath.NewKeyPath("int"), 42)
 
 	node := root.Get(keypath.NewKeyPath("int"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	val := tree.NewValue(node, keypath.NewKeyPath("int"))
 
 	var i int
 
 	err := val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 42, i)
+	require.NoError(t, err)
+	assert.Equal(t, 42, i)
 }
 
 func TestValue_Get_IntToStringConversion(t *testing.T) {
@@ -46,15 +46,15 @@ func TestValue_Get_IntToStringConversion(t *testing.T) {
 	root.Set(keypath.NewKeyPath("int"), 42)
 
 	node := root.Get(keypath.NewKeyPath("int"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	val := tree.NewValue(node, keypath.NewKeyPath("int"))
 
 	var s string
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "42", s)
+	require.NoError(t, err)
+	assert.Equal(t, "42", s)
 }
 
 func TestValue_Get_String(t *testing.T) {
@@ -64,15 +64,15 @@ func TestValue_Get_String(t *testing.T) {
 	root.Set(keypath.NewKeyPath("str"), "hello")
 
 	node := root.Get(keypath.NewKeyPath("str"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	var str string
 
 	err := val.Get(&str)
-	must.NoError(t, err)
-	test.Eq(t, "hello", str)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", str)
 }
 
 func TestValue_Get_Bool(t *testing.T) {
@@ -82,15 +82,15 @@ func TestValue_Get_Bool(t *testing.T) {
 	root.Set(keypath.NewKeyPath("bool"), true)
 
 	node := root.Get(keypath.NewKeyPath("bool"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	val := tree.NewValue(node, keypath.NewKeyPath("bool"))
 
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.True(t, b)
+	require.NoError(t, err)
+	assert.True(t, b)
 }
 
 func TestValue_Get_Float(t *testing.T) {
@@ -100,15 +100,15 @@ func TestValue_Get_Float(t *testing.T) {
 	root.Set(keypath.NewKeyPath("float"), 3.14)
 
 	node := root.Get(keypath.NewKeyPath("float"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	val := tree.NewValue(node, keypath.NewKeyPath("float"))
 
 	var f float64
 
 	err := val.Get(&f)
-	must.NoError(t, err)
-	test.Eq(t, 3.14, f)
+	require.NoError(t, err)
+	assert.InDelta(t, 3.14, f, 0.0001)
 }
 
 func TestValue_Get_BoolFromString(t *testing.T) {
@@ -123,8 +123,8 @@ func TestValue_Get_BoolFromString(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.True(t, b)
+	require.NoError(t, err)
+	assert.True(t, b)
 }
 
 func TestValue_Get_BoolFromBool(t *testing.T) {
@@ -139,8 +139,8 @@ func TestValue_Get_BoolFromBool(t *testing.T) {
 	var got bool
 
 	err := val.Get(&got)
-	must.NoError(t, err)
-	test.True(t, got)
+	require.NoError(t, err)
+	assert.True(t, got)
 
 	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
@@ -148,8 +148,8 @@ func TestValue_Get_BoolFromBool(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
-	must.NoError(t, err)
-	test.False(t, got)
+	require.NoError(t, err)
+	assert.False(t, got)
 }
 
 func TestValue_Get_IntFromString(t *testing.T) {
@@ -164,8 +164,8 @@ func TestValue_Get_IntFromString(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 123, i)
+	require.NoError(t, err)
+	assert.Equal(t, 123, i)
 }
 
 func TestValue_Get_FloatFromString(t *testing.T) {
@@ -180,8 +180,8 @@ func TestValue_Get_FloatFromString(t *testing.T) {
 	var f float64
 
 	err := val.Get(&f)
-	must.NoError(t, err)
-	test.Eq(t, 45.6, f)
+	require.NoError(t, err)
+	assert.InDelta(t, 45.6, f, 0.0001)
 }
 
 func TestValue_Get_DurationFromString(t *testing.T) {
@@ -196,8 +196,8 @@ func TestValue_Get_DurationFromString(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.NoError(t, err)
-	test.Eq(t, 5*time.Second, d)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, d)
 }
 
 func TestValue_Get_Slice(t *testing.T) {
@@ -214,8 +214,8 @@ func TestValue_Get_Slice(t *testing.T) {
 	var nums []int
 
 	err := val.Get(&nums)
-	must.NoError(t, err)
-	test.Eq(t, []int{1, 2, 3}, nums)
+	require.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3}, nums)
 
 	node = root.Get(keypath.NewKeyPath("strings"))
 	val = tree.NewValue(node, keypath.NewKeyPath("strings"))
@@ -223,8 +223,8 @@ func TestValue_Get_Slice(t *testing.T) {
 	var strs []string
 
 	err = val.Get(&strs)
-	must.NoError(t, err)
-	test.Eq(t, []string{"a", "b", "c"}, strs)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b", "c"}, strs)
 }
 
 func TestValue_Get_Map(t *testing.T) {
@@ -242,10 +242,10 @@ func TestValue_Get_Map(t *testing.T) {
 	var m map[string]any
 
 	err := val.Get(&m)
-	must.NoError(t, err)
-	test.Eq(t, "Alice", m["name"])
-	test.Eq(t, 30, m["age"])
-	test.Eq(t, true, m["active"])
+	require.NoError(t, err)
+	assert.Equal(t, "Alice", m["name"])
+	assert.Equal(t, 30, m["age"])
+	assert.Equal(t, true, m["active"])
 }
 
 func TestValue_Get_Struct(t *testing.T) {
@@ -270,11 +270,11 @@ func TestValue_Get_Struct(t *testing.T) {
 	var person Person
 
 	err := val.Get(&person)
-	must.NoError(t, err)
-	test.Eq(t, "Bob", person.Name)
-	test.Eq(t, 25, person.Age)
-	test.False(t, person.Active)
-	test.Eq(t, "something", person.Extra)
+	require.NoError(t, err)
+	assert.Equal(t, "Bob", person.Name)
+	assert.Equal(t, 25, person.Age)
+	assert.False(t, person.Active)
+	assert.Equal(t, "something", person.Extra)
 }
 
 func TestValue_Get_NestedStruct(t *testing.T) {
@@ -301,10 +301,10 @@ func TestValue_Get_NestedStruct(t *testing.T) {
 	var user User
 
 	err := val.Get(&user)
-	must.NoError(t, err)
-	test.Eq(t, "Charlie", user.Name)
-	test.Eq(t, "Moscow", user.Address.City)
-	test.Eq(t, 123456, user.Address.Zip)
+	require.NoError(t, err)
+	assert.Equal(t, "Charlie", user.Name)
+	assert.Equal(t, "Moscow", user.Address.City)
+	assert.Equal(t, 123456, user.Address.Zip)
 }
 
 func TestValue_Get_Pointer(t *testing.T) {
@@ -319,9 +319,9 @@ func TestValue_Get_Pointer(t *testing.T) {
 	var ptr *string
 
 	err := val.Get(&ptr)
-	must.NoError(t, err)
-	must.NotNil(t, ptr)
-	test.Eq(t, "pointer test", *ptr)
+	require.NoError(t, err)
+	require.NotNil(t, ptr)
+	assert.Equal(t, "pointer test", *ptr)
 }
 
 func TestValue_Get_NonPointerError(t *testing.T) {
@@ -336,8 +336,8 @@ func TestValue_Get_NonPointerError(t *testing.T) {
 	var s string
 
 	err := val.Get(s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "pointer")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pointer")
 }
 
 func TestValue_Get_NilPointerError(t *testing.T) {
@@ -350,8 +350,8 @@ func TestValue_Get_NilPointerError(t *testing.T) {
 	val := tree.NewValue(node, keypath.NewKeyPath("str"))
 
 	err := val.Get(nil)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "pointer")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pointer")
 }
 
 func TestValue_Get_TypeMismatchError(t *testing.T) {
@@ -366,8 +366,8 @@ func TestValue_Get_TypeMismatchError(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_IntFromInvalidString(t *testing.T) {
@@ -382,8 +382,8 @@ func TestValue_Get_IntFromInvalidString(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_FloatFromInvalidString(t *testing.T) {
@@ -398,8 +398,8 @@ func TestValue_Get_FloatFromInvalidString(t *testing.T) {
 	var f float64
 
 	err := val.Get(&f)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_FloatFromVariousTypes(t *testing.T) {
@@ -433,8 +433,8 @@ func TestValue_Get_FloatFromVariousTypes(t *testing.T) {
 			var got float64
 
 			err := val.Get(&got)
-			must.NoError(t, err)
-			test.Eq(t, tt.want, got)
+			require.NoError(t, err)
+			assert.InDelta(t, tt.want, got, 0.0001)
 		})
 	}
 }
@@ -451,8 +451,8 @@ func TestValue_Get_BoolFromInvalidString(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_DurationFromInvalidString(t *testing.T) {
@@ -467,8 +467,8 @@ func TestValue_Get_DurationFromInvalidString(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "parse")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse")
 }
 
 func TestValue_Get_UintFromNegativeFloatString(t *testing.T) {
@@ -483,8 +483,8 @@ func TestValue_Get_UintFromNegativeFloatString(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "invalid syntax")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid syntax")
 }
 
 func TestValue_Get_DurationFromUnsupportedType(t *testing.T) {
@@ -499,8 +499,8 @@ func TestValue_Get_DurationFromUnsupportedType(t *testing.T) {
 	var dur time.Duration
 
 	err := val.Get(&dur)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "cannot convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert")
 }
 
 func TestValue_Get_Overflow(t *testing.T) {
@@ -515,14 +515,14 @@ func TestValue_Get_Overflow(t *testing.T) {
 	var u8 uint8
 
 	err := val.Get(&u8)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 
 	var i8 int8
 
 	err = val.Get(&i8)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 
 	root.Set(keypath.NewKeyPath("huge"), 1e50)
 
@@ -532,8 +532,8 @@ func TestValue_Get_Overflow(t *testing.T) {
 	var f32 float32
 
 	err = val.Get(&f32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_MapToStringConversion(t *testing.T) {
@@ -550,10 +550,10 @@ func TestValue_Get_MapToStringConversion(t *testing.T) {
 	var m map[string]string
 
 	err := val.Get(&m)
-	must.NoError(t, err)
-	test.Eq(t, "hello", m["str"])
-	test.Eq(t, "42", m["num"])
-	test.Eq(t, "true", m["bool"])
+	require.NoError(t, err)
+	assert.Equal(t, "hello", m["str"])
+	assert.Equal(t, "42", m["num"])
+	assert.Equal(t, "true", m["bool"])
 }
 
 func TestValue_Get_MapToIntConversionError(t *testing.T) {
@@ -570,8 +570,8 @@ func TestValue_Get_MapToIntConversionError(t *testing.T) {
 	var m map[string]int
 
 	err := val.Get(&m)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_MapFromSliceError(t *testing.T) {
@@ -586,8 +586,8 @@ func TestValue_Get_MapFromSliceError(t *testing.T) {
 	var m map[string]any
 
 	err := val.Get(&m)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "not a map")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a map")
 }
 
 func TestValue_Get_MapWithNonStringKeyError(t *testing.T) {
@@ -602,8 +602,8 @@ func TestValue_Get_MapWithNonStringKeyError(t *testing.T) {
 	var badMap map[int]string
 
 	err := val.Get(&badMap)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "must have string keys")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must have string keys")
 }
 
 func TestValue_Get_Int8ToIntConversion(t *testing.T) {
@@ -618,8 +618,8 @@ func TestValue_Get_Int8ToIntConversion(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 42, i)
+	require.NoError(t, err)
+	assert.Equal(t, 42, i)
 }
 
 func TestValue_Get_Int16(t *testing.T) {
@@ -634,8 +634,8 @@ func TestValue_Get_Int16(t *testing.T) {
 	var i16 int16
 
 	err := val.Get(&i16)
-	must.NoError(t, err)
-	test.Eq(t, int16(1000), i16)
+	require.NoError(t, err)
+	assert.Equal(t, int16(1000), i16)
 }
 
 func TestValue_Get_Int32(t *testing.T) {
@@ -650,8 +650,8 @@ func TestValue_Get_Int32(t *testing.T) {
 	var i32 int32
 
 	err := val.Get(&i32)
-	must.NoError(t, err)
-	test.Eq(t, int32(100000), i32)
+	require.NoError(t, err)
+	assert.Equal(t, int32(100000), i32)
 }
 
 func TestValue_Get_Uint8(t *testing.T) {
@@ -666,8 +666,8 @@ func TestValue_Get_Uint8(t *testing.T) {
 	var u8 uint8
 
 	err := val.Get(&u8)
-	must.NoError(t, err)
-	test.Eq(t, uint8(200), u8)
+	require.NoError(t, err)
+	assert.Equal(t, uint8(200), u8)
 }
 
 func TestValue_Get_Uint16(t *testing.T) {
@@ -682,8 +682,8 @@ func TestValue_Get_Uint16(t *testing.T) {
 	var u16 uint16
 
 	err := val.Get(&u16)
-	must.NoError(t, err)
-	test.Eq(t, uint16(50000), u16)
+	require.NoError(t, err)
+	assert.Equal(t, uint16(50000), u16)
 }
 
 func TestValue_Get_Uint32(t *testing.T) {
@@ -698,8 +698,8 @@ func TestValue_Get_Uint32(t *testing.T) {
 	var u32 uint32
 
 	err := val.Get(&u32)
-	must.NoError(t, err)
-	test.Eq(t, uint32(3000000000), u32)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(3000000000), u32)
 }
 
 func TestValue_Get_DurationFromInt64(t *testing.T) {
@@ -714,8 +714,8 @@ func TestValue_Get_DurationFromInt64(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.NoError(t, err)
-	test.Eq(t, 5*time.Second, d)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, d)
 }
 
 func TestValue_Get_DurationFromUint64(t *testing.T) {
@@ -730,8 +730,8 @@ func TestValue_Get_DurationFromUint64(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.NoError(t, err)
-	test.Eq(t, 5*time.Second, d)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, d)
 }
 
 func TestValue_Get_DurationFromFloat(t *testing.T) {
@@ -746,8 +746,8 @@ func TestValue_Get_DurationFromFloat(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.NoError(t, err)
-	test.Eq(t, time.Duration(2500000000), d)
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(2500000000), d)
 }
 
 func TestValue_Get_StringFromBytes(t *testing.T) {
@@ -762,8 +762,8 @@ func TestValue_Get_StringFromBytes(t *testing.T) {
 	var s string
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "hello bytes", s)
+	require.NoError(t, err)
+	assert.Equal(t, "hello bytes", s)
 }
 
 func TestValue_Get_StringFromStringer(t *testing.T) {
@@ -778,8 +778,8 @@ func TestValue_Get_StringFromStringer(t *testing.T) {
 	var s string
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "I am a Stringer", s)
+	require.NoError(t, err)
+	assert.Equal(t, "I am a Stringer", s)
 }
 
 func TestValue_Get_StringFromInt(t *testing.T) {
@@ -794,8 +794,8 @@ func TestValue_Get_StringFromInt(t *testing.T) {
 	var s string
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "123", s)
+	require.NoError(t, err)
+	assert.Equal(t, "123", s)
 }
 
 func TestValue_Get_BoolFromZero(t *testing.T) {
@@ -810,8 +810,8 @@ func TestValue_Get_BoolFromZero(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.False(t, b)
+	require.NoError(t, err)
+	assert.False(t, b)
 }
 
 func TestValue_Get_BoolFromOne(t *testing.T) {
@@ -826,8 +826,8 @@ func TestValue_Get_BoolFromOne(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.True(t, b)
+	require.NoError(t, err)
+	assert.True(t, b)
 }
 
 func TestValue_Get_BoolFromNegative(t *testing.T) {
@@ -842,8 +842,8 @@ func TestValue_Get_BoolFromNegative(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.True(t, b)
+	require.NoError(t, err)
+	assert.True(t, b)
 }
 
 func TestValue_Get_BoolFromUint(t *testing.T) {
@@ -858,8 +858,8 @@ func TestValue_Get_BoolFromUint(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.NoError(t, err)
-	test.True(t, b)
+	require.NoError(t, err)
+	assert.True(t, b)
 }
 
 func TestValue_Get_NilSource(t *testing.T) {
@@ -874,20 +874,20 @@ func TestValue_Get_NilSource(t *testing.T) {
 	var s string
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "", s)
+	require.NoError(t, err)
+	assert.Empty(t, s)
 
 	var i int
 
 	err = val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 0, i)
+	require.NoError(t, err)
+	assert.Equal(t, 0, i)
 
 	var p *int
 
 	err = val.Get(&p)
-	must.NoError(t, err)
-	must.Nil(t, p)
+	require.NoError(t, err)
+	require.Nil(t, p)
 }
 
 func TestValue_Meta(t *testing.T) {
@@ -897,17 +897,17 @@ func TestValue_Meta(t *testing.T) {
 	root.Set(keypath.NewKeyPath("test"), "value")
 
 	node := root.Get(keypath.NewKeyPath("test"))
-	must.NotNil(t, node)
+	require.NotNil(t, node)
 
 	node.Source = "file.yaml"
 	node.Revision = "42"
 
 	val := tree.NewValue(node, keypath.NewKeyPath("test"))
 	mi := val.Meta()
-	test.Eq(t, keypath.NewKeyPath("test"), mi.Key)
-	test.Eq(t, "file.yaml", mi.Source.Name)
-	test.Eq(t, meta.UnknownSource, mi.Source.Type)
-	test.Eq(t, "42", mi.Revision)
+	assert.Equal(t, keypath.NewKeyPath("test"), mi.Key)
+	assert.Equal(t, "file.yaml", mi.Source.Name)
+	assert.Equal(t, meta.UnknownSource, mi.Source.Type)
+	assert.Equal(t, meta.RevisionType("42"), mi.Revision)
 }
 
 func TestValue_Get_Uint64ToInt64Overflow(t *testing.T) {
@@ -922,8 +922,8 @@ func TestValue_Get_Uint64ToInt64Overflow(t *testing.T) {
 	var i64 int64
 
 	err := val.Get(&i64)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_UintToIntOverflow(t *testing.T) {
@@ -938,8 +938,8 @@ func TestValue_Get_UintToIntOverflow(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_IntFromBool(t *testing.T) {
@@ -954,8 +954,8 @@ func TestValue_Get_IntFromBool(t *testing.T) {
 	var got int
 
 	err := val.Get(&got)
-	must.NoError(t, err)
-	test.Eq(t, 1, got)
+	require.NoError(t, err)
+	assert.Equal(t, 1, got)
 
 	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
@@ -963,8 +963,8 @@ func TestValue_Get_IntFromBool(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
-	must.NoError(t, err)
-	test.Eq(t, 0, got)
+	require.NoError(t, err)
+	assert.Equal(t, 0, got)
 }
 
 func TestValue_Get_Int16Overflow(t *testing.T) {
@@ -979,8 +979,8 @@ func TestValue_Get_Int16Overflow(t *testing.T) {
 	var i16 int16
 
 	err := val.Get(&i16)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 
 	root.Set(keypath.NewKeyPath("small"), -32769)
 
@@ -988,8 +988,8 @@ func TestValue_Get_Int16Overflow(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("small"))
 
 	err = val.Get(&i16)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_Int32Overflow(t *testing.T) {
@@ -1004,8 +1004,8 @@ func TestValue_Get_Int32Overflow(t *testing.T) {
 	var i32 int32
 
 	err := val.Get(&i32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 
 	root.Set(keypath.NewKeyPath("small"), int64(-2147483649))
 
@@ -1013,8 +1013,8 @@ func TestValue_Get_Int32Overflow(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("small"))
 
 	err = val.Get(&i32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_UintFromNegativeInt(t *testing.T) {
@@ -1029,8 +1029,8 @@ func TestValue_Get_UintFromNegativeInt(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "negative")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "negative")
 }
 
 func TestValue_Get_UintFromNegativeFloat(t *testing.T) {
@@ -1045,8 +1045,8 @@ func TestValue_Get_UintFromNegativeFloat(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "negative")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "negative")
 }
 
 func TestValue_Get_UintFromNegativeFloat32(t *testing.T) {
@@ -1061,8 +1061,8 @@ func TestValue_Get_UintFromNegativeFloat32(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "negative")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "negative")
 }
 
 func TestValue_Get_Uint16Overflow(t *testing.T) {
@@ -1077,8 +1077,8 @@ func TestValue_Get_Uint16Overflow(t *testing.T) {
 	var u16 uint16
 
 	err := val.Get(&u16)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_Uint32Overflow(t *testing.T) {
@@ -1093,8 +1093,8 @@ func TestValue_Get_Uint32Overflow(t *testing.T) {
 	var u32 uint32
 
 	err := val.Get(&u32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_UintFromBool(t *testing.T) {
@@ -1109,8 +1109,8 @@ func TestValue_Get_UintFromBool(t *testing.T) {
 	var got uint
 
 	err := val.Get(&got)
-	must.NoError(t, err)
-	test.Eq(t, uint(1), got)
+	require.NoError(t, err)
+	assert.Equal(t, uint(1), got)
 
 	root.Set(keypath.NewKeyPath("boolfalse"), false)
 
@@ -1118,8 +1118,8 @@ func TestValue_Get_UintFromBool(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("boolfalse"))
 
 	err = val.Get(&got)
-	must.NoError(t, err)
-	test.Eq(t, uint(0), got)
+	require.NoError(t, err)
+	assert.Equal(t, uint(0), got)
 }
 
 func TestValue_Get_UintFromInvalidString(t *testing.T) {
@@ -1134,8 +1134,8 @@ func TestValue_Get_UintFromInvalidString(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_UintFromVariousTypes(t *testing.T) {
@@ -1167,8 +1167,8 @@ func TestValue_Get_UintFromVariousTypes(t *testing.T) {
 			var got uint64
 
 			err := val.Get(&got)
-			must.NoError(t, err)
-			test.Eq(t, tt.want, got)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -1185,8 +1185,8 @@ func TestValue_Get_UintFromUnsupportedType(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert to uint")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert to uint")
 }
 
 func TestValue_Get_Float32Overflow(t *testing.T) {
@@ -1201,8 +1201,8 @@ func TestValue_Get_Float32Overflow(t *testing.T) {
 	var f32 float32
 
 	err := val.Get(&f32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 
 	root.Set(keypath.NewKeyPath("negHuge"), -1e100)
 
@@ -1210,8 +1210,8 @@ func TestValue_Get_Float32Overflow(t *testing.T) {
 	val = tree.NewValue(node, keypath.NewKeyPath("negHuge"))
 
 	err = val.Get(&f32)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_FloatFromUnsupportedType(t *testing.T) {
@@ -1226,8 +1226,8 @@ func TestValue_Get_FloatFromUnsupportedType(t *testing.T) {
 	var f float64
 
 	err := val.Get(&f)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_BoolFromUnsupportedType(t *testing.T) {
@@ -1242,8 +1242,8 @@ func TestValue_Get_BoolFromUnsupportedType(t *testing.T) {
 	var b bool
 
 	err := val.Get(&b)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_SliceFromNonSliceError(t *testing.T) {
@@ -1258,8 +1258,8 @@ func TestValue_Get_SliceFromNonSliceError(t *testing.T) {
 	var s []int
 
 	err := val.Get(&s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "not a slice")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a slice")
 }
 
 func TestValue_Get_MapKeyNotStringError(t *testing.T) {
@@ -1274,8 +1274,8 @@ func TestValue_Get_MapKeyNotStringError(t *testing.T) {
 	var m map[string]string
 
 	err := val.Get(&m)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "key is not string")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "key is not string")
 }
 
 func TestValue_Get_StructSourceNotMapError(t *testing.T) {
@@ -1294,8 +1294,8 @@ func TestValue_Get_StructSourceNotMapError(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "must be a map")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a map")
 }
 
 func TestValue_Get_StructMapKeyNotStringError(t *testing.T) {
@@ -1314,8 +1314,8 @@ func TestValue_Get_StructMapKeyNotStringError(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "must have string keys")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must have string keys")
 }
 
 func TestValue_Get_StructFieldDecodeError(t *testing.T) {
@@ -1334,8 +1334,8 @@ func TestValue_Get_StructFieldDecodeError(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert")
 }
 
 func TestValue_Get_StructUnexportedField(t *testing.T) {
@@ -1356,9 +1356,9 @@ func TestValue_Get_StructUnexportedField(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "hello", s.Exported)
-	test.Eq(t, "", s.unexported)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", s.Exported)
+	assert.Empty(t, s.unexported)
 }
 
 func TestValue_Get_StructYamlTagComma(t *testing.T) {
@@ -1377,8 +1377,8 @@ func TestValue_Get_StructYamlTagComma(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "value", s.Field)
+	require.NoError(t, err)
+	assert.Equal(t, "value", s.Field)
 }
 
 func TestValue_Get_StructMissingField(t *testing.T) {
@@ -1398,9 +1398,9 @@ func TestValue_Get_StructMissingField(t *testing.T) {
 	var s S
 
 	err := val.Get(&s)
-	must.NoError(t, err)
-	test.Eq(t, "hello", s.Present)
-	test.Eq(t, "", s.Missing)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", s.Present)
+	assert.Empty(t, s.Missing)
 }
 
 func TestValue_Get_DurationOverflowInt64(t *testing.T) {
@@ -1416,8 +1416,8 @@ func TestValue_Get_DurationOverflowInt64(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_DurationOverflowUint64(t *testing.T) {
@@ -1433,8 +1433,8 @@ func TestValue_Get_DurationOverflowUint64(t *testing.T) {
 	var d time.Duration
 
 	err := val.Get(&d)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "overflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
 }
 
 func TestValue_Get_UnsupportedDestinationType(t *testing.T) {
@@ -1449,8 +1449,8 @@ func TestValue_Get_UnsupportedDestinationType(t *testing.T) {
 	var c complex64
 
 	err := val.Get(&c)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 }
 
 func TestValue_Get_InterfaceImplemented(t *testing.T) {
@@ -1465,8 +1465,8 @@ func TestValue_Get_InterfaceImplemented(t *testing.T) {
 	var iface fmt.Stringer
 
 	err := val.Get(&iface)
-	must.NoError(t, err)
-	test.Eq(t, "I am a Stringer", iface.String())
+	require.NoError(t, err)
+	assert.Equal(t, "I am a Stringer", iface.String())
 }
 
 func TestValue_Get_InterfaceEmpty(t *testing.T) {
@@ -1481,8 +1481,8 @@ func TestValue_Get_InterfaceEmpty(t *testing.T) {
 	var iface any
 
 	err := val.Get(&iface)
-	must.NoError(t, err)
-	test.Eq(t, 42, iface)
+	require.NoError(t, err)
+	assert.Equal(t, 42, iface)
 }
 
 func TestValue_Get_IntFromUint(t *testing.T) {
@@ -1497,8 +1497,8 @@ func TestValue_Get_IntFromUint(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 42, i)
+	require.NoError(t, err)
+	assert.Equal(t, 42, i)
 }
 
 func TestValue_Get_Int64FromUint64(t *testing.T) {
@@ -1513,8 +1513,8 @@ func TestValue_Get_Int64FromUint64(t *testing.T) {
 	var i64 int64
 
 	err := val.Get(&i64)
-	must.NoError(t, err)
-	test.Eq(t, int64(1234567890), i64)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1234567890), i64)
 }
 
 func TestValue_Get_IntFromFloat(t *testing.T) {
@@ -1529,8 +1529,8 @@ func TestValue_Get_IntFromFloat(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.NoError(t, err)
-	test.Eq(t, 3, i)
+	require.NoError(t, err)
+	assert.Equal(t, 3, i)
 }
 
 func TestValue_Get_UintFromFloat(t *testing.T) {
@@ -1545,8 +1545,8 @@ func TestValue_Get_UintFromFloat(t *testing.T) {
 	var u uint
 
 	err := val.Get(&u)
-	must.NoError(t, err)
-	test.Eq(t, uint(5), u)
+	require.NoError(t, err)
+	assert.Equal(t, uint(5), u)
 }
 
 func TestValue_Get_IntFromVariousTypes(t *testing.T) {
@@ -1580,8 +1580,8 @@ func TestValue_Get_IntFromVariousTypes(t *testing.T) {
 			var got int64
 
 			err := val.Get(&got)
-			must.NoError(t, err)
-			test.Eq(t, tt.want, got)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -1598,8 +1598,8 @@ func TestValue_Get_IntFromUnsupportedType(t *testing.T) {
 	var i int
 
 	err := val.Get(&i)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "convert to int")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "convert to int")
 }
 
 func TestValue_Get_BoolFromNumericTypes(t *testing.T) {
@@ -1641,8 +1641,8 @@ func TestValue_Get_BoolFromNumericTypes(t *testing.T) {
 			var b bool
 
 			err := val.Get(&b)
-			must.NoError(t, err)
-			test.Eq(t, tt.want, b)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, b)
 		})
 	}
 }
@@ -1659,8 +1659,8 @@ func TestValue_Get_SliceElementConversionError(t *testing.T) {
 	var s []int
 
 	err := val.Get(&s)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "slice element")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "slice element")
 }
 
 func TestValue_Get_UnsupportedDestinationKinds(t *testing.T) {
@@ -1675,42 +1675,42 @@ func TestValue_Get_UnsupportedDestinationKinds(t *testing.T) {
 	var arr [1]int
 
 	err := val.Get(&arr)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var ch chan int
 
 	err = val.Get(&ch)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var fn func()
 
 	err = val.Get(&fn)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var up unsafe.Pointer
 
 	err = val.Get(&up)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var ui uintptr
 
 	err = val.Get(&ui)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var c64 complex64
 
 	err = val.Get(&c64)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 
 	var c128 complex128
 
 	err = val.Get(&c128)
-	must.Error(t, err)
-	test.StrContains(t, err.Error(), "unsupported")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
 }

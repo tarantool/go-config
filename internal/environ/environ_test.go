@@ -3,7 +3,7 @@ package environ_test
 import (
 	"testing"
 
-	"github.com/shoenig/test"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/tarantool/go-config/internal/environ"
 	"github.com/tarantool/go-config/internal/testutil"
@@ -16,8 +16,8 @@ func TestParse(t *testing.T) {
 		"FOO=bar",
 		"MYAPP_HOST=localhost",
 		"EMPTY=",
-		"=VALUE",    // malformed, should be skipped.
-		"NO_EQUALS", // malformed, should be skipped.
+		"=VALUE",
+		"NO_EQUALS",
 	}
 
 	expected := []testutil.TestIterSeq2Pair[string, string]{
@@ -32,10 +32,6 @@ func TestParse(t *testing.T) {
 func TestParseAll(t *testing.T) {
 	t.Parallel()
 
-	// We can't predict the environment, but we can verify that
-	// ParseAll returns at least as many entries as os.Environ().
-	// However, ParseAll skips malformed entries, so it may be fewer.
-	// Instead, just ensure it doesn't panic and returns something.
 	iter := environ.ParseAll()
 
 	count := 0
@@ -43,9 +39,7 @@ func TestParseAll(t *testing.T) {
 		count++
 	}
 
-	// At least zero entries (possible in empty environment).
-	// We just ensure we can iterate.
-	test.True(t, count >= 0)
+	assert.GreaterOrEqual(t, count, 0)
 }
 
 func TestParseEmpty(t *testing.T) {
@@ -63,6 +57,5 @@ func TestParseMalformed(t *testing.T) {
 		"=VALUE",
 		"=VALUE=",
 	}
-	// All entries malformed, should be skipped.
 	testutil.TestIterSeq2Empty(t, environ.Parse(env))
 }

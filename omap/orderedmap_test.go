@@ -3,8 +3,8 @@ package omap_test
 import (
 	"testing"
 
-	"github.com/shoenig/test"
-	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config/internal/testutil"
 	"github.com/tarantool/go-config/omap"
@@ -17,8 +17,8 @@ func TestOrderedMap_Set_Get_single(t *testing.T) {
 	m.Set("a", 1)
 
 	val, ok := m.Get("a")
-	must.True(t, ok)
-	test.Eq(t, 1, val)
+	require.True(t, ok)
+	assert.Equal(t, 1, val)
 }
 
 func TestOrderedMap_Set_Get_multiple(t *testing.T) {
@@ -30,16 +30,16 @@ func TestOrderedMap_Set_Get_multiple(t *testing.T) {
 	m.Set("c", 3)
 
 	val, ok := m.Get("a")
-	must.True(t, ok)
-	test.Eq(t, 1, val)
+	require.True(t, ok)
+	assert.Equal(t, 1, val)
 
 	val, ok = m.Get("b")
-	must.True(t, ok)
-	test.Eq(t, 2, val)
+	require.True(t, ok)
+	assert.Equal(t, 2, val)
 
 	val, ok = m.Get("c")
-	must.True(t, ok)
-	test.Eq(t, 3, val)
+	require.True(t, ok)
+	assert.Equal(t, 3, val)
 }
 
 func TestOrderedMap_Set_Get_missing(t *testing.T) {
@@ -51,7 +51,7 @@ func TestOrderedMap_Set_Get_missing(t *testing.T) {
 	m.Set("c", 3)
 
 	_, ok := m.Get("missing")
-	test.False(t, ok)
+	assert.False(t, ok)
 }
 
 func TestOrderedMap_Set_Overwrite_value(t *testing.T) {
@@ -61,14 +61,14 @@ func TestOrderedMap_Set_Overwrite_value(t *testing.T) {
 	m.Set("key", "first")
 
 	val, ok := m.Get("key")
-	must.True(t, ok)
-	test.Eq(t, "first", val)
+	require.True(t, ok)
+	assert.Equal(t, "first", val)
 
 	m.Set("key", "second")
 
 	val, ok = m.Get("key")
-	must.True(t, ok)
-	test.Eq(t, "second", val)
+	require.True(t, ok)
+	assert.Equal(t, "second", val)
 }
 
 func TestOrderedMap_Set_Overwrite_order(t *testing.T) {
@@ -90,13 +90,12 @@ func TestOrderedMap_Delete_existing(t *testing.T) {
 	m.Set("c", 3)
 
 	ok := m.Delete("b")
-	must.True(t, ok)
+	require.True(t, ok)
 	testutil.TestIterSeqLen(t, 2, m.Keys())
 
 	_, ok = m.Get("b")
-	test.False(t, ok)
+	assert.False(t, ok)
 
-	// Order should be a, c.
 	testutil.TestIterSeqCompare(t, []string{"a", "c"}, m.Keys())
 }
 
@@ -109,14 +108,14 @@ func TestOrderedMap_Delete_missing(t *testing.T) {
 	m.Set("c", 3)
 
 	ok := m.Delete("missing")
-	test.False(t, ok)
+	assert.False(t, ok)
 }
 
 func TestOrderedMap_Len_initial(t *testing.T) {
 	t.Parallel()
 
 	m := omap.New[string, int]()
-	test.Length(t, 0, m)
+	assert.Equal(t, 0, m.Len())
 }
 
 func TestOrderedMap_Len_afterSet(t *testing.T) {
@@ -124,7 +123,7 @@ func TestOrderedMap_Len_afterSet(t *testing.T) {
 
 	m := omap.New[string, int]()
 	m.Set("a", 1)
-	test.Length(t, 1, m)
+	assert.Equal(t, 1, m.Len())
 }
 
 func TestOrderedMap_Len_afterMultipleSet(t *testing.T) {
@@ -133,7 +132,7 @@ func TestOrderedMap_Len_afterMultipleSet(t *testing.T) {
 	m := omap.New[string, int]()
 	m.Set("a", 1)
 	m.Set("b", 2)
-	test.Length(t, 2, m)
+	assert.Equal(t, 2, m.Len())
 }
 
 func TestOrderedMap_Len_afterDelete(t *testing.T) {
@@ -143,7 +142,7 @@ func TestOrderedMap_Len_afterDelete(t *testing.T) {
 	m.Set("a", 1)
 	m.Set("b", 2)
 	m.Delete("a")
-	test.Length(t, 1, m)
+	assert.Equal(t, 1, m.Len())
 }
 
 func TestOrderedMap_Len_afterClear(t *testing.T) {
@@ -153,7 +152,7 @@ func TestOrderedMap_Len_afterClear(t *testing.T) {
 	m.Set("a", 1)
 	m.Set("b", 2)
 	m.Clear()
-	test.Length(t, 0, m)
+	assert.Equal(t, 0, m.Len())
 }
 
 func TestOrderedMap_Keys_empty(t *testing.T) {
@@ -248,7 +247,7 @@ func TestOrderedMap_Clear_empties(t *testing.T) {
 	m.Set("b", 2)
 
 	m.Clear()
-	test.Length(t, 0, m)
+	assert.Equal(t, 0, m.Len())
 	testutil.TestIterSeqEmpty(t, m.Keys())
 	testutil.TestIterSeqEmpty(t, m.Values())
 }
@@ -262,7 +261,7 @@ func TestOrderedMap_Clear_canSetAgain(t *testing.T) {
 
 	m.Clear()
 	m.Set("c", 3)
-	test.Length(t, 1, m)
+	assert.Equal(t, 1, m.Len())
 	testutil.TestIterSeqCompare(t, []string{"c"}, m.Keys())
 }
 
@@ -270,7 +269,7 @@ func TestOrderedMap_NewWithCapacity_initial(t *testing.T) {
 	t.Parallel()
 
 	m := omap.NewWithCapacity[string, int](10)
-	test.Length(t, 0, m)
+	assert.Equal(t, 0, m.Len())
 }
 
 func TestOrderedMap_NewWithCapacity_afterSet(t *testing.T) {
@@ -279,16 +278,16 @@ func TestOrderedMap_NewWithCapacity_afterSet(t *testing.T) {
 	m := omap.NewWithCapacity[string, int](10)
 	m.Set("a", 1)
 	m.Set("b", 2)
-	test.Length(t, 2, m)
+	assert.Equal(t, 2, m.Len())
 }
 
 func TestOrderedMap_NewWithCapacity_zero(t *testing.T) {
 	t.Parallel()
 
 	m := omap.NewWithCapacity[string, int](0)
-	test.Length(t, 0, m)
+	assert.Equal(t, 0, m.Len())
 	m.Set("a", 1)
-	test.Length(t, 1, m)
+	assert.Equal(t, 1, m.Len())
 }
 
 func TestOrderedMap_OrderPreservation_SetExisting(t *testing.T) {
@@ -299,14 +298,13 @@ func TestOrderedMap_OrderPreservation_SetExisting(t *testing.T) {
 	m.Set("y", 2)
 	m.Set("x", 3)
 
-	// Insert existing key, order unchanged.
 	m.Set("y", 99)
 
 	testutil.TestIterSeqCompare(t, []string{"z", "y", "x"}, m.Keys())
 
 	val, ok := m.Get("y")
-	must.True(t, ok)
-	test.Eq(t, 99, val)
+	require.True(t, ok)
+	assert.Equal(t, 99, val)
 }
 
 func TestOrderedMap_OrderPreservation_DeleteMiddle(t *testing.T) {
@@ -383,7 +381,7 @@ func TestOrderedMap_Has_true(t *testing.T) {
 	m := omap.New[string, int]()
 	m.Set("a", 1)
 
-	must.True(t, m.Has("a"))
+	require.True(t, m.Has("a"))
 }
 
 func TestOrderedMap_Has_false(t *testing.T) {
@@ -392,7 +390,7 @@ func TestOrderedMap_Has_false(t *testing.T) {
 	m := omap.New[string, int]()
 	m.Set("a", 1)
 
-	test.False(t, m.Has("b"))
+	assert.False(t, m.Has("b"))
 }
 
 func TestOrderedMap_EmptyMapBehavior_GetMissing(t *testing.T) {
@@ -400,21 +398,21 @@ func TestOrderedMap_EmptyMapBehavior_GetMissing(t *testing.T) {
 
 	m := omap.New[string, int]()
 	_, ok := m.Get("anything")
-	test.False(t, ok)
+	assert.False(t, ok)
 }
 
 func TestOrderedMap_EmptyMapBehavior_HasMissing(t *testing.T) {
 	t.Parallel()
 
 	m := omap.New[string, int]()
-	test.False(t, m.Has("anything"))
+	assert.False(t, m.Has("anything"))
 }
 
 func TestOrderedMap_EmptyMapBehavior_DeleteMissing(t *testing.T) {
 	t.Parallel()
 
 	m := omap.New[string, int]()
-	test.False(t, m.Delete("anything"))
+	assert.False(t, m.Delete("anything"))
 }
 
 func TestOrderedMap_EmptyMapBehavior_Keys(t *testing.T) {

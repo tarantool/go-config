@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shoenig/test"
-	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
@@ -19,11 +19,11 @@ func TestNewMap(t *testing.T) {
 		"foo": "bar",
 	}
 	mc := collectors.NewMap(data)
-	must.NotNil(t, mc)
-	test.Eq(t, "map", mc.Name())
-	test.Eq(t, config.UnknownSource, mc.Source())
-	test.Eq(t, "", mc.Revision())
-	test.False(t, mc.KeepOrder())
+	require.NotNil(t, mc)
+	assert.Equal(t, "map", mc.Name())
+	assert.Equal(t, config.UnknownSource, mc.Source())
+	assert.Equal(t, config.RevisionType(""), mc.Revision())
+	assert.False(t, mc.KeepOrder())
 }
 
 func TestMap_WithName(t *testing.T) {
@@ -31,7 +31,7 @@ func TestMap_WithName(t *testing.T) {
 
 	data := map[string]any{}
 	mc := collectors.NewMap(data).WithName("custom")
-	test.Eq(t, "custom", mc.Name())
+	assert.Equal(t, "custom", mc.Name())
 }
 
 func TestMap_WithSourceType(t *testing.T) {
@@ -39,7 +39,7 @@ func TestMap_WithSourceType(t *testing.T) {
 
 	data := map[string]any{}
 	mc := collectors.NewMap(data).WithSourceType(config.FileSource)
-	test.Eq(t, config.FileSource, mc.Source())
+	assert.Equal(t, config.FileSource, mc.Source())
 }
 
 func TestMap_WithRevision(t *testing.T) {
@@ -47,7 +47,7 @@ func TestMap_WithRevision(t *testing.T) {
 
 	data := map[string]any{}
 	mc := collectors.NewMap(data).WithRevision("v1.0.0")
-	test.Eq(t, "v1.0.0", mc.Revision())
+	assert.Equal(t, config.RevisionType("v1.0.0"), mc.Revision())
 }
 
 func TestMap_WithKeepOrder(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMap_WithKeepOrder(t *testing.T) {
 
 	data := map[string]any{}
 	mc := collectors.NewMap(data).WithKeepOrder(true)
-	test.True(t, mc.KeepOrder())
+	assert.True(t, mc.KeepOrder())
 }
 
 func TestMap_Read_Basic(t *testing.T) {
@@ -76,14 +76,13 @@ func TestMap_Read_Basic(t *testing.T) {
 		values = append(values, v)
 	}
 
-	test.Len(t, 2, values)
+	assert.Len(t, values, 2)
 
-	// Verify values can be extracted.
 	for _, val := range values {
 		var dest any
 
 		err := val.Get(&dest)
-		must.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -98,16 +97,14 @@ func TestMap_Read_Cancellation(t *testing.T) {
 	mc := collectors.NewMap(data)
 	valueCh := mc.Read(ctx)
 
-	// Read first value.
 	val, ok := <-valueCh
-	must.True(t, ok)
+	require.True(t, ok)
 
 	var dest int
 
 	err := val.Get(&dest)
-	must.NoError(t, err)
+	require.NoError(t, err)
 
-	// Cancel context.
 	cancel()
 
 	testutil.Drain(t, valueCh)
@@ -127,8 +124,8 @@ func TestMap_Read_ComplexStructure(t *testing.T) {
 		},
 	}
 	mc := collectors.NewMap(data).WithName("test").WithSourceType(config.FileSource)
-	test.Eq(t, "test", mc.Name())
-	test.Eq(t, config.FileSource, mc.Source())
+	assert.Equal(t, "test", mc.Name())
+	assert.Equal(t, config.FileSource, mc.Source())
 
 	ch := mc.Read(ctx)
 
@@ -139,8 +136,8 @@ func TestMap_Read_ComplexStructure(t *testing.T) {
 		var dest any
 
 		err := v.Get(&dest)
-		must.NoError(t, err)
+		require.NoError(t, err)
 	}
 
-	test.Eq(t, 3, count)
+	assert.Equal(t, 3, count)
 }
