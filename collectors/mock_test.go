@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shoenig/test"
-	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
@@ -16,39 +16,39 @@ func TestNewMock(t *testing.T) {
 	t.Parallel()
 
 	mc := collectors.NewMock()
-	must.NotNil(t, mc)
-	test.Eq(t, "mock", mc.Name())
-	test.Eq(t, config.UnknownSource, mc.Source())
-	test.Eq(t, "", mc.Revision())
-	test.False(t, mc.KeepOrder())
+	require.NotNil(t, mc)
+	assert.Equal(t, "mock", mc.Name())
+	assert.Equal(t, config.UnknownSource, mc.Source())
+	assert.Equal(t, config.RevisionType(""), mc.Revision())
+	assert.False(t, mc.KeepOrder())
 }
 
 func TestMock_WithName(t *testing.T) {
 	t.Parallel()
 
 	mc := collectors.NewMock().WithName("custom")
-	test.Eq(t, "custom", mc.Name())
+	assert.Equal(t, "custom", mc.Name())
 }
 
 func TestMock_WithSourceType(t *testing.T) {
 	t.Parallel()
 
 	mc := collectors.NewMock().WithSourceType(config.FileSource)
-	test.Eq(t, config.FileSource, mc.Source())
+	assert.Equal(t, config.FileSource, mc.Source())
 }
 
 func TestMock_WithRevision(t *testing.T) {
 	t.Parallel()
 
 	mc := collectors.NewMock().WithRevision("v1.0.0")
-	test.Eq(t, "v1.0.0", mc.Revision())
+	assert.Equal(t, config.RevisionType("v1.0.0"), mc.Revision())
 }
 
 func TestMock_WithKeepOrder(t *testing.T) {
 	t.Parallel()
 
 	mc := collectors.NewMock().WithKeepOrder(true)
-	test.True(t, mc.KeepOrder())
+	assert.True(t, mc.KeepOrder())
 }
 
 func TestMock_WithEntry(t *testing.T) {
@@ -65,20 +65,19 @@ func TestMock_WithEntry(t *testing.T) {
 		values = append(values, val)
 	}
 
-	test.Len(t, 2, values)
+	assert.Len(t, values, 2)
 
-	// Verify values can be extracted.
 	var host string
 
 	err := values[0].Get(&host)
-	must.NoError(t, err)
-	test.Eq(t, "localhost", host)
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", host)
 
 	var port int
 
 	err = values[1].Get(&port)
-	must.NoError(t, err)
-	test.Eq(t, 8080, port)
+	require.NoError(t, err)
+	assert.Equal(t, 8080, port)
 }
 
 func TestMock_WithEntries(t *testing.T) {
@@ -98,14 +97,14 @@ func TestMock_WithEntries(t *testing.T) {
 		var dest any
 
 		err := val.Get(&dest)
-		must.NoError(t, err)
+		require.NoError(t, err)
 
 		meta := val.Meta()
 
 		got[meta.Key.String()] = dest
 	}
 
-	test.Eq(t, entries, got)
+	assert.Equal(t, entries, got)
 }
 
 func TestMock_Read_Cancellation(t *testing.T) {
@@ -117,16 +116,14 @@ func TestMock_Read_Cancellation(t *testing.T) {
 		WithEntry(config.NewKeyPath("/b"), 2)
 	valueCh := mc.Read(ctx)
 
-	// Read first value.
 	val, ok := <-valueCh
-	must.True(t, ok)
+	require.True(t, ok)
 
 	var dest int
 
 	err := val.Get(&dest)
-	must.NoError(t, err)
+	require.NoError(t, err)
 
-	// Cancel context.
 	cancel()
 
 	testutil.Drain(t, valueCh)
