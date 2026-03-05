@@ -289,3 +289,27 @@ func TestMatchDoubleStar(t *testing.T) {
 		})
 	}
 }
+
+func TestNewKeyPathFromSegments(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		segments []string
+		expected keypath.KeyPath
+	}{
+		{"empty", []string{}, keypath.KeyPath{}},
+		{"single", []string{"a"}, keypath.KeyPath{"a"}},
+		{"multiple", []string{"a", "b", "c"}, keypath.KeyPath{"a", "b", "c"}},
+		{"with_empty", []string{"a", "", "c"}, keypath.KeyPath{"a", "", "c"}},
+		{"nil", nil, keypath.KeyPath{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.expected, keypath.NewKeyPathFromSegments(tt.segments))
+		})
+	}
+}
