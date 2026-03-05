@@ -3,7 +3,9 @@ package collectors
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
+	"strings"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/tree"
@@ -96,6 +98,14 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 			flattenYamlIntoTree(node, *value, newPrefix)
 		}
 	case yaml.SequenceNode:
+		// Ensure the array node exists even for empty sequences.
+		if node.Get(prefix) == nil {
+			node.Set(prefix, nil)
+		}
+
+		arrNode := node.Get(prefix)
+		arrNode.MarkArray()
+
 		for i, item := range yamlNode.Content {
 			newPrefix := prefix.Append(strconv.Itoa(i))
 
@@ -106,7 +116,7 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 		// Field `Alias` contains pointer to the anchor.
 		flattenYamlIntoTree(node, *yamlNode.Alias, prefix)
 	case yaml.ScalarNode:
-		node.Set(prefix, yamlNode.Value)
+		node.Set(prefix, resolveYamlScalar(yamlNode))
 
 		if n := node.Get(prefix); n != nil {
 			n.Range = tree.Range{
@@ -116,4 +126,103 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 		}
 	default:
 	}
+}
+
+// resolveYamlScalar converts a YAML scalar node's string value into a typed Go value
+// based on the YAML tag. Only core YAML tags (!!null, !!bool, !!int, !!float, !!str)
+// are converted; unknown tags default to string.
+func resolveYamlScalar(yamlNode yaml.Node) any {
+	tag := yamlNode.ShortTag()
+
+	switch tag {
+	case "!!null":
+		return nil
+	case "!!bool":
+		return resolveYamlBool(yamlNode.Value)
+	case "!!int":
+		return resolveYamlInt(yamlNode.Value)
+	case "!!float":
+		return resolveYamlFloat(yamlNode.Value)
+	default:
+		return yamlNode.Value
+	}
+}
+
+// resolveYamlBool parses YAML boolean values.
+func resolveYamlBool(value string) any {
+	lower := strings.ToLower(value)
+
+	switch lower {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return value
+	}
+}
+
+// resolveYamlInt parses YAML integer values (decimal, hex, octal, binary).
+func resolveYamlInt(value string) any {
+	plain := strings.ReplaceAll(value, "_", "")
+
+	i, err := strconv.ParseInt(plain, 0, 64)
+	if err == nil {
+		return i
+	}
+
+	// Try as unsigned for very large values.
+	u, err := strconv.ParseUint(plain, 0, 64)
+	if err == nil {
+		return u
+	}
+
+	// Handle 0o and 0b prefixes with signs.
+	switch {
+	case strings.HasPrefix(plain, "0o"):
+		i, err = strconv.ParseInt(plain[2:], 8, 64)
+		if err == nil {
+			return i
+		}
+	case strings.HasPrefix(plain, "-0o"):
+		i, err = strconv.ParseInt("-"+plain[3:], 8, 64)
+		if err == nil {
+			return i
+		}
+	case strings.HasPrefix(plain, "0b"):
+		i, err = strconv.ParseInt(plain[2:], 2, 64)
+		if err == nil {
+			return i
+		}
+	case strings.HasPrefix(plain, "-0b"):
+		i, err = strconv.ParseInt("-"+plain[3:], 2, 64)
+		if err == nil {
+			return i
+		}
+	}
+
+	return value
+}
+
+// resolveYamlFloat parses YAML float values including special values (.inf, .nan).
+func resolveYamlFloat(value string) any {
+	lower := strings.ToLower(value)
+
+	switch lower {
+	case ".inf", "+.inf":
+		return math.Inf(1)
+	case "-.inf":
+		return math.Inf(-1)
+	case ".nan":
+		return math.NaN()
+	}
+
+	plain := strings.ReplaceAll(value, "_", "")
+
+	f, err := strconv.ParseFloat(plain, 64)
+	if err == nil {
+		return f
+	}
+
+	return value
 }

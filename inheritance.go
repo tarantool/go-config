@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tarantool/go-config/keypath"
@@ -179,6 +180,10 @@ func cloneNode(node *tree.Node) *tree.Node {
 	clone.Value = node.Value
 	clone.Source = node.Source
 	clone.Revision = node.Revision
+
+	if node.IsArray() {
+		clone.MarkArray()
+	}
 
 	for _, key := range node.ChildrenKeys() {
 		clone.SetChild(key, cloneNode(node.Child(key)))
@@ -393,18 +398,27 @@ func setDefaultsRecursive(node *tree.Node, prefix keypath.KeyPath, val any) {
 	}
 }
 
-// isSliceNode returns true if node is a leaf with a slice value.
-func isSliceNode(n *tree.Node) bool {
-	if n == nil || !n.IsLeaf() {
+// isSliceNode returns true if node represents a sequence:
+// either an array node (from YAML sequences) or a leaf with a slice value.
+func isSliceNode(node *tree.Node) bool {
+	if node == nil {
 		return false
 	}
 
-	return reflect.TypeOf(n.Value).Kind() == reflect.Slice
+	if node.IsArray() {
+		return true
+	}
+
+	if !node.IsLeaf() {
+		return false
+	}
+
+	return reflect.TypeOf(node.Value).Kind() == reflect.Slice
 }
 
-// isMapNode returns true if node is a non-leaf node (has children).
+// isMapNode returns true if node is a non-leaf, non-array node (has children representing a map).
 func isMapNode(n *tree.Node) bool {
-	return n != nil && !n.IsLeaf()
+	return n != nil && !n.IsLeaf() && !n.IsArray()
 }
 
 // mergeIntoResult merges a single key's subtree into the result node
@@ -425,6 +439,13 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 			return
 		}
 
+		// Both are array nodes (from YAML sequences).
+		if existing.IsArray() && source.IsArray() {
+			mergeArrayNodes(existing, source)
+			return
+		}
+
+		// Both are leaf slices.
 		existingSlice, ok1 := existing.Value.([]any)
 
 		sourceSlice, ok2 := source.Value.([]any)
@@ -457,6 +478,18 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 			// Fallback to replace if not both maps.
 			result.SetChild(key, cloneNode(source))
 		}
+	}
+}
+
+// mergeArrayNodes appends children from source array node to existing array node,
+// reindexing the source children to continue after the existing ones.
+func mergeArrayNodes(existing, source *tree.Node) {
+	existingKeys := existing.ChildrenKeys()
+	start := len(existingKeys)
+
+	for i, key := range source.ChildrenKeys() {
+		srcChild := source.Child(key)
+		existing.SetChild(strconv.Itoa(start+i), cloneNode(srcChild))
 	}
 }
 
