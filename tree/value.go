@@ -67,16 +67,27 @@ func (v *valueImpl) Meta() meta.Info {
 
 // nodeToValue converts a tree node into a generic Go value.
 // If the node is a leaf (no children), returns node.Value (which may be a slice, map, or primitive).
+// For array nodes, builds a []any from children in order.
 // Otherwise, builds a map[string]any from its children.
 func nodeToValue(node *Node) any {
 	if node.IsLeaf() {
 		return node.Value
 	}
 
-	// Build map from children.
 	children := node.Children()
 	keys := node.ChildrenKeys()
 
+	// Array node - return slice.
+	if node.isArray {
+		result := make([]any, 0, len(children))
+		for _, child := range children {
+			result = append(result, nodeToValue(child))
+		}
+
+		return result
+	}
+
+	// Map node - return map.
 	m := make(map[string]any, len(children))
 	for i, child := range children {
 		m[keys[i]] = nodeToValue(child)
