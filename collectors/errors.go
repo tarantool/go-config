@@ -23,4 +23,6 @@ var (
 	ErrStorageRange = errors.New("storage range query failed")
 	// ErrStorageValidation indicates that storage integrity validation failed.
 	ErrStorageValidation = errors.New("storage integrity validation failed")
+	// ErrDirectoryRead indicates that reading a directory failed.
+	ErrDirectoryRead = errors.New("directory read failed")
 )
