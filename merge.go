@@ -15,16 +15,16 @@ import (
 // should be merged later). This function handles primitive replacement, slice
 // replacement, map recursive merging, and key order preservation based on the
 // collector's KeepOrder flag.
-func MergeCollector(root *tree.Node, col Collector) error {
-	return MergeCollectorWithMerger(root, col, Default)
+func MergeCollector(ctx context.Context, root *tree.Node, col Collector) error {
+	return MergeCollectorWithMerger(ctx, root, col, Default)
 }
 
 // MergeCollectorWithMerger reads all values from a collector and merges them into the tree
 // using the provided merger. Returns a CollectorError if any errors occur during processing.
 // Multiple errors are accumulated and returned together.
-func MergeCollectorWithMerger(root *tree.Node, col Collector, merger Merger) error {
-	ctx := merger.CreateContext(col)
-	valueCh := col.Read(context.Background())
+func MergeCollectorWithMerger(ctx context.Context, root *tree.Node, col Collector, merger Merger) error {
+	mergeCtx := merger.CreateContext(col)
+	valueCh := col.Read(ctx)
 
 	var errs []error
 
@@ -39,14 +39,14 @@ func MergeCollectorWithMerger(root *tree.Node, col Collector, merger Merger) err
 			continue
 		}
 
-		err = merger.MergeValue(ctx, root, meta.Key, raw)
+		err = merger.MergeValue(mergeCtx, root, meta.Key, raw)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("merge value at %s: %w", meta.Key.String(), err))
 			continue
 		}
 	}
 
-	err := ctx.ApplyOrdering(root)
+	err := mergeCtx.ApplyOrdering(root)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("apply ordering: %w", err))
 	}

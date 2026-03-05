@@ -25,7 +25,7 @@ func TestConfig_Stat_ExistingKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("server/port"))
@@ -43,7 +43,7 @@ func TestConfig_Stat_NonExistentKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("missing"))
@@ -67,7 +67,7 @@ func TestConfig_Stat_NestedKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("a/b/c"))
@@ -86,7 +86,7 @@ func TestConfig_Slice_Root(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	sliced, err := cfg.Slice(config.NewKeyPath(""))
@@ -114,7 +114,7 @@ func TestConfig_Slice_ValidPath(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	sliced, err := cfg.Slice(config.NewKeyPath("parent/child"))
@@ -138,7 +138,7 @@ func TestConfig_Slice_NonExistentPath(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	_, err := cfg.Slice(config.NewKeyPath("nonexistent"))
@@ -161,7 +161,7 @@ func TestConfig_Walk_RootAllValues(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath(""), -1)
@@ -196,7 +196,7 @@ func TestConfig_Walk_WithDepthLimit(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath(""), 1)
@@ -225,7 +225,7 @@ func TestConfig_Walk_FromSubPath(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, config.NewKeyPath("parent"), -1)
@@ -253,7 +253,7 @@ func TestConfig_String_ReturnsEmpty(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	assert.Empty(t, cfg.String())
@@ -268,7 +268,7 @@ func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	bytes, err := cfg.MarshalYAML()
@@ -285,7 +285,7 @@ func TestMutableConfig_Set_NotImplemented(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.BuildMutable()
+	cfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	err := cfg.Set(config.NewKeyPath("key"), "value")
@@ -301,7 +301,7 @@ func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.BuildMutable()
+	cfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	err := cfg.Merge(&cfg.Config)
@@ -317,7 +317,7 @@ func TestMutableConfig_Update_NotImplemented(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.BuildMutable()
+	cfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	err := cfg.Update(&cfg.Config)
@@ -333,7 +333,7 @@ func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.BuildMutable()
+	cfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	deleted := cfg.Delete(config.NewKeyPath("key"))

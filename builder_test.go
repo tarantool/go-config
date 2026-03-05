@@ -36,7 +36,7 @@ func TestConfigBuilder_PortOverride(t *testing.T) {
 	builder = builder.AddCollector(col1)
 	builder = builder.AddCollector(col2)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var port int
@@ -73,7 +73,7 @@ func TestConfigBuilder_TimeoutFromFirstCollector(t *testing.T) {
 	builder = builder.AddCollector(col1)
 	builder = builder.AddCollector(col2)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var timeout string
@@ -110,7 +110,7 @@ func TestConfigBuilder_LogLevelFromSecondCollector(t *testing.T) {
 	builder = builder.AddCollector(col1)
 	builder = builder.AddCollector(col2)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var level string
@@ -132,7 +132,7 @@ func TestConfigBuilder_Lookup_ExistingKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	val, ok := cfg.Lookup(config.NewKeyPath("foo"))
@@ -154,7 +154,7 @@ func TestConfigBuilder_Lookup_NonExistentKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	_, ok := cfg.Lookup(config.NewKeyPath("nonexistent"))

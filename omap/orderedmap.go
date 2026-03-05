@@ -1,4 +1,3 @@
-// Package omap provides an ordered map implementation that maintains insertion order.
 package omap
 
 import "iter"
