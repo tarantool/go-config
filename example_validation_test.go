@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -57,7 +58,7 @@ func Example_validation() {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(collectors.NewMap(validData).WithName("valid"))
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Validation errors: %v\n", errs)
 	} else {
@@ -82,7 +83,7 @@ func Example_validation() {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(collectors.NewMap(invalidData).WithName("invalid"))
 
-	_, errs = builder.Build()
+	_, errs = builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Validation failed: %v\n", len(errs) > 0)
 	}
@@ -128,7 +129,7 @@ func Example_customValidator() {
 	builder = builder.WithValidator(val)
 	builder = builder.AddCollector(collectors.NewMap(data).WithName("config"))
 
-	_, errs := builder.Build()
+	_, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Missing service: %v\n", strings.Contains(errs[0].Error(), "service"))
 	}
@@ -145,7 +146,7 @@ func Example_customValidator() {
 	builder = builder.WithValidator(val)
 	builder = builder.AddCollector(collectors.NewMap(dataWithService).WithName("config"))
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Unexpected errors: %v\n", errs)
 	} else {

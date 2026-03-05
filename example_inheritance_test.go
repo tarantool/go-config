@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/tarantool/go-config"
@@ -48,7 +49,7 @@ func Example_inheritanceBasic() {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -145,7 +146,7 @@ func Example_inheritanceMergeStrategies() {
 		config.WithInheritMerge("credentials", config.MergeDeep),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -243,7 +244,7 @@ func Example_inheritanceExclusions() {
 		config.WithNoInheritFrom(config.Global, "snapshot.dir"), // Global snapshot.dir not inherited.
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -309,7 +310,7 @@ func Example_inheritanceDefaults() {
 		}),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return

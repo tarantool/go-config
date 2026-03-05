@@ -1,4 +1,3 @@
-// Package collectors provides standard implementations of the Collector interface.
 package collectors
 
 import (

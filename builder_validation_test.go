@@ -44,7 +44,7 @@ func TestBuilder_WithValidator_Success(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 }
@@ -74,7 +74,7 @@ func TestBuilder_WithValidator_Failure(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs)
 	assert.Len(t, errs, 1)
 	// Root should be nil when validation fails; Lookup should return false.
@@ -108,7 +108,7 @@ func TestBuilder_WithJSONSchema_Success(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 }
@@ -167,7 +167,7 @@ func TestBuilder_ValidationFailure_NilRoot(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs)
 	assert.NotEmpty(t, errs)
 	// Root should be nil when validation fails; Lookup should return false.
@@ -201,7 +201,7 @@ func TestBuilder_BuildMutable_Validation(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	mcfg, errs := builder.BuildMutable()
+	mcfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 	assert.NotNil(t, mcfg.Config)
 

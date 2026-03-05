@@ -106,7 +106,7 @@ func TestStorage_Integration_Etcd(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs, "Build should succeed without errors")
 
 	// Verify that config was read correctly.
@@ -165,7 +165,7 @@ func TestStorageSource_Integration_Etcd(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var logLevel string
@@ -206,7 +206,7 @@ func TestStorage_Integration_Etcd_Update(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var mode string
@@ -229,7 +229,7 @@ func TestStorage_Integration_Etcd_Update(t *testing.T) {
 	builder = config.NewBuilder()
 	builder = builder.AddCollector(collector)
 
-	cfg, errs = builder.Build()
+	cfg, errs = builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	_, err = cfg.Get(config.NewKeyPath("mode"), &mode)
@@ -291,7 +291,7 @@ func TestStorage_Integration_Etcd_MultipleKeys(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var memory string
@@ -396,7 +396,7 @@ func TestStorage_Integration_Etcd_MergeKeys(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	// Verify that both "database/*" keys are merged into the tree.
@@ -481,7 +481,7 @@ func TestStorage_Integration_Etcd_MergeCollectors(t *testing.T) {
 	builder = builder.AddCollector(defaults)
 	builder = builder.AddCollector(storageCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	// "server/port" overridden by storage collector.
@@ -558,7 +558,7 @@ func TestStorage_Integration_Etcd_MergeOverwrite(t *testing.T) {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	ch, err := cfg.Walk(ctx, nil, 1000)

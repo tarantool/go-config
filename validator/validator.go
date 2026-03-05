@@ -1,4 +1,3 @@
-// Package validator defines interfaces and types for configuration validation.
 package validator
 
 import (
