@@ -121,7 +121,7 @@ func TestEnv_Read_CustomTransform(t *testing.T) {
 			parts[i], parts[j] = parts[j], parts[i]
 		}
 
-		return config.NewKeyPathWithDelim(strings.Join(parts, "/"), "/")
+		return config.NewKeyPathFromSegments(parts)
 	}
 
 	ec := collectors.NewEnv().
@@ -168,4 +168,21 @@ func TestEnv_Read_Cancellation(t *testing.T) {
 	cancel()
 
 	testutil.Drain(t, valueCh)
+}
+
+func TestEnv_Read_NoMatchNoEmit(t *testing.T) {
+	ctx := context.Background()
+
+	t.Setenv("OTHERAPP_FOO", "bar")
+	t.Setenv("OTHERAPP_BAZ", "qux")
+
+	ec := collectors.NewEnv().WithPrefix("MYAPP_")
+	ch := ec.Read(ctx)
+
+	var values []config.Value //nolint:prealloc
+	for val := range ch {
+		values = append(values, val)
+	}
+
+	assert.Empty(t, values)
 }

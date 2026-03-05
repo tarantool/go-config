@@ -21,3 +21,9 @@ func NewKeyPath(p string) KeyPath {
 func NewKeyPathWithDelim(p, delim string) KeyPath {
 	return keypath.NewKeyPathWithDelim(p, delim)
 }
+
+// NewKeyPathFromSegments creates a KeyPath from a slice of segments.
+// This is useful when you already have segments as a slice and don't need string parsing.
+func NewKeyPathFromSegments(segments []string) KeyPath {
+	return keypath.NewKeyPathFromSegments(segments)
+}
