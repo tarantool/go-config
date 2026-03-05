@@ -95,7 +95,7 @@ func TestDirectory_Read_SingleFile(t *testing.T) {
 		valuesMap[val.Meta().Key.String()] = dest
 	}
 
-	assert.Equal(t, "8080", valuesMap["port"])
+	assert.Equal(t, int64(8080), valuesMap["port"])
 	assert.Equal(t, "localhost", valuesMap["host"])
 }
 
@@ -139,7 +139,7 @@ func TestDirectory_Read_MultipleFiles(t *testing.T) {
 	}
 
 	assert.Len(t, valuesMap, 2)
-	assert.Equal(t, "8080", valuesMap["port"])
+	assert.Equal(t, int64(8080), valuesMap["port"])
 	assert.Equal(t, "postgres", valuesMap["dbhost"])
 }
 
@@ -272,8 +272,8 @@ func TestDirectory_Read_NestedYaml(t *testing.T) {
 
 	assert.Len(t, valuesMap, 3)
 	assert.Equal(t, "deep", valuesMap["a/b/c"])
-	assert.Equal(t, "1", valuesMap["a/b/d/0"])
-	assert.Equal(t, "2", valuesMap["a/b/d/1"])
+	assert.Equal(t, int64(1), valuesMap["a/b/d/0"])
+	assert.Equal(t, int64(2), valuesMap["a/b/d/1"])
 }
 
 func TestDirectory_Read_Cancellation(t *testing.T) {
@@ -429,7 +429,7 @@ func TestDirectory_Read_Recursive(t *testing.T) {
 	}
 
 	assert.Len(t, valuesMap, 2)
-	assert.Equal(t, "8080", valuesMap["port"])
+	assert.Equal(t, int64(8080), valuesMap["port"])
 	assert.Equal(t, "postgres", valuesMap["dbhost"])
 }
 
@@ -486,7 +486,7 @@ func TestDirectory_Read_FollowsFileSymlink(t *testing.T) {
 		valuesMap[val.Meta().Key.String()] = dest
 	}
 
-	assert.Equal(t, "8080", valuesMap["port"])
+	assert.Equal(t, int64(8080), valuesMap["port"])
 }
 
 func TestDirectory_Read_SkipsDirectorySymlink(t *testing.T) {

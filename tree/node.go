@@ -24,6 +24,10 @@ type Node struct {
 	// Range indicates the position in source file where this node was defined.
 	Range Range
 
+	// isArray indicates that this node represents a YAML sequence (array).
+	// Children are indexed by "0", "1", "2", etc.
+	isArray bool
+
 	// orderSet indicates whether the order of children has been set by a higher-priority ordered collector.
 	orderSet bool
 
@@ -39,6 +43,7 @@ func New() *Node {
 		Revision: "",
 		Range:    Range{Start: Position{Line: 0, Column: 0}, End: Position{Line: 0, Column: 0}},
 
+		isArray:  false,
 		children: nil,
 		orderSet: false,
 	}
@@ -51,6 +56,16 @@ func (n *Node) IsLeaf() bool {
 	}
 
 	return n.children.Len() == 0
+}
+
+// IsArray returns true if this node represents a sequence (array).
+func (n *Node) IsArray() bool {
+	return n.isArray
+}
+
+// MarkArray marks this node as representing a sequence (array).
+func (n *Node) MarkArray() {
+	n.isArray = true
 }
 
 // Children returns the child nodes in insertion order.

@@ -97,7 +97,7 @@ func TestStorage_Read_SingleKey(t *testing.T) {
 		assert.Equal(t, "storage:/config/app", val.Meta().Source.Name)
 	}
 
-	assert.Equal(t, "8080", valuesMap["port"])
+	assert.Equal(t, int64(8080), valuesMap["port"])
 	assert.Equal(t, "localhost", valuesMap["host"])
 	assert.NotEmpty(t, collector.Revision())
 }
@@ -221,8 +221,8 @@ func TestStorage_Read_NestedYaml(t *testing.T) {
 
 	assert.Len(t, valuesMap, 3)
 	assert.Equal(t, "deep", valuesMap["a/b/c"])
-	assert.Equal(t, "1", valuesMap["a/b/d/0"])
-	assert.Equal(t, "2", valuesMap["a/b/d/1"])
+	assert.Equal(t, int64(1), valuesMap["a/b/d/0"])
+	assert.Equal(t, int64(2), valuesMap["a/b/d/1"])
 }
 
 func TestStorage_Read_EmptyRange(t *testing.T) {
