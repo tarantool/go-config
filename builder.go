@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -116,9 +117,28 @@ func (b *Builder) Build() (Config, []error) {
 	}
 
 	for _, col := range b.collectors {
-		err := MergeCollectorWithMerger(root, col, merger)
+		multiCol, isMulti := col.(MultiCollector)
+		if !isMulti {
+			err := MergeCollectorWithMerger(root, col, merger)
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			continue
+		}
+
+		subs, err := multiCol.Collectors(context.Background())
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, NewCollectorError(col.Name(), err))
+
+			continue
+		}
+
+		for _, sub := range subs {
+			err := MergeCollectorWithMerger(root, sub, merger)
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 
