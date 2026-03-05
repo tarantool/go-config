@@ -24,3 +24,15 @@ type Collector interface {
 	// at the corresponding nesting level during merging.
 	KeepOrder() bool
 }
+
+// MultiCollector is an optional interface that a Collector may implement
+// to indicate it produces multiple independent configuration documents.
+// When the Builder encounters a MultiCollector, it calls Collectors to
+// expand it into sub-collectors and merges each one independently with
+// its own MergerContext, source name, and revision.
+type MultiCollector interface {
+	// Collectors returns the sub-collectors, each representing an
+	// independent configuration document. The returned collectors are
+	// merged in order (earlier = lower priority).
+	Collectors(ctx context.Context) ([]Collector, error)
+}

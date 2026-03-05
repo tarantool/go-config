@@ -3,7 +3,6 @@ package collectors
 
 import (
 	"context"
-	"slices"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/tree"
@@ -89,52 +88,4 @@ func (mc *Map) Revision() config.RevisionType {
 // KeepOrder implements the Collector interface.
 func (mc *Map) KeepOrder() bool {
 	return mc.keepOrder
-}
-
-// flattenMapIntoTree recursively inserts map values into a tree node.
-// If keepOrder is true, keys are inserted in sorted order to provide deterministic ordering.
-func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any, keepOrder bool) {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	if keepOrder {
-		slices.Sort(keys)
-	}
-
-	for _, k := range keys {
-		value := m[k]
-		path := prefix.Append(k)
-
-		switch val := value.(type) {
-		case map[string]any:
-			flattenMapIntoTree(node, path, val, keepOrder)
-		default:
-			// Leaf value.
-			node.Set(path, value)
-		}
-	}
-}
-
-// walkTree sends leaf values into the channel.
-func walkTree(ctx context.Context, node *tree.Node, prefix config.KeyPath, valueCh chan<- config.Value) {
-	if node.IsLeaf() {
-		select {
-		case <-ctx.Done():
-			return
-		case valueCh <- tree.NewValue(node, prefix):
-		}
-
-		return
-	}
-
-	for _, key := range node.ChildrenKeys() {
-		child := node.Child(key)
-		if child == nil {
-			continue
-		}
-
-		walkTree(ctx, child, prefix.Append(key), valueCh)
-	}
 }
