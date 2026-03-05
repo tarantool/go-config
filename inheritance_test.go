@@ -62,7 +62,7 @@ func TestWithInheritance_BasicInheritance(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -121,7 +121,7 @@ func TestWithInheritance_ChildOverridesParent(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	instanceCfg, err := cfg.Effective(config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
@@ -146,7 +146,7 @@ func TestWithInheritance_Defaults(t *testing.T) {
 		}),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	instanceCfg, err := cfg.Effective(config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
@@ -175,7 +175,7 @@ func TestWithInheritance_DefaultsOverriddenByGlobal(t *testing.T) {
 		}),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	instanceCfg, err := cfg.Effective(config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
@@ -239,7 +239,7 @@ func TestWithInheritance_EffectiveAll(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -299,7 +299,7 @@ func TestWithInheritance_NoInherit(t *testing.T) {
 		config.WithNoInherit("leader"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -350,7 +350,7 @@ func TestWithInheritance_MergeAppend(t *testing.T) {
 		config.WithInheritMerge("roles", config.MergeAppend),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -409,7 +409,7 @@ func TestWithInheritance_MergeDeep(t *testing.T) {
 		config.WithInheritMerge("credentials", config.MergeDeep),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -465,7 +465,7 @@ func TestWithInheritance_NoInheritFrom(t *testing.T) {
 		config.WithNoInheritFrom(config.Global, "snapshot.dir"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -521,7 +521,7 @@ func TestWithInheritance_MultipleHierarchies(t *testing.T) {
 		config.Levels(config.Global, "buckets", "objects"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -585,7 +585,7 @@ func TestWithInheritance_InvalidPath(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -636,7 +636,7 @@ func TestWithInheritance_PartialHierarchy(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -685,7 +685,7 @@ func TestWithInheritance_MergeAppendNonSlice(t *testing.T) {
 		config.WithInheritMerge("key", config.MergeAppend),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -721,7 +721,7 @@ func TestWithInheritance_NoInheritanceConfigured(t *testing.T) {
 		},
 	}).WithName("test").WithSourceType(config.FileSource))
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -778,7 +778,7 @@ func TestWithInheritance_EffectiveAllMultipleLeafs(t *testing.T) {
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -896,7 +896,7 @@ func TestWithInheritance_NoInheritFrom_PrefixMatching(t *testing.T) {
 		config.WithNoInheritFrom(config.Global, "credentials.users"),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -946,7 +946,7 @@ func TestWithInheritance_MergeDeep_LeafMapMismatch(t *testing.T) {
 		config.WithInheritMerge("config", config.MergeDeep),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -996,7 +996,7 @@ func TestWithInheritance_MergeDeep_MapLeafMismatch(t *testing.T) {
 		config.WithInheritMerge("config", config.MergeDeep),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -1038,7 +1038,7 @@ func TestWithInheritance_MergeAppend_ParentSliceChildNotSlice(t *testing.T) {
 		config.WithInheritMerge("tags", config.MergeAppend),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -1080,7 +1080,7 @@ func TestWithInheritance_MergeAppend_ParentMissingChildSlice(t *testing.T) {
 		config.WithInheritMerge("tags", config.MergeAppend),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -1138,7 +1138,7 @@ func TestWithInheritance_MergeDeep_NestedStrategyPath(t *testing.T) {
 		config.WithInheritMerge("credentials/users", config.MergeDeep),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -1213,7 +1213,7 @@ func TestWithInheritance_ParentAndChildStrategies(t *testing.T) {
 		config.WithInheritMerge("credentials/users", config.MergeReplace),
 	)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 
@@ -1258,7 +1258,7 @@ func TestConfig_Walk_ContextCancellation(t *testing.T) {
 		},
 	}).WithName("test").WithSourceType(config.FileSource))
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 	require.NotNil(t, cfg)
 

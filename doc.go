@@ -43,7 +43,7 @@
 //	    config.Levels(config.Global, "groups", "replicasets", "instances"),
 //	)
 //
-//	cfg, _ := b.Build()
+//	cfg, _ := b.Build(context.Background())
 //	instanceCfg, _ := cfg.Effective(config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
 //
 //	var failover string

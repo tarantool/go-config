@@ -381,7 +381,7 @@ func TestStorage_Builder_Integration(t *testing.T) {
 
 	builder = builder.AddCollector(storageCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	assert.Empty(t, errs)
 
 	var port int
@@ -410,7 +410,7 @@ func TestStorage_Builder_WithOtherCollectors(t *testing.T) {
 	builder = builder.AddCollector(mapCollector)
 	builder = builder.AddCollector(storageCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	assert.Empty(t, errs)
 
 	var val string

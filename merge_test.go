@@ -23,7 +23,7 @@ func TestMergeCollector_Success(t *testing.T) {
 		WithEntry(config.NewKeyPath("server/host"), "localhost").
 		WithName("test")
 
-	err := config.MergeCollector(root, col)
+	err := config.MergeCollector(t.Context(), root, col)
 	require.NoError(t, err)
 
 	portNode := root.Get(config.NewKeyPath("server/port"))
@@ -50,7 +50,7 @@ func TestMergeCollector_MapMerging(t *testing.T) {
 		}).
 		WithName("first")
 
-	err := config.MergeCollector(root, col1)
+	err := config.MergeCollector(t.Context(), root, col1)
 	require.NoError(t, err)
 
 	col2 := collectors.NewMock().
@@ -60,7 +60,7 @@ func TestMergeCollector_MapMerging(t *testing.T) {
 		}).
 		WithName("second")
 
-	err = config.MergeCollector(root, col2)
+	err = config.MergeCollector(t.Context(), root, col2)
 	require.NoError(t, err)
 
 	serverNode := root.Get(config.NewKeyPath("server"))
@@ -93,7 +93,7 @@ func TestMergeCollector_LeafToMapConversion(t *testing.T) {
 		WithEntry(config.NewKeyPath("server"), 8080).
 		WithName("first")
 
-	err := config.MergeCollector(root, col1)
+	err := config.MergeCollector(t.Context(), root, col1)
 	require.NoError(t, err)
 
 	serverNode := root.Get(config.NewKeyPath("server"))
@@ -108,7 +108,7 @@ func TestMergeCollector_LeafToMapConversion(t *testing.T) {
 		}).
 		WithName("second")
 
-	err = config.MergeCollector(root, col2)
+	err = config.MergeCollector(t.Context(), root, col2)
 	require.NoError(t, err)
 
 	serverNode = root.Get(config.NewKeyPath("server"))
@@ -137,7 +137,7 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 		WithEntry(config.NewKeyPath("items"), []string{"a", "b"}).
 		WithName("first")
 
-	err := config.MergeCollector(root, col1)
+	err := config.MergeCollector(t.Context(), root, col1)
 	require.NoError(t, err)
 
 	itemsNode := root.Get(config.NewKeyPath("items"))
@@ -150,7 +150,7 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 		WithEntry(config.NewKeyPath("items"), []string{"c", "d", "e"}).
 		WithName("second")
 
-	err = config.MergeCollector(root, col2)
+	err = config.MergeCollector(t.Context(), root, col2)
 	require.NoError(t, err)
 
 	itemsNode = root.Get(config.NewKeyPath("items"))
@@ -163,7 +163,7 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 		WithEntry(config.NewKeyPath("items"), 42).
 		WithName("third")
 
-	err = config.MergeCollector(root, col3)
+	err = config.MergeCollector(t.Context(), root, col3)
 	require.NoError(t, err)
 
 	itemsNode = root.Get(config.NewKeyPath("items"))
@@ -182,7 +182,7 @@ func TestMergeCollectorWithMerger_ErrorInMergeValue(t *testing.T) {
 		WithName("test")
 
 	merger := &errorMerger{err: errors.New("merge failed")} //nolint:err113
-	err := config.MergeCollectorWithMerger(root, col, merger)
+	err := config.MergeCollectorWithMerger(t.Context(), root, col, merger)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "collector test: merge value at key: merge failed")
 
@@ -202,7 +202,7 @@ func TestMergeCollectorWithMerger_ApplyOrderingError(t *testing.T) {
 		WithKeepOrder(true)
 
 	merger := &orderingErrorMerger{}
-	err := config.MergeCollectorWithMerger(root, col, merger)
+	err := config.MergeCollectorWithMerger(t.Context(), root, col, merger)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "collector test: apply ordering: ordering failed")
 
@@ -224,7 +224,7 @@ func TestMergeCollectorWithMerger_MultipleErrors(t *testing.T) {
 		},
 	}
 
-	err := config.MergeCollector(root, col)
+	err := config.MergeCollector(t.Context(), root, col)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "collector multi: failed to get raw value for key key0: first error")
 	require.ErrorContains(t, err, "failed to get raw value for key key1: second error")

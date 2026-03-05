@@ -387,6 +387,7 @@ func (c *Config) collectLeafEntities(
 }
 
 // MutableConfig is an extension of Config that allows safe runtime modifications.
+// Note: MutableConfig is not implemented yet and is under active development.
 type MutableConfig struct {
 	Config // Embeds the read-only interface.
 
@@ -398,6 +399,7 @@ type MutableConfig struct {
 
 // Set sets or overwrites a value at the specified path.
 // The key's metadata must be updated: Source becomes 'ModifiedSource', and Revision is incremented.
+// Note: this method is not implemented yet and is under active development.
 func (mc *MutableConfig) Set(path KeyPath, value any) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -429,6 +431,7 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 // Merge merges two configurations so that all values from the new configuration
 // are added or override similar values in the current one.
 // An error may occur if the new values do not conform to the current schema.
+// Note: this method is not implemented yet and is under active development.
 func (mc *MutableConfig) Merge(other *Config) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -466,6 +469,7 @@ func (mc *MutableConfig) Merge(other *Config) error {
 // Update merges two configurations, but applies only those values that already exist
 // in the current config. Everything else is ignored.
 // An error may occur if the new values do not match the type of the current value according to the schema.
+// Note: this method is not implemented yet and is under active development.
 func (mc *MutableConfig) Update(other *Config) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -504,6 +508,7 @@ func (mc *MutableConfig) Update(other *Config) error {
 }
 
 // Delete removes a key from the configuration.
+// Note: this method is not implemented yet and is under active development.
 func (mc *MutableConfig) Delete(_ KeyPath) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
