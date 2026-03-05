@@ -27,6 +27,16 @@ func NewKeyPathWithDelim(path, delim string) KeyPath {
 	return strings.Split(path, delim)
 }
 
+// NewKeyPathFromSegments creates a KeyPath from a slice of segments.
+// This is useful when you already have segments as a slice and don't need string parsing.
+func NewKeyPathFromSegments(segments []string) KeyPath {
+	if segments == nil {
+		return KeyPath{}
+	}
+
+	return KeyPath(segments)
+}
+
 // String returns a textual representation of the path with slash ("/") as the delimiter.
 func (p KeyPath) String() string {
 	return p.MakeString("/")

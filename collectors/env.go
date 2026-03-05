@@ -114,7 +114,11 @@ func (ec *Env) Read(ctx context.Context) <-chan config.Value {
 		}
 
 		// Walk the tree and send leaf values.
-		walkTree(ctx, root, config.NewKeyPath(""), valueCh)
+		// Skip if no environment variables matched — emitting an empty
+		// root node would overwrite all existing values during merge.
+		if !root.IsLeaf() {
+			walkTree(ctx, root, config.NewKeyPath(""), valueCh)
+		}
 	}()
 
 	return valueCh
@@ -156,7 +160,7 @@ func (ec *Env) defaultTransform(key string) config.KeyPath {
 		}
 	}
 
-	return config.NewKeyPathWithDelim(strings.Join(filtered, "/"), "/")
+	return config.NewKeyPathFromSegments(filtered)
 }
 
 // stripPrefix removes the configured prefix from the environment variable key.
