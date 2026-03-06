@@ -153,8 +153,8 @@ github.com/tarantool/go-iproto v1.1.0 h1:HULVOIHsiehI+FnHfM7wMDntuzUddO09DKqu2Wn
 github.com/tarantool/go-iproto v1.1.0/go.mod h1:LNCtdyZxojUed8SbOiYHoc3v9NvaZTB7p96hUySMlIo=
 github.com/tarantool/go-option v1.0.0 h1:+Etw0i3TjsXvADTo5rfZNCfsXe3BfHOs+iVfIrl0Nlo=
 github.com/tarantool/go-option v1.0.0/go.mod h1:lXzzeZtL+rPUtLOCDP6ny3FemFBjruG9aHKzNN2bS08=
-github.com/tarantool/go-storage v1.1.1-0.20260305103144-24f65fa44986 h1:3r10BSu/OcltNswq6xDUw8W7rw1bbmY9fvX5Lv1AM5k=
-github.com/tarantool/go-storage v1.1.1-0.20260305103144-24f65fa44986/go.mod h1:lM/UPkuzeggynwtmIHD5OCqdz5H2RHsXX6HaOzYBCzk=
+github.com/tarantool/go-storage v1.1.1 h1:hLP2El9XKcpAB9OA55rEWHIXbxVmEFksxV4+phvif78=
+github.com/tarantool/go-storage v1.1.1/go.mod h1:lM/UPkuzeggynwtmIHD5OCqdz5H2RHsXX6HaOzYBCzk=
 github.com/tarantool/go-tarantool/v2 v2.4.1 h1:Bk9mh+gMPVmHTSefHvVBpEkf6P2UZA/8xa5kqgyQtyo=
 github.com/tarantool/go-tarantool/v2 v2.4.1/go.mod h1:MTbhdjFc3Jl63Lgi/UJr5D+QbT+QegqOzsNJGmaw7VM=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 h1:uruHq4dN7GR16kFc5fp3d1RIYzJW5onx8Ybykw2YQFA=

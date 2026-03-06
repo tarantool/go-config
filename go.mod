@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/kaptinlin/jsonschema v0.6.7
 	github.com/stretchr/testify v1.11.1
-	github.com/tarantool/go-storage v1.1.1-0.20260305103144-24f65fa44986
+	github.com/tarantool/go-storage v1.1.1
 	go.etcd.io/etcd/client/pkg/v3 v3.6.5
 	go.etcd.io/etcd/client/v3 v3.6.5
 	go.etcd.io/etcd/tests/v3 v3.6.5
