@@ -90,6 +90,34 @@ func (v *valueChangeValidator) SchemaType() string {
 	return "value-change"
 }
 
+// minKeysValidator fails validation when number of keys is below minimum.
+type minKeysValidator struct {
+	minKeys int
+}
+
+func (m *minKeysValidator) Validate(root *tree.Node) []validator.ValidationError {
+	if root == nil {
+		return nil
+	}
+
+	if len(root.Children()) < m.minKeys {
+		return []validator.ValidationError{
+			{
+				Path:    config.NewKeyPath(""),
+				Range:   validator.NewEmptyRange(),
+				Code:    "too-few-keys",
+				Message: "too few keys",
+			},
+		}
+	}
+
+	return nil
+}
+
+func (m *minKeysValidator) SchemaType() string {
+	return "min-keys"
+}
+
 func TestConfig_Get_MissingKey(t *testing.T) {
 	t.Parallel()
 
