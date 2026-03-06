@@ -39,6 +39,8 @@ merging and resolves effective configuration for any entity in the hierarchy.
 - Multiple Sources: load configuration from maps, files, directories,
   environment variables, or centralized key-value storages (etcd, TCS)
 - Order Preservation: maintain insertion order of keys when needed
+- Mutable Configuration: thread-safe runtime modifications with
+  validation
 - Reactive Watch: monitor storage changes via the Watcher interface
 - Custom Mergers: full control over how collector values are merged into
   the configuration tree
@@ -198,22 +200,27 @@ Collectors are pluggable data sources. Each implements the `Collector` interface
 and streams configuration values via a channel.
 
 #### Map Collector
+
 Reads configuration from an in-memory `map[string]any`. Useful for defaults
 and tests.
 
 #### File / Source Collector
+
 Reads configuration from a single file (e.g., YAML) using the `DataSource` and
 `Format` interfaces.
 
 #### Directory Collector
+
 Reads all matching files from a directory (e.g., `*.yaml`). Each file is merged
 independently as a sub-collector. Supports recursive scanning.
 
 #### Env Collector
+
 Reads configuration from environment variables with a configurable prefix and
 key transformation.
 
 #### Storage Collector
+
 Reads multiple configuration documents from a centralized key-value storage
 (etcd, TCS) under a common prefix with integrity verification via
 [go-storage](https://github.com/tarantool/go-storage).
@@ -255,6 +262,24 @@ builder, err := builder.WithJSONSchema(schemaReader)
 builder = builder.WithValidator(myValidator)
 ```
 
+### Mutable Configuration
+
+`BuildMutable()` returns a `MutableConfig` that allows thread-safe runtime
+modifications:
+
+```go
+cfg, errs := builder.BuildMutable()
+
+// Set a single value.
+err := cfg.Set(config.NewKeyPath("server/port"), 9090)
+
+// Merge another config.
+err = cfg.Merge(&otherConfig)
+
+// Update only existing keys.
+err = cfg.Update(&patchConfig)
+```
+
 ### Examples
 
 Runnable examples are available in the root package as `Example_*` test
@@ -268,6 +293,8 @@ functions. Run them all with `go test -v -run Example ./...`.
 | `Example_walkConfig` | Iterating leaf values with `Walk`, depth control, and sub-paths |
 | `Example_sliceConfig` | Extracting a sub-configuration with `Slice` |
 | `Example_effectiveAll` | Resolving all leaf entities at once with `EffectiveAll` |
+| `Example_mutableConfig` | Runtime modifications via `BuildMutable`, `Set`, `Merge`, `Update` |
+
 #### Collectors — [`example_collectors_test.go`](example_collectors_test.go)
 
 | Example | Description |

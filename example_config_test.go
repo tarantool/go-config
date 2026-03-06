@@ -308,3 +308,116 @@ func Example_effectiveAll() {
 	// groups/storages/replicasets/s-001/instances/s-001-b: listen=127.0.0.1:3302 failover=manual
 }
 
+// Example_mutableConfig demonstrates MutableConfig with Set, Merge, and Update
+// methods for modifying configuration at runtime.
+func Example_mutableConfig() {
+	data := map[string]any{
+		"server": map[string]any{
+			"host": "localhost",
+			"port": 8080,
+		},
+		"debug": false,
+	}
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(data).WithName("config"))
+
+	cfg, errs := builder.BuildMutable(context.Background())
+	if len(errs) > 0 {
+		fmt.Printf("Build errors: %v\n", errs)
+		return
+	}
+
+	// Set overwrites a single value.
+	err := cfg.Set(config.NewKeyPath("server/port"), 9090)
+	if err != nil {
+		fmt.Printf("Set error: %v\n", err)
+		return
+	}
+
+	var port int
+
+	_, err = cfg.Get(config.NewKeyPath("server/port"), &port)
+	if err != nil {
+		fmt.Printf("Get error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Port after Set: %d\n", port)
+
+	// Merge adds all values from another Config (overrides existing keys).
+	overrideData := map[string]any{
+		"debug": true,
+	}
+
+	overrideBuilder := config.NewBuilder()
+
+	overrideBuilder = overrideBuilder.AddCollector(collectors.NewMap(overrideData))
+
+	overrideCfg, errs := overrideBuilder.Build(context.Background())
+	if len(errs) > 0 {
+		fmt.Printf("Build errors: %v\n", errs)
+		return
+	}
+
+	err = cfg.Merge(&overrideCfg)
+	if err != nil {
+		fmt.Printf("Merge error: %v\n", err)
+		return
+	}
+
+	var debug bool
+
+	_, err = cfg.Get(config.NewKeyPath("debug"), &debug)
+	if err != nil {
+		fmt.Printf("Get error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Debug after Merge: %v\n", debug)
+
+	// Update only modifies keys that already exist in the config.
+	updateData := map[string]any{
+		"server": map[string]any{
+			"host": "0.0.0.0",
+		},
+		"new_key": "ignored",
+	}
+
+	updateBuilder := config.NewBuilder()
+
+	updateBuilder = updateBuilder.AddCollector(collectors.NewMap(updateData))
+
+	updateCfg, errs := updateBuilder.Build(context.Background())
+	if len(errs) > 0 {
+		fmt.Printf("Build errors: %v\n", errs)
+		return
+	}
+
+	err = cfg.Update(&updateCfg)
+	if err != nil {
+		fmt.Printf("Update error: %v\n", err)
+		return
+	}
+
+	var host string
+
+	_, err = cfg.Get(config.NewKeyPath("server/host"), &host)
+	if err != nil {
+		fmt.Printf("Get error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Host after Update: %s\n", host)
+
+	// Verify that new_key was not added by Update.
+	_, ok := cfg.Lookup(config.NewKeyPath("new_key"))
+	fmt.Printf("new_key exists: %v\n", ok)
+
+	// Output:
+	// Port after Set: 9090
+	// Debug after Merge: true
+	// Host after Update: 0.0.0.0
+	// new_key exists: false
+}

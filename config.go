@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/tarantool/go-config/keypath"
@@ -397,70 +398,164 @@ type MutableConfig struct {
 	validator validator.Validator
 }
 
+// nextRevision increments a revision string. Non-numeric or empty revisions start from "1".
+func nextRevision(cur string) string {
+	n, err := strconv.ParseUint(cur, 10, 64)
+	if err != nil {
+		n = 0
+	}
+
+	return strconv.FormatUint(n+1, 10)
+}
+
+// markModified updates a node's Source and Revision to reflect a runtime modification.
+func markModified(node *tree.Node) {
+	if node == nil {
+		return
+	}
+
+	node.Source = "modified"
+	node.Revision = nextRevision(node.Revision)
+}
+
+// Get retrieves a value at the specified path with read-lock protection.
+func (mc *MutableConfig) Get(path KeyPath, dest any) (MetaInfo, error) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Get(path, dest)
+}
+
+// Lookup searches for a value by key with read-lock protection.
+func (mc *MutableConfig) Lookup(path KeyPath) (Value, bool) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Lookup(path)
+}
+
+// Stat returns metadata for a key with read-lock protection.
+func (mc *MutableConfig) Stat(path KeyPath) (MetaInfo, bool) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Stat(path)
+}
+
+// Walk returns a channel of all key-value pairs with read-lock protection.
+// The tree is cloned under the lock so the channel can be consumed safely after unlock.
+func (mc *MutableConfig) Walk(ctx context.Context, path KeyPath, depth int) (<-chan Value, error) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	snap := newConfig(cloneNode(mc.root), mc.inheritances)
+
+	return snap.Walk(ctx, path, depth)
+}
+
+// Slice returns a sub-configuration at the given path with read-lock protection.
+func (mc *MutableConfig) Slice(path KeyPath) (Config, error) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Slice(path)
+}
+
+// Effective returns the resolved config for a specific leaf entity with read-lock protection.
+func (mc *MutableConfig) Effective(path KeyPath) (Config, error) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Effective(path)
+}
+
+// EffectiveAll returns resolved configs for all leaf entities with read-lock protection.
+func (mc *MutableConfig) EffectiveAll() (map[string]Config, error) {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.EffectiveAll()
+}
+
 // Set sets or overwrites a value at the specified path.
-// The key's metadata must be updated: Source becomes 'ModifiedSource', and Revision is incremented.
-// Note: this method is not implemented yet and is under active development.
+// The key's metadata is updated: Source becomes "modified", and Revision is incremented.
+// If validation fails, the tree is restored to its previous state.
 func (mc *MutableConfig) Set(path KeyPath, value any) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
+	oldRoot := cloneNode(mc.root)
+
 	mc.root.Set(path, value)
 
-	if mc.validator != nil {
-		validationErrs := mc.validator.Validate(mc.root)
-		if len(validationErrs) > 0 {
-			node := mc.root.Get(path)
-			if node != nil {
-				node.Value = nil
-				// TODO: properly revert to previous state (should be implemented in TNTP-5724).
-			}
-
-			return &validationErrs[0]
-		}
+	restoreErr := mc.validateOrRestore(oldRoot)
+	if restoreErr != nil {
+		return restoreErr
 	}
 
-	node := mc.root.Get(path)
-	if node != nil {
-		node.Source = "modified"
-		// TODO: increment revision (should be implemented in TNTP-5724).
-	}
+	markModified(mc.root.Get(path))
 
 	return nil
 }
 
-// Merge merges two configurations so that all values from the new configuration
-// are added or override similar values in the current one.
-// An error may occur if the new values do not conform to the current schema.
-// Note: this method is not implemented yet and is under active development.
-func (mc *MutableConfig) Merge(other *Config) error {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
+// mergeOp represents a pending merge operation.
+type mergeOp struct {
+	path  keypath.KeyPath
+	value any
+}
 
+// materializeOps walks the other config and collects all leaf values as operations.
+func materializeOps(other *Config) ([]mergeOp, error) {
 	ctx := context.Background()
 
-	ch, err := other.Walk(ctx, nil, -1)
+	valueChan, err := other.Walk(ctx, nil, -1)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for val := range ch {
+	var ops []mergeOp
+
+	for val := range valueChan {
 		path := val.Meta().Key
 
 		var dest any
 
 		err := val.Get(&dest)
 		if err != nil {
-			return fmt.Errorf("failed to get value at path %s: %w", path, err)
+			return nil, fmt.Errorf("failed to get value at path %s: %w", path, err)
 		}
 
-		mc.root.Set(path, dest)
+		ops = append(ops, mergeOp{path: path, value: dest})
 	}
 
-	if mc.validator != nil {
-		validationErrs := mc.validator.Validate(mc.root)
-		if len(validationErrs) > 0 {
-			return &validationErrs[0]
-		}
+	return ops, nil
+}
+
+// Merge merges two configurations so that all values from the new configuration
+// are added or override similar values in the current one.
+// If validation fails, the tree is restored to its previous state.
+func (mc *MutableConfig) Merge(other *Config) error {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	ops, err := materializeOps(other)
+	if err != nil {
+		return err
+	}
+
+	oldRoot := cloneNode(mc.root)
+
+	for _, mergeEntry := range ops {
+		mc.root.Set(mergeEntry.path, mergeEntry.value)
+	}
+
+	restoreErr := mc.validateOrRestore(oldRoot)
+	if restoreErr != nil {
+		return restoreErr
+	}
+
+	for _, mergeEntry := range ops {
+		markModified(mc.root.Get(mergeEntry.path))
 	}
 
 	return nil
@@ -468,52 +563,90 @@ func (mc *MutableConfig) Merge(other *Config) error {
 
 // Update merges two configurations, but applies only those values that already exist
 // in the current config. Everything else is ignored.
-// An error may occur if the new values do not match the type of the current value according to the schema.
-// Note: this method is not implemented yet and is under active development.
+// If validation fails, the tree is restored to its previous state.
 func (mc *MutableConfig) Update(other *Config) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	ctx := context.Background()
-
-	ch, err := other.Walk(ctx, nil, -1)
+	ops, err := materializeOps(other)
 	if err != nil {
 		return err
 	}
 
-	for val := range ch {
-		keyPath := val.Meta().Key
-		if mc.root.Get(keyPath) == nil {
+	oldRoot := cloneNode(mc.root)
+
+	var applied []keypath.KeyPath
+
+	for _, updateEntry := range ops {
+		if mc.root.Get(updateEntry.path) == nil {
 			continue
 		}
 
-		var dest any
+		mc.root.Set(updateEntry.path, updateEntry.value)
 
-		err := val.Get(&dest)
-		if err != nil {
-			return fmt.Errorf("failed to get value at path %s: %w", keyPath, err)
-		}
-
-		mc.root.Set(keyPath, dest)
+		applied = append(applied, updateEntry.path)
 	}
 
-	if mc.validator != nil {
-		validationErrs := mc.validator.Validate(mc.root)
-		if len(validationErrs) > 0 {
-			return &validationErrs[0]
-		}
+	restoreErr := mc.validateOrRestore(oldRoot)
+	if restoreErr != nil {
+		return restoreErr
+	}
+
+	for _, path := range applied {
+		markModified(mc.root.Get(path))
 	}
 
 	return nil
 }
 
 // Delete removes a key from the configuration.
-// Note: this method is not implemented yet and is under active development.
-func (mc *MutableConfig) Delete(_ KeyPath) bool {
+// Returns true if the key was found and deleted, false otherwise.
+// If validation fails after deletion, the tree is restored and false is returned.
+func (mc *MutableConfig) Delete(path KeyPath) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	//nolint:godox
-	// TODO: not implemented (should be implemented in TNTP-5724).
-	return false
+	if mc.root == nil || len(path) == 0 {
+		return false
+	}
+
+	// Check that the target exists.
+	if mc.root.Get(path) == nil {
+		return false
+	}
+
+	oldRoot := cloneNode(mc.root)
+
+	// Navigate to the parent and delete the target child.
+	parentPath := path[:len(path)-1]
+	childKey := path[len(path)-1]
+
+	parent := mc.root.Get(parentPath)
+	if parent == nil {
+		return false
+	}
+
+	if !parent.DeleteChild(childKey) {
+		return false
+	}
+
+	restoreErr := mc.validateOrRestore(oldRoot)
+
+	return restoreErr == nil
+}
+
+// validateOrRestore validates the current tree and restores the old root on failure.
+func (mc *MutableConfig) validateOrRestore(oldRoot *tree.Node) error {
+	if mc.validator == nil {
+		return nil
+	}
+
+	validationErrs := mc.validator.Validate(mc.root)
+	if len(validationErrs) > 0 {
+		mc.root = oldRoot
+
+		return &validationErrs[0]
+	}
+
+	return nil
 }

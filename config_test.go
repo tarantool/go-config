@@ -276,7 +276,56 @@ func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
 	assert.Nil(t, bytes)
 }
 
-func TestMutableConfig_Set_NotImplemented(t *testing.T) {
+func TestMutableConfig_Set(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "original"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	err := cfg.Set(config.NewKeyPath("key"), "updated")
+	require.NoError(t, err)
+
+	var val string
+
+	meta, err := cfg.Get(config.NewKeyPath("key"), &val)
+	require.NoError(t, err)
+	assert.Equal(t, "updated", val)
+	assert.Equal(t, "modified", meta.Source.Name)
+	assert.Equal(t, "1", string(meta.Revision))
+}
+
+func TestMutableConfig_Set_RevisionIncrement(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "v1"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	err := cfg.Set(config.NewKeyPath("key"), "v2")
+	require.NoError(t, err)
+
+	meta, _ := cfg.Stat(config.NewKeyPath("key"))
+	assert.Equal(t, "1", string(meta.Revision))
+
+	err = cfg.Set(config.NewKeyPath("key"), "v3")
+	require.NoError(t, err)
+
+	meta, _ = cfg.Stat(config.NewKeyPath("key"))
+	assert.Equal(t, "2", string(meta.Revision))
+}
+
+func TestMutableConfig_Set_NewKey(t *testing.T) {
 	t.Parallel()
 
 	data := map[string]any{}
@@ -288,14 +337,67 @@ func TestMutableConfig_Set_NotImplemented(t *testing.T) {
 	cfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
-	err := cfg.Set(config.NewKeyPath("key"), "value")
+	err := cfg.Set(config.NewKeyPath("newkey"), "value")
 	require.NoError(t, err)
+
+	var val string
+
+	_, err = cfg.Get(config.NewKeyPath("newkey"), &val)
+	require.NoError(t, err)
+	assert.Equal(t, "value", val)
 }
 
-func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
+func TestMutableConfig_Set_ValidationFailure_Reverts(t *testing.T) {
 	t.Parallel()
 
-	data := map[string]any{}
+	v := &valueChangeValidator{}
+	data := map[string]any{"key": "original"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(v)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	err := cfg.Set(config.NewKeyPath("key"), "bad")
+	require.Error(t, err)
+
+	// Value should be reverted to original.
+	var val string
+
+	_, err = cfg.Get(config.NewKeyPath("key"), &val)
+	require.NoError(t, err)
+	assert.Equal(t, "original", val)
+}
+
+func TestMutableConfig_Set_ValidationFailure_RevertsNewPath(t *testing.T) {
+	t.Parallel()
+
+	v := &maxKeysValidator{maxKeys: 1}
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(v)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	err := cfg.Set(config.NewKeyPath("secondkey"), "value")
+	require.Error(t, err)
+
+	// New key should not exist after revert.
+	_, ok := cfg.Lookup(config.NewKeyPath("secondkey"))
+	assert.False(t, ok)
+}
+
+func TestMutableConfig_Merge(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value"}
 	col := collectors.NewMap(data)
 	builder := config.NewBuilder()
 
@@ -308,10 +410,74 @@ func TestMutableConfig_Merge_NotImplemented(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMutableConfig_Update_NotImplemented(t *testing.T) {
+func TestMutableConfig_Merge_Metadata(t *testing.T) {
 	t.Parallel()
 
-	data := map[string]any{}
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	otherData := map[string]any{"key": "newval", "extra": "added"}
+	col2 := collectors.NewMap(otherData)
+	builder2 := config.NewBuilder()
+
+	builder2 = builder2.AddCollector(col2)
+
+	otherCfg, errs2 := builder2.Build(t.Context())
+	require.Empty(t, errs2)
+
+	err := cfg.Merge(&otherCfg)
+	require.NoError(t, err)
+
+	meta, ok := cfg.Stat(config.NewKeyPath("key"))
+	assert.True(t, ok)
+	assert.Equal(t, "modified", meta.Source.Name)
+
+	meta, ok = cfg.Stat(config.NewKeyPath("extra"))
+	assert.True(t, ok)
+	assert.Equal(t, "modified", meta.Source.Name)
+}
+
+func TestMutableConfig_Merge_ValidationFailure_Reverts(t *testing.T) {
+	t.Parallel()
+
+	v := &maxKeysValidator{maxKeys: 1}
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(v)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	otherData := map[string]any{"newkey": "newvalue"}
+	col2 := collectors.NewMap(otherData)
+	builder2 := config.NewBuilder()
+
+	builder2 = builder2.AddCollector(col2)
+
+	otherCfg, errs2 := builder2.Build(t.Context())
+	require.Empty(t, errs2)
+
+	err := cfg.Merge(&otherCfg)
+	require.Error(t, err)
+
+	// newkey should not exist after revert.
+	_, ok := cfg.Lookup(config.NewKeyPath("newkey"))
+	assert.False(t, ok)
+}
+
+func TestMutableConfig_Update(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value"}
 	col := collectors.NewMap(data)
 	builder := config.NewBuilder()
 
@@ -324,10 +490,73 @@ func TestMutableConfig_Update_NotImplemented(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
+func TestMutableConfig_Update_Metadata(t *testing.T) {
 	t.Parallel()
 
-	data := map[string]any{}
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	otherData := map[string]any{"key": "updated"}
+	col2 := collectors.NewMap(otherData)
+	builder2 := config.NewBuilder()
+
+	builder2 = builder2.AddCollector(col2)
+
+	otherCfg, errs2 := builder2.Build(t.Context())
+	require.Empty(t, errs2)
+
+	err := cfg.Update(&otherCfg)
+	require.NoError(t, err)
+
+	meta, ok := cfg.Stat(config.NewKeyPath("key"))
+	assert.True(t, ok)
+	assert.Equal(t, "modified", meta.Source.Name)
+}
+
+func TestMutableConfig_Update_ValidationFailure_Reverts(t *testing.T) {
+	t.Parallel()
+
+	v := &valueChangeValidator{}
+	data := map[string]any{"key": "original"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(v)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	otherData := map[string]any{"key": "newvalue"}
+	col2 := collectors.NewMap(otherData)
+	builder2 := config.NewBuilder()
+
+	builder2 = builder2.AddCollector(col2)
+
+	otherCfg, errs2 := builder2.Build(t.Context())
+	require.Empty(t, errs2)
+
+	err := cfg.Update(&otherCfg)
+	require.Error(t, err)
+
+	// Value should be reverted to original.
+	var val string
+
+	_, err = cfg.Get(config.NewKeyPath("key"), &val)
+	require.NoError(t, err)
+	assert.Equal(t, "original", val)
+}
+
+func TestMutableConfig_Delete_ExistingKey(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value", "other": "data"}
 	col := collectors.NewMap(data)
 	builder := config.NewBuilder()
 
@@ -337,5 +566,99 @@ func TestMutableConfig_Delete_NotImplemented(t *testing.T) {
 	require.Empty(t, errs)
 
 	deleted := cfg.Delete(config.NewKeyPath("key"))
+	assert.True(t, deleted)
+
+	_, ok := cfg.Lookup(config.NewKeyPath("key"))
+	assert.False(t, ok)
+
+	// Other key should still exist.
+	_, ok = cfg.Lookup(config.NewKeyPath("other"))
+	assert.True(t, ok)
+}
+
+func TestMutableConfig_Delete_MissingKey(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	deleted := cfg.Delete(config.NewKeyPath("nonexistent"))
 	assert.False(t, deleted)
+}
+
+func TestMutableConfig_Delete_EmptyPath(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	deleted := cfg.Delete(config.NewKeyPath(""))
+	assert.False(t, deleted)
+}
+
+func TestMutableConfig_Delete_NestedKey(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{
+		"server": map[string]any{
+			"host": "localhost",
+			"port": 8080,
+		},
+	}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	deleted := cfg.Delete(config.NewKeyPath("server/host"))
+	assert.True(t, deleted)
+
+	_, ok := cfg.Lookup(config.NewKeyPath("server/host"))
+	assert.False(t, ok)
+
+	// server/port should still exist.
+	var port int
+
+	_, err := cfg.Get(config.NewKeyPath("server/port"), &port)
+	require.NoError(t, err)
+	assert.Equal(t, 8080, port)
+}
+
+func TestMutableConfig_Delete_ValidationFailure_Reverts(t *testing.T) {
+	t.Parallel()
+
+	// minKeysValidator requires at least 2 keys. Start with 2 keys (build passes).
+	// Deleting one would drop to 1 key, failing validation, so tree should be restored.
+	v := &minKeysValidator{minKeys: 2}
+	data := map[string]any{"key": "value", "other": "data"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(v)
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	deleted := cfg.Delete(config.NewKeyPath("key"))
+	assert.False(t, deleted)
+
+	// Key should still exist after revert.
+	_, ok := cfg.Lookup(config.NewKeyPath("key"))
+	assert.True(t, ok)
 }

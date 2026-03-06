@@ -162,7 +162,6 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 
 // BuildMutable starts the configuration assembly process but returns
 // a mutable MutableConfig object that allows changes after creation.
-// Note: this method is not implemented yet and is under active development.
 func (b *Builder) BuildMutable(ctx context.Context) (MutableConfig, []error) {
 	cfg, errs := b.Build(ctx)
 	if len(errs) > 0 {
