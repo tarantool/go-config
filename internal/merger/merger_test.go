@@ -29,7 +29,7 @@ func TestMergeCollector_PrimitiveSet(t *testing.T) {
 		"port": 8080,
 	}).WithName("first").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col))
 
 	// Verify value.
 	node := root.Get(config.NewKeyPath("port"))
@@ -48,14 +48,14 @@ func TestMergeCollector_PrimitiveOverride(t *testing.T) {
 		"port": 8080,
 	}).WithName("first").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	// Second collector (higher priority) overrides.
 	col2 := collectors.NewMap(map[string]any{
 		"port": 9090,
 	}).WithName("second").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	// Verify overridden value.
 	node := root.Get(config.NewKeyPath("port"))
@@ -73,7 +73,7 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 		"items": []any{"a", "b", "c"},
 	}).WithName("first")
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	node := root.Get(config.NewKeyPath("items"))
 	require.NotNil(t, node)
@@ -87,7 +87,7 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 		"items": []any{"x", "y"},
 	}).WithName("second")
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	node = root.Get(config.NewKeyPath("items"))
 	require.NotNil(t, node)
@@ -111,7 +111,7 @@ func TestMergeCollector_MapRecursiveMerge(t *testing.T) {
 		},
 	}).WithName("first")
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	// Verify initial values.
 	portNode := root.Get(config.NewKeyPath("server/port"))
@@ -130,7 +130,7 @@ func TestMergeCollector_MapRecursiveMerge(t *testing.T) {
 		},
 	}).WithName("second")
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	// Port should be overridden.
 	portNode = root.Get(config.NewKeyPath("server/port"))
@@ -164,7 +164,7 @@ func TestMergeCollector_OrderedCollectorSetsOrder(t *testing.T) {
 		"d": 4,
 	}).WithName("unordered").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	parent := root.Get(config.NewKeyPath(""))
 	require.NotNil(t, parent)
@@ -183,7 +183,7 @@ func TestMergeCollector_OrderedCollectorSetsOrder(t *testing.T) {
 		"a": 10,
 	}).WithName("ordered").WithKeepOrder(true)
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	// Ordered keys are sorted alphabetically: ["a", "c"].
 	// They should be moved to front while preserving relative order of other keys.
@@ -221,7 +221,7 @@ func TestMergeCollector_OrderSetFlagPreventsReordering(t *testing.T) {
 		"z": 3,
 	}).WithName("ordered1").WithKeepOrder(true)
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	parent := root.Get(config.NewKeyPath(""))
 	require.NotNil(t, parent)
@@ -235,7 +235,7 @@ func TestMergeCollector_OrderSetFlagPreventsReordering(t *testing.T) {
 		"x": 10,
 	}).WithName("ordered2").WithKeepOrder(true)
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	// Order should remain unchanged (x,y,z).
 	keys := parent.ChildrenKeys()
@@ -258,7 +258,7 @@ func TestMergeCollector_UnorderedCollectorDoesNotAffectOrder(t *testing.T) {
 		"third":  3,
 	}).WithName("ordered").WithKeepOrder(true)
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	parent := root.Get(config.NewKeyPath(""))
 	keys := parent.ChildrenKeys()
@@ -269,7 +269,7 @@ func TestMergeCollector_UnorderedCollectorDoesNotAffectOrder(t *testing.T) {
 		"fourth": 4,
 	}).WithName("unordered").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	keys = parent.ChildrenKeys()
 	assert.Equal(t, []string{"first", "second", "third", "fourth"}, keys)
@@ -279,7 +279,7 @@ func TestMergeCollector_UnorderedCollectorDoesNotAffectOrder(t *testing.T) {
 		"second": 200,
 	}).WithName("unordered2").WithKeepOrder(false)
 
-	require.NoError(t, config.MergeCollector(root, col3))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col3))
 
 	keys = parent.ChildrenKeys()
 	assert.Equal(t, []string{"first", "second", "third", "fourth"}, keys)
@@ -296,7 +296,7 @@ func TestMergeCollector_LeafToMapConversion(t *testing.T) {
 		"foo": "bar",
 	}).WithName("primitive")
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	node := root.Get(config.NewKeyPath("foo"))
 	require.NotNil(t, node)
@@ -310,7 +310,7 @@ func TestMergeCollector_LeafToMapConversion(t *testing.T) {
 		},
 	}).WithName("map")
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	node = root.Get(config.NewKeyPath("foo"))
 	require.NotNil(t, node)
@@ -335,7 +335,7 @@ func TestMergeCollector_MapToLeafConversion(t *testing.T) {
 		},
 	}).WithName("map")
 
-	require.NoError(t, config.MergeCollector(root, col1))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
 
 	node := root.Get(config.NewKeyPath("foo"))
 	require.NotNil(t, node)
@@ -346,7 +346,7 @@ func TestMergeCollector_MapToLeafConversion(t *testing.T) {
 		"foo": 42,
 	}).WithName("primitive")
 
-	require.NoError(t, config.MergeCollector(root, col2))
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
 
 	node = root.Get(config.NewKeyPath("foo"))
 	require.NotNil(t, node)

@@ -15,5 +15,6 @@ const (
 	// EnvSource indicates environment variables.
 	EnvSource
 	// ModifiedSource indicates dynamically modified data (e.g., at runtime) for MutableConfig.
+	// Note: ModifiedSource is not implemented yet and is under active development.
 	ModifiedSource
 )

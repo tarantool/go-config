@@ -27,7 +27,7 @@ func Example_storageCollector() {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -75,7 +75,7 @@ func Example_storageCollectorMultipleKeys() {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -126,7 +126,7 @@ func Example_storageCollectorWithMapOverride() {
 	builder = builder.AddCollector(mapCollector)
 	builder = builder.AddCollector(storageCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return
@@ -168,7 +168,7 @@ func Example_storageSource() {
 
 	builder = builder.AddCollector(collector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 	if len(errs) > 0 {
 		fmt.Printf("Build errors: %v\n", errs)
 		return

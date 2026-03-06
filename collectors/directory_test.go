@@ -323,7 +323,7 @@ func TestDirectory_Builder_Integration(t *testing.T) {
 
 	builder = builder.AddCollector(dirCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	assert.Empty(t, errs)
 
 	var port int
@@ -351,7 +351,7 @@ func TestDirectory_Builder_WithOtherCollectors(t *testing.T) {
 	builder = builder.AddCollector(mapCollector)
 	builder = builder.AddCollector(dirCollector)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	assert.Empty(t, errs)
 
 	var val string

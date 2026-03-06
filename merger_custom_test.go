@@ -101,7 +101,7 @@ func TestCustomMerger(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	// Verify merger was called for each key.
@@ -219,7 +219,7 @@ func TestSelectiveMerger(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	// Server keys should be present.

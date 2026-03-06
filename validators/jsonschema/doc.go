@@ -36,7 +36,7 @@
 //	    log.Fatal(err)
 //	}
 //
-//	cfg, errs := builder.Build()
+//	cfg, errs := builder.Build(context.Background())
 //
 // # Error Handling
 //

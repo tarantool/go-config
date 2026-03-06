@@ -101,7 +101,7 @@ func TestConfig_Get_MissingKey(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var dest int
@@ -122,7 +122,7 @@ func TestConfig_Get_TypeMismatchError(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	var dest int
@@ -143,7 +143,7 @@ func TestConfig_Stat_NilRoot(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs)
 
 	meta, ok := cfg.Stat(config.NewKeyPath("any"))
@@ -163,7 +163,7 @@ func TestConfig_Walk_NilRoot(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs)
 
 	ctx := context.Background()
@@ -184,7 +184,7 @@ func TestMutableConfig_Update_ValidationError(t *testing.T) {
 	builder = builder.WithValidator(v)
 	builder = builder.AddCollector(col)
 
-	mcfg, errs := builder.BuildMutable()
+	mcfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	// Create other config with updated value for existing key.
@@ -194,7 +194,7 @@ func TestMutableConfig_Update_ValidationError(t *testing.T) {
 
 	builder2 = builder2.AddCollector(col2)
 
-	otherCfg, errs2 := builder2.Build()
+	otherCfg, errs2 := builder2.Build(t.Context())
 	require.Empty(t, errs2)
 
 	// Update should fail due to validation error.
@@ -214,7 +214,7 @@ func TestConfig_Slice_NilRootNonEmptyPath(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs)
 
 	// Slice with non-empty path on nil root should error.
@@ -233,7 +233,7 @@ func TestMutableConfig_Merge_WalkError(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	mcfg, errs := builder.BuildMutable()
+	mcfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	// Create invalid config with nil root (validation failure).
@@ -245,7 +245,7 @@ func TestMutableConfig_Merge_WalkError(t *testing.T) {
 	builder2 = builder2.WithValidator(validator)
 	builder2 = builder2.AddCollector(col2)
 
-	invalidCfg, errs2 := builder2.Build()
+	invalidCfg, errs2 := builder2.Build(t.Context())
 	require.NotNil(t, errs2) // Validation errors, root is nil.
 
 	// Merge should fail because Walk on invalid config returns error.
@@ -266,7 +266,7 @@ func TestMutableConfig_Merge_ValidationError(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	mcfg, errs := builder.BuildMutable()
+	mcfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	// Sanity check: validator is attached and works for Set.
@@ -281,7 +281,7 @@ func TestMutableConfig_Merge_ValidationError(t *testing.T) {
 
 	builder2 = builder2.AddCollector(col2)
 
-	otherCfg, errs2 := builder2.Build()
+	otherCfg, errs2 := builder2.Build(t.Context())
 	require.Empty(t, errs2)
 
 	// Verify other config contains newkey.
@@ -304,7 +304,7 @@ func TestMutableConfig_Update_WalkError(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	mcfg, errs := builder.BuildMutable()
+	mcfg, errs := builder.BuildMutable(t.Context())
 	require.Empty(t, errs)
 
 	// Create invalid config with nil root (validation failure).
@@ -316,7 +316,7 @@ func TestMutableConfig_Update_WalkError(t *testing.T) {
 	builder2 = builder2.WithValidator(validator)
 	builder2 = builder2.AddCollector(col2)
 
-	invalidCfg, errs2 := builder2.Build()
+	invalidCfg, errs2 := builder2.Build(t.Context())
 	require.NotNil(t, errs2) // Validation errors, root is nil.
 
 	// Update should fail because Walk on invalid config returns error.
@@ -334,7 +334,7 @@ func TestConfig_Walk_NonExistentPath(t *testing.T) {
 
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
 	ctx := context.Background()
@@ -357,7 +357,7 @@ func TestConfig_Slice_NilRootEmptyPath(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs) // Validation errors, root is nil.
 
 	// Slice with empty path should return config with nil root (no error).
@@ -380,7 +380,7 @@ func TestConfig_Effective_NilRoot(t *testing.T) {
 	builder = builder.WithValidator(validator)
 	builder = builder.AddCollector(col)
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(t.Context())
 	require.NotNil(t, errs) // Validation errors, root is nil.
 
 	_, err := cfg.Effective(config.NewKeyPath("any"))

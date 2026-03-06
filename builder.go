@@ -106,7 +106,7 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 // Build starts the configuration assembly process.
 // It performs reading data from all collectors, merging them,
 // validation against the schema, and returns a ready Config object or an error.
-func (b *Builder) Build() (Config, []error) {
+func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	root := tree.New()
 
 	var errs []error
@@ -119,7 +119,7 @@ func (b *Builder) Build() (Config, []error) {
 	for _, col := range b.collectors {
 		multiCol, isMulti := col.(MultiCollector)
 		if !isMulti {
-			err := MergeCollectorWithMerger(root, col, merger)
+			err := MergeCollectorWithMerger(ctx, root, col, merger)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -127,7 +127,7 @@ func (b *Builder) Build() (Config, []error) {
 			continue
 		}
 
-		subs, err := multiCol.Collectors(context.Background())
+		subs, err := multiCol.Collectors(ctx)
 		if err != nil {
 			errs = append(errs, NewCollectorError(col.Name(), err))
 
@@ -135,7 +135,7 @@ func (b *Builder) Build() (Config, []error) {
 		}
 
 		for _, sub := range subs {
-			err := MergeCollectorWithMerger(root, sub, merger)
+			err := MergeCollectorWithMerger(ctx, root, sub, merger)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -162,8 +162,9 @@ func (b *Builder) Build() (Config, []error) {
 
 // BuildMutable starts the configuration assembly process but returns
 // a mutable MutableConfig object that allows changes after creation.
-func (b *Builder) BuildMutable() (MutableConfig, []error) {
-	cfg, errs := b.Build()
+// Note: this method is not implemented yet and is under active development.
+func (b *Builder) BuildMutable(ctx context.Context) (MutableConfig, []error) {
+	cfg, errs := b.Build(ctx)
 	if len(errs) > 0 {
 		return MutableConfig{Config: Config{root: nil, inheritances: nil}, mu: sync.RWMutex{}, validator: nil}, errs
 	}

@@ -2,6 +2,7 @@
 package config_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -59,7 +60,7 @@ func Example_validatingMerger() {
 	builder = builder.WithMerger(validator)
 	builder = builder.AddCollector(collectors.NewMap(validData).WithName("valid"))
 
-	cfg, errs := builder.Build()
+	cfg, errs := builder.Build(context.Background())
 
 	if errs != nil {
 		log.Printf("Errors: %v", errs)
@@ -86,7 +87,7 @@ func Example_validatingMerger() {
 	builder = builder.WithMerger(validator)
 	builder = builder.AddCollector(collectors.NewMap(invalidData).WithName("invalid"))
 
-	_, errs = builder.Build()
+	_, errs = builder.Build(context.Background())
 
 	if errs != nil {
 		fmt.Printf("Validation failed: %v\n", strings.Contains(errs[0].Error(), "port must be between"))
@@ -214,7 +215,7 @@ func Example_transformingMerger() {
 	builder = builder.WithMerger(transformer)
 	builder = builder.AddCollector(collectors.NewMap(data).WithName("user-data"))
 
-	cfg, _ := builder.Build()
+	cfg, _ := builder.Build(context.Background())
 
 	var name, email string
 
@@ -329,7 +330,7 @@ func Example_loggingMerger() {
 	builder = builder.WithMerger(logger)
 	builder = builder.AddCollector(collectors.NewMap(data).WithName("db-config"))
 
-	cfg, _ := builder.Build()
+	cfg, _ := builder.Build(context.Background())
 
 	var host string
 
@@ -445,7 +446,7 @@ func Example_sourceBasedMerger() {
 	builder = builder.AddCollector(collectors.NewMap(prodData).WithName("production"))
 	builder = builder.AddCollector(collectors.NewMap(devData).WithName("development"))
 
-	cfg, _ := builder.Build()
+	cfg, _ := builder.Build(context.Background())
 
 	var apiKey string
 

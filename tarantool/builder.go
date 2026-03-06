@@ -142,7 +142,7 @@ func (b *Builder) Build(ctx context.Context) (config.Config, error) {
 		return config.Config{}, err
 	}
 
-	cfg, errs := inner.Build() //nolint:contextcheck // config.Builder.Build does not accept context.
+	cfg, errs := inner.Build(ctx)
 	if len(errs) > 0 {
 		return cfg, errors.Join(errs...)
 	}
@@ -152,13 +152,14 @@ func (b *Builder) Build(ctx context.Context) (config.Config, error) {
 
 // BuildMutable is like [Builder.Build] but returns a [config.MutableConfig]
 // that allows runtime modifications.
+// Note: this method is not implemented yet and is under active development.
 func (b *Builder) BuildMutable(ctx context.Context) (*config.MutableConfig, error) {
 	inner, err := b.buildInner(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, errs := inner.BuildMutable() //nolint:contextcheck // config.Builder.BuildMutable does not accept context.
+	cfg, errs := inner.BuildMutable(ctx)
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
