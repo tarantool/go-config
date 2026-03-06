@@ -51,7 +51,7 @@ jobs:
           # Use exact Go toolchain version to workaround Go 1.25 covdata issue.
           # See: https://github.com/golang/go/issues/75031
           GOTOOLCHAIN: go1.25.0+auto
-        run: make coverage coveralls-deps coveralls
+        run: make coverage deps coveralls
 
   run-benchmarks:
     if: false

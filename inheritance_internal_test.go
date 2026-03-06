@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -436,5 +437,158 @@ func TestWalkNodes_CtxCancelled(t *testing.T) {
 		assert.False(t, ok)
 		// Optional: check val.
 		_ = val
+	}
+}
+
+func TestMergeArrayNodes_Basic(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+	existing.SetChild("0", tree.New())
+	existing.SetChild("1", tree.New())
+
+	existing.Child("0").Value = "a"
+	existing.Child("1").Value = "b"
+
+	source := tree.New()
+	source.MarkArray()
+	source.SetChild("0", tree.New())
+	source.SetChild("1", tree.New())
+
+	source.Child("0").Value = "c"
+	source.Child("1").Value = "d"
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Len(t, children, 4)
+
+	assert.Equal(t, "a", existing.Child("0").Value)
+	assert.Equal(t, "b", existing.Child("1").Value)
+	assert.Equal(t, "c", existing.Child("2").Value)
+	assert.Equal(t, "d", existing.Child("3").Value)
+}
+
+func TestMergeArrayNodes_EmptySource(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+	existing.SetChild("0", tree.New())
+
+	existing.Child("0").Value = "a"
+
+	source := tree.New()
+	source.MarkArray()
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Len(t, children, 1)
+	assert.Equal(t, "a", existing.Child("0").Value)
+}
+
+func TestMergeArrayNodes_EmptyExisting(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+
+	source := tree.New()
+	source.MarkArray()
+	source.SetChild("0", tree.New())
+	source.SetChild("1", tree.New())
+
+	source.Child("0").Value = "a"
+	source.Child("1").Value = "b"
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Len(t, children, 2)
+	assert.Equal(t, "a", existing.Child("0").Value)
+	assert.Equal(t, "b", existing.Child("1").Value)
+}
+
+func TestMergeArrayNodes_BothEmpty(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+
+	source := tree.New()
+	source.MarkArray()
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Empty(t, children)
+}
+
+func TestMergeArrayNodes_WithNestedObjects(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+
+	child0 := tree.New()
+	child0.Set(NewKeyPath("name"), "Alice")
+	child0.Set(NewKeyPath("age"), 30)
+	existing.SetChild("0", child0)
+
+	source := tree.New()
+	source.MarkArray()
+
+	child1 := tree.New()
+	child1.Set(NewKeyPath("name"), "Bob")
+	child1.Set(NewKeyPath("age"), 25)
+	source.SetChild("0", child1)
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Len(t, children, 2)
+
+	assert.Equal(t, "Alice", existing.Child("0").Child("name").Value)
+	assert.Equal(t, 30, existing.Child("0").Child("age").Value)
+	assert.Equal(t, "Bob", existing.Child("1").Child("name").Value)
+	assert.Equal(t, 25, existing.Child("1").Child("age").Value)
+}
+
+func TestMergeArrayNodes_Reindexing(t *testing.T) {
+	t.Parallel()
+
+	existing := tree.New()
+	existing.MarkArray()
+
+	for i := range 5 {
+		child := tree.New()
+
+		child.Value = i
+		existing.SetChild(strconv.Itoa(i), child)
+	}
+
+	source := tree.New()
+	source.MarkArray()
+
+	for i := range 3 {
+		child := tree.New()
+
+		child.Value = 100 + i
+		source.SetChild(strconv.Itoa(i), child)
+	}
+
+	mergeArrayNodes(existing, source)
+
+	children := existing.Children()
+	assert.Len(t, children, 8)
+
+	for i := range 5 {
+		assert.Equal(t, i, existing.Child(strconv.Itoa(i)).Value)
+	}
+
+	for i := range 3 {
+		assert.Equal(t, 100+i, existing.Child(strconv.Itoa(5+i)).Value)
 	}
 }

@@ -766,3 +766,51 @@ func TestNode_ReorderChildren(t *testing.T) {
 		})
 	}
 }
+
+func TestNode_IsArray_Default(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+	assert.False(t, node.IsArray())
+}
+
+func TestNode_IsArray_AfterMarkArray(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+	node.MarkArray()
+	assert.True(t, node.IsArray())
+}
+
+func TestNode_MarkArray_MultipleCalls(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+	node.MarkArray()
+	node.MarkArray()
+	assert.True(t, node.IsArray())
+}
+
+func TestNode_MarkArray_WithChildren(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+	assert.True(t, root.IsArray())
+
+	root.SetChild("0", tree.New())
+	root.SetChild("1", tree.New())
+	assert.True(t, root.IsArray())
+}
+
+func TestNode_IsArray_LeafNode(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+
+	node.Value = 42
+	assert.False(t, node.IsArray())
+
+	node.MarkArray()
+	assert.True(t, node.IsArray())
+}

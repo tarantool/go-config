@@ -19,20 +19,11 @@ testrace:
 
 .PHONY: coverage
 coverage:
-	@echo "Running tests with coveralls"
+	@echo "Running tests with coverage (excluding internal/testutil)"
 	go test -tags "$(TAGS)" ./... -v -p 1 -covermode=atomic -coverprofile=$(COVERAGE_FILE) -count=1
+	@echo "Excluding internal/testutil from coverage report"
+	@grep -v "internal/testutil" $(COVERAGE_FILE) > $(COVERAGE_FILE).tmp && mv $(COVERAGE_FILE).tmp $(COVERAGE_FILE)
 	go tool cover -func=$(COVERAGE_FILE)
-
-.PHONY: coveralls
-coveralls:
-	@echo "uploading coverage to coveralls"
-	@goveralls -coverprofile=$(COVERAGE_FILE) -service=github
-
-.PHONY: coveralls-deps
-coveralls-deps:
-	@echo "Installing coveralls"
-	@go get github.com/mattn/goveralls
-	@go install github.com/mattn/goveralls
 
 .PHONY: deps
 deps:
@@ -40,13 +31,18 @@ deps:
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
 	@echo "Installing govulncheck"
 	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "Install goveralls"
+	@go install github.com/mattn/goveralls@latest
+
+.PHONY: coveralls
+coveralls:
+	@echo "uploading coverage to coveralls"
+	@goveralls -coverprofile=$(COVERAGE_FILE) -service=github
 
 .PHONY: lint
 lint:
 	@echo "Running go-linter"
-	@go mod tidy
-	@go mod vendor
-	@golangci-lint run --config=./.golangci.yml --modules-download-mode vendor
+	@golangci-lint run --config=./.golangci.yml ./...
 
 .PHONY: govulncheck
 govulncheck:
