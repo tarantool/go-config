@@ -10,6 +10,12 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* Thread-safe mutable configuration API on `MutableConfig`: `Set`, `Merge`,
+  `Update`, `Delete` validate the resulting tree and roll back to the previous
+  state on failure, and read methods (`Get`, `Lookup`, `Stat`, `Walk`, `Slice`,
+  `Effective`, `EffectiveAll`) take a read lock. Modified keys get a bumped
+  revision and `"modified"` source.
+
 ### Changed
 
 ### Fixed

@@ -180,10 +180,15 @@ func cloneNode(node *tree.Node) *tree.Node {
 	clone.Value = node.Value
 	clone.Source = node.Source
 	clone.Revision = node.Revision
+	clone.Range = node.Range
 	clone.SetAnnotation(node.Annotation())
 
 	if node.IsArray() {
 		clone.MarkArray()
+	}
+
+	if node.OrderSet() {
+		clone.SetOrderSet(true)
 	}
 
 	for _, key := range node.ChildrenKeys() {
