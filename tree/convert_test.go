@@ -116,3 +116,107 @@ func TestToAny_DeepNesting(t *testing.T) {
 	}
 	assert.Equal(t, any(expected), result)
 }
+
+func TestToAny_Array(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+	root.SetChild("0", tree.New())
+	root.SetChild("1", tree.New())
+	root.SetChild("2", tree.New())
+
+	root.Child("0").Value = "a"
+	root.Child("1").Value = "b"
+	root.Child("2").Value = "c"
+
+	result := tree.ToAny(root)
+	expected := []any{"a", "b", "c"}
+	assert.Equal(t, any(expected), result)
+}
+
+func TestToAny_ArrayOfMaps(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+
+	child0 := tree.New()
+	child0.Set(keypath.NewKeyPath("name"), "Alice")
+	child0.Set(keypath.NewKeyPath("age"), 30)
+	root.SetChild("0", child0)
+
+	child1 := tree.New()
+	child1.Set(keypath.NewKeyPath("name"), "Bob")
+	child1.Set(keypath.NewKeyPath("age"), 25)
+	root.SetChild("1", child1)
+
+	result := tree.ToAny(root)
+	expected := []any{
+		map[string]any{"name": "Alice", "age": 30},
+		map[string]any{"name": "Bob", "age": 25},
+	}
+	assert.Equal(t, any(expected), result)
+}
+
+func TestToArray_EmptyArray(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+
+	result := tree.ToAny(root)
+	expected := []any{}
+	assert.Equal(t, any(expected), result)
+}
+
+func TestToAny_ArrayWithNil(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+	root.SetChild("0", tree.New())
+	// Skip index 1 (nil).
+	root.SetChild("2", tree.New())
+
+	root.Child("0").Value = "a"
+	root.Child("2").Value = "c"
+
+	result := tree.ToAny(root)
+	// Only non-nil children are included.
+	expected := []any{"a", "c"}
+	assert.Equal(t, any(expected), result)
+}
+
+func TestToAny_NestedArray(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.MarkArray()
+
+	outer0 := tree.New()
+	outer0.MarkArray()
+	outer0.SetChild("0", tree.New())
+	outer0.SetChild("1", tree.New())
+
+	outer0.Child("0").Value = 1
+	outer0.Child("1").Value = 2
+
+	outer1 := tree.New()
+	outer1.MarkArray()
+	outer1.SetChild("0", tree.New())
+	outer1.SetChild("1", tree.New())
+
+	outer1.Child("0").Value = 3
+	outer1.Child("1").Value = 4
+
+	root.SetChild("0", outer0)
+	root.SetChild("1", outer1)
+
+	result := tree.ToAny(root)
+	expected := []any{
+		[]any{1, 2},
+		[]any{3, 4},
+	}
+	assert.Equal(t, any(expected), result)
+}
