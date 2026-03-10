@@ -14,3 +14,31 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+## [v1.0.0] - 2026-03-10
+
+Initial release of go-config library.
+
+### Added
+
+* Configuration tree API with hierarchical data storage and safe value
+  retrieval.
+* Builder pattern for assembling configuration from multiple sources with
+  priority-based merging.
+* Collectors for reading configuration from: in-memory maps, YAML/JSON files,
+  directories, environment variables, and key-value storage (etcd via go-storage).
+* Hierarchical inheritance system: define multi-level hierarchies (e.g.,
+  global → group → replicaset → instance) with configurable merge strategies
+  (replace, append, deep).
+* Flexible merging with customizable Merger interface and default
+  last-write-wins semantics.
+* JSON Schema validation support for configuration integrity checking.
+* Order preservation for deterministic key ordering when serializing
+  configuration.
+* Tarantool-specific builder with predefined defaults for Tarantool cluster
+  configuration (env prefix, inheritance rules, schema validation).
+* Storage integration with integrity verification via hash validation and
+  signature checking.
+* Watcher interface for reactive change notifications from storage backends.
+* KeyPath type for configuration key manipulation with wildcard pattern support.
+* MutableConfig for runtime configuration modifications with validation.
+
