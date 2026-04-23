@@ -274,13 +274,10 @@ func TestBuild_WithSchemaBytes(t *testing.T) {
 	assert.Equal(t, int64(8080), port)
 }
 
+// Mixing two different schema setters is an error; same-setter repetition is
+// still OK.
 func TestBuild_WithSchemaFileThenWithSchema(t *testing.T) {
 	t.Parallel()
-
-	schema := []byte(`{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"type": "object"
-	}`)
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
@@ -288,20 +285,12 @@ func TestBuild_WithSchemaFileThenWithSchema(t *testing.T) {
 
 	ctx := context.Background()
 
-	// WithSchema should override WithSchemaFile (method chaining).
-	cfg, err := tarantool.New().
+	_, err := tarantool.New().
 		WithConfigFile(cfgPath).
 		WithSchemaFile("/nonexistent/schema.json").
-		WithSchema(schema).
-		WithoutSchema().
+		WithSchema([]byte(`{"type":"object"}`)).
 		Build(ctx)
-	require.NoError(t, err)
-
-	var val string
-
-	_, err = cfg.Get(config.NewKeyPath("key"), &val)
-	require.NoError(t, err)
-	assert.Equal(t, "value", val)
+	require.ErrorIs(t, err, tarantool.ErrConflictingSchemaOptions)
 }
 
 func TestBuild_AllCollectorTypes(t *testing.T) {

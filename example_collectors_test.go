@@ -235,7 +235,7 @@ func Example_fileSource() {
 	// Create a File data source and wrap it with a YAML format.
 	file := collectors.NewFile(filePath)
 
-	collector, err := collectors.NewSource(file, collectors.NewYamlFormat())
+	collector, err := collectors.NewSource(context.Background(), file, collectors.NewYamlFormat())
 	if err != nil {
 		fmt.Printf("NewSource error: %v\n", err)
 		return

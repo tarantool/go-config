@@ -433,9 +433,12 @@ func TestBuild_WithSchema(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Use an isolated env prefix to prevent TT_CLI_* env vars from leaking
+	// into the config and failing additionalProperties validation.
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
 		WithSchema(schema).
+		WithEnvPrefix("TT_TESTONLY_").
 		Build(ctx)
 	require.NoError(t, err)
 
@@ -498,9 +501,12 @@ func TestBuild_WithSchemaFile(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Use an isolated env prefix to prevent TT_CLI_* env vars from leaking
+	// into the config and failing additionalProperties validation.
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
 		WithSchemaFile(schemaPath).
+		WithEnvPrefix("TT_TESTONLY_").
 		Build(ctx)
 	require.NoError(t, err)
 
@@ -642,13 +648,159 @@ func TestDefaultEnvTransform_SkipsNonDefault(t *testing.T) {
 	assert.Equal(t, "9999", port)
 }
 
-func TestWithSchema_OverridesWithSchemaFile(t *testing.T) {
+func TestBuild_ConflictMatrix(t *testing.T) {
 	t.Parallel()
 
-	schema := []byte(`{
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	writeFile(t, cfgPath, "key: value\n")
+
+	anySchema := []byte(`{"type":"object"}`)
+	anySchemaFile := "/nonexistent/schema.json"
+
+	cases := []struct {
+		name    string
+		builder *tarantool.Builder
+	}{
+		{
+			name: "WithSchema+WithSchemaFile",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(anySchema).
+				WithSchemaFile(anySchemaFile),
+		},
+		{
+			name: "WithSchema+WithSchemaVersion",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(anySchema).
+				WithSchemaVersion("3.7.0"),
+		},
+		{
+			name: "WithSchema+WithoutSchema",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(anySchema).
+				WithoutSchema(),
+		},
+		{
+			name: "WithSchema+WithSchemaURLDefault",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(anySchema).
+				WithSchemaURLDefault(),
+		},
+		{
+			name: "WithSchema+WithSchemaURL",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(anySchema).
+				WithSchemaURL("https://example.com/schema.json"),
+		},
+		{
+			name: "WithSchemaFile+WithSchemaVersion",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaFile(anySchemaFile).
+				WithSchemaVersion("3.7.0"),
+		},
+		{
+			name: "WithSchemaFile+WithoutSchema",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaFile(anySchemaFile).
+				WithoutSchema(),
+		},
+		{
+			name: "WithSchemaFile+WithSchemaURLDefault",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaFile(anySchemaFile).
+				WithSchemaURLDefault(),
+		},
+		{
+			name: "WithSchemaFile+WithSchemaURL",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaFile(anySchemaFile).
+				WithSchemaURL("https://example.com/schema.json"),
+		},
+		{
+			name: "WithSchemaVersion+WithoutSchema",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaVersion("3.7.0").
+				WithoutSchema(),
+		},
+		{
+			name: "WithSchemaVersion+WithSchemaURLDefault",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaVersion("3.7.0").
+				WithSchemaURLDefault(),
+		},
+		{
+			name: "WithSchemaVersion+WithSchemaURL",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaVersion("3.7.0").
+				WithSchemaURL("https://example.com/schema.json"),
+		},
+		{
+			name: "WithoutSchema+WithSchemaURLDefault",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithoutSchema().
+				WithSchemaURLDefault(),
+		},
+		{
+			name: "WithoutSchema+WithSchemaURL",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithoutSchema().
+				WithSchemaURL("https://example.com/schema.json"),
+		},
+		{
+			name: "WithSchemaURLDefault+WithSchemaURL",
+			builder: tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaURLDefault().
+				WithSchemaURL("https://example.com/schema.json"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := tc.builder.Build(ctx)
+			require.Error(t, err)
+			assert.ErrorIsf(t, err, tarantool.ErrConflictingSchemaOptions,
+				"expected ErrConflictingSchemaOptions, got: %v", err)
+		})
+	}
+}
+
+// Uses a user-registered minimal schema to avoid coupling to real Tarantool
+// schema content.
+func TestBuild_WithSchemaVersion_Hit(t *testing.T) {
+	t.Parallel()
+
+	const ver = "99.10.0"
+
+	minSchema := []byte(`{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"type": "object"
+		"type": "object",
+		"properties": {
+			"key": { "type": "string" }
+		},
+		"additionalProperties": false
 	}`)
+
+	err := tarantool.RegisterSchema(ver, minSchema)
+	require.NoError(t, err)
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
@@ -658,8 +810,8 @@ func TestWithSchema_OverridesWithSchemaFile(t *testing.T) {
 
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
-		WithSchemaFile("/nonexistent/should-not-be-read.json").
-		WithSchema(schema).
+		WithSchemaVersion(ver).
+		WithEnvPrefix("TT_TESTONLY_").
 		Build(ctx)
 	require.NoError(t, err)
 
@@ -670,7 +822,7 @@ func TestWithSchema_OverridesWithSchemaFile(t *testing.T) {
 	assert.Equal(t, "value", val)
 }
 
-func TestWithoutSchema_OverridesWithSchema(t *testing.T) {
+func TestBuild_WithSchemaVersion_Miss(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -679,18 +831,13 @@ func TestWithoutSchema_OverridesWithSchema(t *testing.T) {
 
 	ctx := context.Background()
 
-	cfg, err := tarantool.New().
+	_, err := tarantool.New().
 		WithConfigFile(cfgPath).
-		WithSchema([]byte(`{"type":"integer"}`)).
-		WithoutSchema().
+		WithSchemaVersion("99.99.99").
 		Build(ctx)
-	require.NoError(t, err)
-
-	var val string
-
-	_, err = cfg.Get(config.NewKeyPath("key"), &val)
-	require.NoError(t, err)
-	assert.Equal(t, "value", val)
+	require.Error(t, err)
+	assert.ErrorIsf(t, err, tarantool.ErrUnknownSchemaVersion,
+		"expected ErrUnknownSchemaVersion, got: %v", err)
 }
 
 // writeFile is a test helper that writes content to a file.

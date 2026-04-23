@@ -28,7 +28,7 @@ coverage:
 .PHONY: deps
 deps:
 	@echo "Installing lint deps"
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 	@echo "Installing govulncheck"
 	@go install golang.org/x/vuln/cmd/govulncheck@latest
 	@echo "Install goveralls"

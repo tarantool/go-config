@@ -1,7 +1,6 @@
 package collectors_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,7 +47,7 @@ func TestNewFile_Revision(t *testing.T) {
 func TestNewFile_FetchStream(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	file := collectors.NewFile("testdata/config.yaml")
 	require.NotNil(t, file)
@@ -65,7 +64,7 @@ func TestNewFile_FetchStream(t *testing.T) {
 func TestNewFile_FetchStream_Error(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	file := collectors.NewFile("testdata/invalid.yaml")
 	require.NotNil(t, file)
@@ -86,7 +85,11 @@ func TestNewFile_FetchStream_Error(t *testing.T) {
 func TestNewSource_Creation(t *testing.T) {
 	t.Parallel()
 
-	source, err := collectors.NewSource(collectors.NewFile("testdata/config.yaml"), collectors.NewYamlFormat())
+	source, err := collectors.NewSource(
+		t.Context(),
+		collectors.NewFile("testdata/config.yaml"),
+		collectors.NewYamlFormat(),
+	)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 }
@@ -94,7 +97,11 @@ func TestNewSource_Creation(t *testing.T) {
 func TestNewSource_Name(t *testing.T) {
 	t.Parallel()
 
-	source, err := collectors.NewSource(collectors.NewFile("testdata/config.yaml"), collectors.NewYamlFormat())
+	source, err := collectors.NewSource(
+		t.Context(),
+		collectors.NewFile("testdata/config.yaml"),
+		collectors.NewYamlFormat(),
+	)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 
@@ -104,7 +111,11 @@ func TestNewSource_Name(t *testing.T) {
 func TestNewSource_Source(t *testing.T) {
 	t.Parallel()
 
-	source, err := collectors.NewSource(collectors.NewFile("testdata/config.yaml"), collectors.NewYamlFormat())
+	source, err := collectors.NewSource(
+		t.Context(),
+		collectors.NewFile("testdata/config.yaml"),
+		collectors.NewYamlFormat(),
+	)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 
@@ -114,7 +125,11 @@ func TestNewSource_Source(t *testing.T) {
 func TestNewSource_Revision(t *testing.T) {
 	t.Parallel()
 
-	source, err := collectors.NewSource(collectors.NewFile("testdata/config.yaml"), collectors.NewYamlFormat())
+	source, err := collectors.NewSource(
+		t.Context(),
+		collectors.NewFile("testdata/config.yaml"),
+		collectors.NewYamlFormat(),
+	)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 
@@ -124,7 +139,11 @@ func TestNewSource_Revision(t *testing.T) {
 func TestNewSource_KeepOrder(t *testing.T) {
 	t.Parallel()
 
-	source, err := collectors.NewSource(collectors.NewFile("testdata/config.yaml"), collectors.NewYamlFormat())
+	source, err := collectors.NewSource(
+		t.Context(),
+		collectors.NewFile("testdata/config.yaml"),
+		collectors.NewYamlFormat(),
+	)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 
@@ -134,7 +153,7 @@ func TestNewSource_KeepOrder(t *testing.T) {
 func TestNewSource_Read(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	file := collectors.NewFile("testdata/config.yaml")
 	require.NotNil(t, file)
@@ -142,7 +161,7 @@ func TestNewSource_Read(t *testing.T) {
 	format := collectors.NewYamlFormat()
 	require.NotNil(t, format)
 
-	source, err := collectors.NewSource(file, format)
+	source, err := collectors.NewSource(t.Context(), file, format)
 	require.NotNil(t, source)
 	require.NoError(t, err)
 

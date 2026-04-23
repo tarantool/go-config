@@ -158,7 +158,7 @@ func Example_storageSource() {
 	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
 
 	// Use it with a format to build a collector.
-	collector, err := collectors.NewSource(source, collectors.NewYamlFormat())
+	collector, err := collectors.NewSource(context.Background(), source, collectors.NewYamlFormat())
 	if err != nil {
 		fmt.Printf("NewSource error: %v\n", err)
 		return

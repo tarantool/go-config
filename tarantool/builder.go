@@ -5,9 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
-	"github.com/tarantool/go-config"
+	config "github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
 	"github.com/tarantool/go-storage/integrity"
 )
@@ -32,9 +33,14 @@ type Builder struct {
 	storage    *integrity.Typed[[]byte]
 	storageKey string
 
-	schema     []byte
-	schemaFile string
-	skipSchema bool
+	schema        []byte
+	schemaFile    string
+	schemaVersion string
+	schemaURL     string
+	schemaURLSet  bool
+	schemaHTTP    bool
+	skipSchema    bool
+	httpClient    *http.Client
 
 	inheritanceOpts []config.InheritanceOption
 
@@ -45,7 +51,7 @@ type Builder struct {
 //   - env prefix: "TT_"
 //   - inheritance: Global → groups → replicasets → instances
 //   - default inheritance options: credentials(MergeDeep), roles(MergeAppend), leader(NoInherit)
-//   - schema: fetched from download.tarantool.org at Build time
+//   - schema: the newest embedded Tarantool version is used offline by default
 func New() *Builder {
 	return &Builder{ //nolint:exhaustruct
 		envPrefix:  defaultEnvPrefix,
@@ -90,31 +96,81 @@ func (b *Builder) WithEnvPrefix(prefix string) *Builder {
 	return b
 }
 
-// WithSchema sets a JSON Schema from raw bytes, disabling the default
-// HTTP fetch from download.tarantool.org.
+// WithSchema sets a JSON Schema from raw bytes.
+// Mutually exclusive with [Builder.WithSchemaFile], [Builder.WithSchemaVersion],
+// [Builder.WithSchemaURLDefault], [Builder.WithSchemaURL], and [Builder.WithoutSchema];
+// setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
 func (b *Builder) WithSchema(schema []byte) *Builder {
 	b.schema = schema
-	b.schemaFile = ""
-	b.skipSchema = false
 
 	return b
 }
 
-// WithSchemaFile sets a JSON Schema from a local file path, disabling
-// the default HTTP fetch.
+// WithSchemaFile sets a JSON Schema from a local file path.
+// Mutually exclusive with [Builder.WithSchema], [Builder.WithSchemaVersion],
+// [Builder.WithSchemaURLDefault], [Builder.WithSchemaURL], and [Builder.WithoutSchema];
+// setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
 func (b *Builder) WithSchemaFile(path string) *Builder {
 	b.schemaFile = path
-	b.schema = nil
-	b.skipSchema = false
+
+	return b
+}
+
+// WithSchemaVersion resolves the JSON Schema from the embedded schema registry
+// by the given version string (e.g. "3.7.0"). Use [RegisterSchema] to add
+// custom versions. Returns [ErrUnknownSchemaVersion] at [Builder.Build] time if
+// the version is not found.
+// Mutually exclusive with [Builder.WithSchema], [Builder.WithSchemaFile],
+// [Builder.WithSchemaURLDefault], [Builder.WithSchemaURL], and [Builder.WithoutSchema];
+// setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
+func (b *Builder) WithSchemaVersion(version string) *Builder {
+	b.schemaVersion = version
+
+	return b
+}
+
+// WithSchemaURLDefault resolves the JSON Schema over HTTP from [DefaultSchemaURL].
+// Mutually exclusive with [Builder.WithSchema], [Builder.WithSchemaFile],
+// [Builder.WithSchemaVersion], [Builder.WithSchemaURL], and
+// [Builder.WithoutSchema]; setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
+func (b *Builder) WithSchemaURLDefault() *Builder {
+	b.schemaHTTP = true
+
+	return b
+}
+
+// WithSchemaURL resolves the JSON Schema over HTTP from the provided URL.
+// Mutually exclusive with [Builder.WithSchema], [Builder.WithSchemaFile],
+// [Builder.WithSchemaVersion], [Builder.WithSchemaURLDefault], and
+// [Builder.WithoutSchema]; setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
+func (b *Builder) WithSchemaURL(url string) *Builder {
+	b.schemaURL = url
+	b.schemaURLSet = true
+
+	return b
+}
+
+// WithHTTPClient injects the HTTP client used by [Builder.WithSchemaURLDefault] and
+// [Builder.WithSchemaURL]. If unset, a package-private default client with a
+// 30-second timeout is used.
+func (b *Builder) WithHTTPClient(client *http.Client) *Builder {
+	b.httpClient = client
 
 	return b
 }
 
 // WithoutSchema disables JSON Schema validation entirely.
+// Mutually exclusive with [Builder.WithSchema], [Builder.WithSchemaFile],
+// [Builder.WithSchemaVersion], [Builder.WithSchemaURLDefault], [Builder.WithSchemaURL],
+// and [Builder.WithoutSchema]; setting more than one returns
+// [ErrConflictingSchemaOptions] at [Builder.Build] time.
 func (b *Builder) WithoutSchema() *Builder {
 	b.skipSchema = true
-	b.schema = nil
-	b.schemaFile = ""
 
 	return b
 }
@@ -135,7 +191,7 @@ func (b *Builder) WithMerger(m config.Merger) *Builder {
 
 // Build assembles all configured collectors in priority order, applies
 // inheritance and validation, and returns an immutable [config.Config].
-// The context is used for schema fetching (HTTP) and collector reads.
+// The context is forwarded to collector reads.
 func (b *Builder) Build(ctx context.Context) (config.Config, error) {
 	inner, err := b.buildInner(ctx)
 	if err != nil {
@@ -171,6 +227,35 @@ func (b *Builder) BuildMutable(ctx context.Context) (*config.MutableConfig, erro
 func (b *Builder) validate() error {
 	if b.configFile != "" && b.configDir != "" {
 		return ErrMutuallyExclusive
+	}
+
+	schemaCount := 0
+	if b.schema != nil {
+		schemaCount++
+	}
+
+	if b.schemaFile != "" {
+		schemaCount++
+	}
+
+	if b.schemaVersion != "" {
+		schemaCount++
+	}
+
+	if b.skipSchema {
+		schemaCount++
+	}
+
+	if b.schemaURLSet {
+		schemaCount++
+	}
+
+	if b.schemaHTTP {
+		schemaCount++
+	}
+
+	if schemaCount > 1 {
+		return ErrConflictingSchemaOptions
 	}
 
 	return nil
@@ -268,7 +353,8 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 
 	// 2. Config file or directory.
 	if b.configFile != "" {
-		source, sourceErr := collectors.NewSource( //nolint:contextcheck
+		source, sourceErr := collectors.NewSource(
+			ctx,
 			collectors.NewFile(b.configFile),
 			collectors.NewYamlFormat(),
 		)
