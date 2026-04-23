@@ -56,6 +56,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   so YAML sequences are correctly represented as arrays after inheritance
   resolution
   ([#34](https://github.com/tarantool/go-config/issues/34)).
+* env vars with compound schema keys (e.g. `TT_AUDIT_LOG_NONBLOCK`,
+  `TT_WAL_QUEUE_MAX_SIZE`, `TT_REPLICATION_FAILOVER`) now resolve to the
+  correct config path when a JSON schema is supplied.
+
 
 ## [v1.0.0] - 2026-03-10
 
