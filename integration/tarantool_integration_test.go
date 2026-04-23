@@ -447,19 +447,14 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	}
 }
 
-// TestTarantool_Integration_WithRealSchema fetches the real Tarantool schema
-// from download.tarantool.org and validates a config against it.
-// This test is skipped in short mode and requires network access.
+// TestTarantool_Integration_WithRealSchema validates a config against the
+// embedded Tarantool schema bundle.
 //
 // Note: config uses only scalar and map fields (no YAML arrays) because
 // the builder merge pipeline currently does not preserve the isArray flag,
 // which causes array-typed fields to appear as maps to the JSON Schema
 // validator.
 func TestTarantool_Integration_WithRealSchema(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping: requires network access to download.tarantool.org")
-	}
-
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 
@@ -483,9 +478,11 @@ groups:
 
 	ctx := context.Background()
 
-	// Build with real schema (fetched from download.tarantool.org).
+	// Use an isolated env prefix to prevent ambient TT_* variables from
+	// entering the config and violating the real schema.
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
+		WithEnvPrefix("TT_TESTONLY_").
 		Build(ctx)
 	require.NoError(t, err, "config should pass real Tarantool schema validation")
 

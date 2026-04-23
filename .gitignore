@@ -24,3 +24,9 @@ coverage.out.tmp
 *.swp
 *.swo
 *~
+
+# Local-only build/test caches and scratch dir
+.go-cache/
+.gocache/
+.golangci-cache/
+tmp/

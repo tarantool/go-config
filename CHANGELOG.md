@@ -10,7 +10,23 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* Offline JSON Schema by default, plus opt-in HTTP fetching via
+  `WithSchemaURLDefault`, `WithSchemaURL`, `WithHTTPClient`, and
+  `DefaultSchemaURL`.
+* Embed gzipped minified schemas for Tarantool 3.3.0 – 3.7.0, decompressed at
+  package init.
+
 ### Changed
+
+* `collectors.NewSource` now takes `ctx context.Context` as its first argument.
+  Previously the function created `context.Background()` internally; callers
+  must now supply a context, which is forwarded to `DataSource.FetchStream`.
+  Migrate `NewSource(src, fmt)` to `NewSource(ctx, src, fmt)`. This is a
+  breaking change.
+* `tarantool.New()` now uses the newest embedded JSON Schema by default instead
+  of fetching `https://download.tarantool.org/tarantool/schema/config.schema.json`
+  at `Build()` time. This is a breaking change in default behavior.
+* Schema selectors on `tarantool.Builder` are now mutually exclusive.
 
 ### Fixed
 
@@ -41,4 +57,3 @@ Initial release of go-config library.
 * Watcher interface for reactive change notifications from storage backends.
 * KeyPath type for configuration key manipulation with wildcard pattern support.
 * MutableConfig for runtime configuration modifications with validation.
-

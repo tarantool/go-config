@@ -158,7 +158,7 @@ func TestStorageSource_Integration_Etcd(t *testing.T) {
 	// Create a StorageSource for a single document.
 	source := collectors.NewStorageSource(cluster.Storage, prefix, "myapp", nil, nil)
 
-	collector, err := collectors.NewSource(source, collectors.NewYamlFormat())
+	collector, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.NoError(t, err)
 
 	builder := config.NewBuilder()

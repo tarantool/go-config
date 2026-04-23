@@ -179,7 +179,7 @@ func TestEnv_Read_NoMatchNoEmit(t *testing.T) {
 	ec := collectors.NewEnv().WithPrefix("MYAPP_")
 	ch := ec.Read(ctx)
 
-	var values []config.Value //nolint:prealloc
+	var values []config.Value
 	for val := range ch {
 		values = append(values, val)
 	}

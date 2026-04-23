@@ -70,10 +70,8 @@ type Source struct {
 }
 
 // NewSource returns new Source object.
-func NewSource(source DataSource, format Format) (config.Collector, error) {
+func NewSource(ctx context.Context, source DataSource, format Format) (config.Collector, error) {
 	var err error
-
-	ctx := context.Background()
 
 	reader, err := source.FetchStream(ctx)
 	if err != nil {
