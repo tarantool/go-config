@@ -13,6 +13,29 @@
 //  3. Centralized storage (etcd / tarantool-storage) under <prefix>/config/*.
 //  4. Environment variables — TT_* prefix.
 //
+// # Environment variable path resolution
+//
+// When a JSON schema is supplied (via [Builder.WithSchema] or
+// [Builder.WithSchemaFile], or fetched at build time), env-var names
+// are resolved to config key paths by walking the schema with greedy
+// longest-prefix matching. This lets compound keys like
+// TT_AUDIT_LOG_NONBLOCK reach audit_log.nonblock and
+// TT_WAL_QUEUE_MAX_SIZE reach wal_queue_max_size, instead of being
+// naively split into "audit/log/nonblock" or "wal/queue/max/size".
+//
+// Vars that don't match any schema path are silently dropped. With
+// [Builder.WithoutSchema] the legacy underscore-split is used.
+//
+// Wildcard segments (e.g. group / replicaset / instance names under
+// additionalProperties) consume exactly one underscore-separated token
+// each; user-defined names containing '_' (e.g. "my_group") are not
+// supported and will fail to resolve.
+//
+// Schema features the resolver does not understand — allOf / oneOf /
+// anyOf composition, $ref pointing anywhere other than #/$defs/<name>
+// or #/definitions/<name> — are treated as opaque and any paths
+// buried beneath them won't be reachable via env vars.
+//
 // # Inheritance
 //
 // The builder registers the Tarantool hierarchy

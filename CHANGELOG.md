@@ -39,6 +39,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `collectors.Storage` no longer silently skips documents with invalid YAML,
   which could mask partially-loaded configurations
   ([#26](https://github.com/tarantool/go-config/issues/26)).
+* `tarantool.Builder`: env vars with compound schema keys (e.g.
+  `TT_AUDIT_LOG_NONBLOCK`, `TT_WAL_QUEUE_MAX_SIZE`,
+  `TT_REPLICATION_FAILOVER`) now resolve to the correct config path
+  when a JSON schema is supplied.
 
 ## [v1.0.0] - 2026-03-10
 
