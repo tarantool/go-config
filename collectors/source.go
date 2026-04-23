@@ -83,7 +83,7 @@ func NewSource(ctx context.Context, source DataSource, format Format) (config.Co
 
 	node, err := format.Parse()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFormatParse, err)
+		return nil, NewFormatParseError(source.Name(), err)
 	}
 
 	return &Source{

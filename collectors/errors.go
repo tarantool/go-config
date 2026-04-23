@@ -1,6 +1,9 @@
 package collectors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrNoData indicates that there is no data to process.
@@ -13,8 +16,6 @@ var (
 	ErrReader = errors.New("reader processing error")
 	// ErrFetchStream indicates that fetching the stream failed.
 	ErrFetchStream = errors.New("failed to fetch the stream")
-	// ErrFormatParse indicates that parsing data with format failed.
-	ErrFormatParse = errors.New("failed to parse data with format")
 	// ErrStorageFetch indicates that storage fetch failed.
 	ErrStorageFetch = errors.New("storage fetch failed")
 	// ErrStorageKeyNotFound indicates that a storage key was not found.
@@ -26,3 +27,28 @@ var (
 	// ErrDirectoryRead indicates that reading a directory failed.
 	ErrDirectoryRead = errors.New("directory read failed")
 )
+
+// FormatParseError indicates that parsing a configuration value with the
+// configured format failed. Key identifies the offending source (storage key,
+// file path, etc.) and Err is the underlying parser error. Callers can match
+// it with errors.As(&FormatParseError{}) and inspect Err directly.
+type FormatParseError struct {
+	Key string
+	Err error
+}
+
+// NewFormatParseError builds a FormatParseError for the given source key and
+// underlying parser error.
+func NewFormatParseError(key string, err error) *FormatParseError {
+	return &FormatParseError{Key: key, Err: err}
+}
+
+// Error renders the full message including the key and the wrapped error.
+func (e *FormatParseError) Error() string {
+	return fmt.Sprintf("failed to parse data with format: key %q: %v", e.Key, e.Err)
+}
+
+// Unwrap exposes the underlying parser error so errors.Is/As can reach it.
+func (e *FormatParseError) Unwrap() error {
+	return e.Err
+}

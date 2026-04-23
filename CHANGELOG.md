@@ -15,6 +15,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   `DefaultSchemaURL`.
 * Embed gzipped minified schemas for Tarantool 3.3.0 – 3.7.0, decompressed at
   package init.
+* `collectors.Storage.WithSkipInvalid(bool)` to silently skip documents that
+  failed to parse.
 
 ### Changed
 
@@ -27,8 +29,16 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   of fetching `https://download.tarantool.org/tarantool/schema/config.schema.json`
   at `Build()` time. This is a breaking change in default behavior.
 * Schema selectors on `tarantool.Builder` are now mutually exclusive.
+* `collectors.Storage.Collectors` is now strict by default: a document whose
+  value fails to parse causes `Collectors` to return an error wrapping
+  `ErrFormatParse` that identifies the offending storage key, instead of
+  being silently dropped.
 
 ### Fixed
+
+* `collectors.Storage` no longer silently skips documents with invalid YAML,
+  which could mask partially-loaded configurations
+  ([#26](https://github.com/tarantool/go-config/issues/26)).
 
 ## [v1.0.0] - 2026-03-10
 

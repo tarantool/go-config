@@ -216,7 +216,7 @@ func (d *Directory) collectFiles(dirPath string) ([]config.Collector, error) {
 			continue
 		}
 
-		subtree, err := d.parseData(data)
+		subtree, err := d.parseData(filePath, data)
 		if err != nil {
 			return nil, err
 		}
@@ -237,14 +237,15 @@ func (d *Directory) collectFiles(dirPath string) ([]config.Collector, error) {
 	return docs, nil
 }
 
-// parseData parses raw bytes using the collector's format.
-func (d *Directory) parseData(data []byte) (*tree.Node, error) {
+// parseData parses raw bytes using the collector's format. filePath is
+// embedded into any FormatParseError so the caller can locate the file.
+func (d *Directory) parseData(filePath string, data []byte) (*tree.Node, error) {
 	reader := strings.NewReader(string(data))
 	format := d.format.From(reader)
 
 	node, err := format.Parse()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFormatParse, err)
+		return nil, NewFormatParseError(filePath, err)
 	}
 
 	return node, nil
