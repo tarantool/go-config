@@ -2,6 +2,7 @@ package collectors_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -261,7 +262,7 @@ func TestStorage_Read_RangeError(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
-func TestStorage_Read_InvalidYamlValue(t *testing.T) {
+func TestStorage_Collectors_InvalidYamlValue_Strict(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
@@ -270,6 +271,63 @@ func TestStorage_Read_InvalidYamlValue(t *testing.T) {
 
 	typed := testutil.NewRawTyped(mock, "/config/")
 	collector := collectors.NewStorage(typed, "/config/", collectors.NewYamlFormat())
+
+	assert.False(t, collector.SkipInvalid())
+
+	subs, err := collector.Collectors(context.Background())
+
+	var fpErr *collectors.FormatParseError
+
+	require.ErrorAs(t, err, &fpErr)
+	assert.Equal(t, "/config/invalid", fpErr.Key)
+	assert.Nil(t, subs)
+}
+
+func TestStorage_Builder_InvalidYamlValue_Strict(t *testing.T) {
+	t.Parallel()
+
+	mock := testutil.NewMockStorage()
+	testutil.PutIntegrity(mock, "/config/", "invalid", []byte("bad: yaml: [unclosed"))
+	testutil.PutIntegrity(mock, "/config/", "valid", []byte("mykey: value"))
+
+	typed := testutil.NewRawTyped(mock, "/config/")
+	collector := collectors.NewStorage(typed, "/config/", collectors.NewYamlFormat())
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collector)
+
+	_, errs := builder.Build(t.Context())
+	require.NotEmpty(t, errs)
+
+	var fpErr *collectors.FormatParseError
+
+	var matched bool
+
+	for _, e := range errs {
+		if errors.As(e, &fpErr) {
+			matched = true
+
+			break
+		}
+	}
+
+	require.True(t, matched, "expected *FormatParseError among builder errors: %v", errs)
+	assert.Equal(t, "/config/invalid", fpErr.Key)
+}
+
+func TestStorage_Read_InvalidYamlValue_SkipInvalid(t *testing.T) {
+	t.Parallel()
+
+	mock := testutil.NewMockStorage()
+	testutil.PutIntegrity(mock, "/config/", "invalid", []byte("bad: yaml: [unclosed"))
+	testutil.PutIntegrity(mock, "/config/", "valid", []byte("mykey: value"))
+
+	typed := testutil.NewRawTyped(mock, "/config/")
+	collector := collectors.NewStorage(typed, "/config/", collectors.NewYamlFormat()).
+		WithSkipInvalid(true)
+
+	assert.True(t, collector.SkipInvalid())
 
 	ctx := context.Background()
 	channel := collector.Read(ctx)

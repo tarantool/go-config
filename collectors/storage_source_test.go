@@ -220,5 +220,8 @@ func TestStorageSource_WithSource_InvalidYaml(t *testing.T) {
 
 	_, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, collectors.ErrFormatParse)
+
+	var fpErr *collectors.FormatParseError
+
+	require.ErrorAs(t, err, &fpErr)
 }

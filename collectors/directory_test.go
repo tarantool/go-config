@@ -176,7 +176,11 @@ func TestDirectory_Collectors_ParseError(t *testing.T) {
 	_, err := collector.Collectors(ctx)
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, collectors.ErrFormatParse)
+
+	var fpErr *collectors.FormatParseError
+
+	require.ErrorAs(t, err, &fpErr)
+	assert.Contains(t, fpErr.Key, "invalid.yaml")
 }
 
 func TestDirectory_Collectors_SkipsEmptyFiles(t *testing.T) {

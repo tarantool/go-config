@@ -17,14 +17,15 @@ import (
 // and merged into a single config tree. Key names are used only for
 // distinguishing documents; the YAML content determines the tree structure.
 type Storage struct {
-	name       string
-	sourceType config.SourceType
-	revision   config.RevisionType
-	keepOrder  bool
-	typed      *integrity.Typed[[]byte]
-	format     Format
-	prefix     string
-	delimiter  string
+	name        string
+	sourceType  config.SourceType
+	revision    config.RevisionType
+	keepOrder   bool
+	skipInvalid bool
+	typed       *integrity.Typed[[]byte]
+	format      Format
+	prefix      string
+	delimiter   string
 }
 
 // NewStorage creates a new Storage collector that reads all keys under the
@@ -36,14 +37,15 @@ func NewStorage(
 	format Format,
 ) *Storage {
 	return &Storage{
-		name:       "storage",
-		sourceType: config.StorageSource,
-		revision:   "",
-		keepOrder:  false,
-		typed:      typed,
-		format:     format,
-		prefix:     prefix,
-		delimiter:  "/",
+		name:        "storage",
+		sourceType:  config.StorageSource,
+		revision:    "",
+		keepOrder:   false,
+		skipInvalid: false,
+		typed:       typed,
+		format:      format,
+		prefix:      prefix,
+		delimiter:   "/",
 	}
 }
 
@@ -79,6 +81,16 @@ func (s *Storage) WithKeepOrder(keep bool) *Storage {
 	return s
 }
 
+// WithSkipInvalid sets whether Collectors should silently skip documents
+// whose value fails to parse. Default is false: a parse error on any key
+// causes Collectors to return a *FormatParseError identifying the offending
+// key. Enable this for tolerant reads where a single bad document should
+// not prevent loading the rest.
+func (s *Storage) WithSkipInvalid(skip bool) *Storage {
+	s.skipInvalid = skip
+	return s
+}
+
 // WithDelimiter sets the delimiter used to split storage keys into
 // config path segments. The default is "/". If the delimiter differs
 // from "/", it is replaced internally with "/" before constructing
@@ -108,6 +120,12 @@ func (s *Storage) KeepOrder() bool {
 	return s.keepOrder
 }
 
+// SkipInvalid returns whether documents with parse errors are skipped
+// silently instead of producing an error.
+func (s *Storage) SkipInvalid() bool {
+	return s.skipInvalid
+}
+
 // Collectors implements config.MultiCollector. It performs a range query with
 // the configured prefix, validates integrity, parses each key's value using the
 // collector's Format, and returns one sub-collector per storage key. Each
@@ -115,7 +133,10 @@ func (s *Storage) KeepOrder() bool {
 // MergerContext, source name, and revision.
 // The parent Storage's revision is updated to the maximum ModRevision among
 // the fetched keys.
-// Keys with empty values or parsing errors are skipped.
+// Keys with empty values are skipped. By default, a parse error on any key
+// causes Collectors to return a *FormatParseError that identifies the
+// offending key; use WithSkipInvalid(true) to silently skip invalid
+// documents instead.
 func (s *Storage) Collectors(ctx context.Context) ([]config.Collector, error) {
 	results, err := s.typed.Range(ctx, "",
 		integrity.IgnoreVerificationError())
@@ -150,7 +171,11 @@ func (s *Storage) Collectors(ctx context.Context) ([]config.Collector, error) {
 
 		subtree, parseErr := format.Parse()
 		if parseErr != nil {
-			continue
+			if s.skipInvalid {
+				continue
+			}
+
+			return nil, NewFormatParseError(s.prefix+result.Name, parseErr)
 		}
 
 		docName := s.sourceName(result.Name)
