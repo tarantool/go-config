@@ -1,0 +1,83 @@
+name: Sync Tarantool schemas
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch and validate only — do not commit, push, or open a PR."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-tarantool-schemas
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: 1.25
+  BOT_NAME: "github-actions[bot]"
+  BOT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+  PR_BRANCH: automation/sync-tarantool-schemas
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: run schemasync
+        id: schemasync
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            args+=("--dry-run")
+            echo "::notice::dry-run enabled; no PR will be opened"
+          fi
+          go run ./internal/tools/schemasync "${args[@]}" | tee schemasync.out
+          added=$(grep '^added=' schemasync.out | cut -d= -f2-)
+          echo "added=${added}" >> "$GITHUB_OUTPUT"
+
+      - name: check for changes
+        id: changes
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain tarantool/schemas/)" ]; then
+            echo "no new schemas"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: validate embedded schemas
+        if: steps.changes.outputs.changed == 'true'
+        run: go test ./tarantool/... -count=1
+
+      - name: create pull request
+        if: steps.changes.outputs.changed == 'true' && inputs.dry_run != true
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: ${{ env.PR_BRANCH }}
+          base: master
+          add-paths: tarantool/schemas
+          commit-message: "tarantool: embed JSON Schemas for ${{ steps.schemasync.outputs.added }}"
+          committer: "${{ env.BOT_NAME }} <${{ env.BOT_EMAIL }}>"
+          author: "${{ env.BOT_NAME }} <${{ env.BOT_EMAIL }}>"
+          title: "tarantool: embed JSON Schemas for ${{ steps.schemasync.outputs.added }}"
+          body: "Automated sync of Tarantool JSON Schemas. Added versions: ${{ steps.schemasync.outputs.added }}."
+          delete-branch: true
