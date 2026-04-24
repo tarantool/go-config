@@ -23,4 +23,8 @@ var (
 	// ErrConflictingSchemaOptions is returned when mutually exclusive schema
 	// options are set on the same Builder.
 	ErrConflictingSchemaOptions = errors.New("tarantool: conflicting schema options")
+
+	// ErrBadEnvIgnorePattern is returned when [Builder.WithEnvIgnore]
+	// receives a pattern that path.Match rejects.
+	ErrBadEnvIgnorePattern = errors.New("tarantool: invalid env-ignore pattern")
 )

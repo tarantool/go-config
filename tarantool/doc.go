@@ -13,6 +13,16 @@
 //  3. Centralized storage (etcd / tarantool-storage) under <prefix>/config/*.
 //  4. Environment variables — TT_* prefix.
 //
+// # Ignoring environment variables
+//
+// [Builder.WithEnvIgnore] takes shell-glob patterns ([path.Match]
+// syntax) that drop matching env vars before the env transform runs.
+// Patterns are matched against the full env-var name, so use the same
+// string you'd see in `env | grep TT_` — for example,
+// WithEnvIgnore("TT_CLI_*") to skip the variables the tt CLI exports
+// into developer shells. Invalid patterns surface as
+// [ErrBadEnvIgnorePattern] from [Builder.Build].
+//
 // # Inheritance
 //
 // The builder registers the Tarantool hierarchy

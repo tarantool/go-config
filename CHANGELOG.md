@@ -17,6 +17,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   package init.
 * `collectors.Storage.WithSkipInvalid(bool)` to silently skip documents that
   failed to parse.
+* `tarantool.Builder.WithEnvIgnore(patterns ...string)` shell-glob patterns
+  for env-var names to drop before the env transform runs.
 
 ### Changed
 

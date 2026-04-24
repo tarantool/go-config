@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path"
 	"strings"
 
 	config "github.com/tarantool/go-config"
@@ -13,8 +14,10 @@ import (
 	"github.com/tarantool/go-storage/integrity"
 )
 
-const defaultEnvPrefix = "TT_"
-const defaultEnvSuffix = "_DEFAULT"
+const (
+	defaultEnvPrefix = "TT_"
+	defaultEnvSuffix = "_DEFAULT"
+)
 
 // DefaultStorageKey is the middle path segment that Tarantool uses between the
 // storage base prefix and the configuration keys. The full storage path is
@@ -29,6 +32,7 @@ type Builder struct {
 	configFile string
 	configDir  string
 	envPrefix  string
+	envIgnore  []string
 
 	storage    *integrity.Typed[[]byte]
 	storageKey string
@@ -93,6 +97,18 @@ func (b *Builder) WithStorageKey(key string) *Builder {
 // WithEnvPrefix sets the environment variable prefix (default "TT_").
 func (b *Builder) WithEnvPrefix(prefix string) *Builder {
 	b.envPrefix = prefix
+	return b
+}
+
+// WithEnvIgnore registers shell-glob patterns ([path.Match] syntax)
+// against which incoming env-var names are checked. Matched names are
+// dropped before the env transform runs. Patterns are matched against
+// the full env-var name including the configured prefix (e.g.
+// "TT_CLI_*", not "CLI_*"). Multiple calls append; patterns are
+// validated at [Builder.Build] time and an invalid one surfaces as
+// [ErrBadEnvIgnorePattern].
+func (b *Builder) WithEnvIgnore(patterns ...string) *Builder {
+	b.envIgnore = append(b.envIgnore, patterns...)
 	return b
 }
 
@@ -297,6 +313,27 @@ func keyPathFromdKey(key string) config.KeyPath {
 	return config.NewKeyPathFromSegments(filtered)
 }
 
+func envFilter(
+	prefix string,
+	patterns []string,
+	next func(string) config.KeyPath,
+) func(string) config.KeyPath {
+	if len(patterns) == 0 {
+		return next
+	}
+
+	return func(key string) config.KeyPath {
+		full := prefix + key
+		for _, pat := range patterns {
+			if ok, _ := path.Match(pat, full); ok {
+				return nil
+			}
+		}
+
+		return next(key)
+	}
+}
+
 // regularEnvTransform returns a transform function for the regular env
 // collector. It skips variables ending with "_DEFAULT" (those belong to the
 // default-env collector), lowercases the remainder, and splits by "_".
@@ -340,13 +377,20 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 		return config.Builder{}, err
 	}
 
+	for _, pat := range b.envIgnore {
+		_, matchErr := path.Match(pat, "")
+		if matchErr != nil {
+			return config.Builder{}, fmt.Errorf("%w %q: %w", ErrBadEnvIgnorePattern, pat, matchErr)
+		}
+	}
+
 	inner := config.NewBuilder()
 
 	// 1. Default env vars (lowest priority).
 	inner = inner.AddCollector(
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(defaultEnvTransform(b.envPrefix)).
+			WithTransform(envFilter(b.envPrefix, b.envIgnore, defaultEnvTransform(b.envPrefix))).
 			WithName("env-default").
 			WithSourceType(config.EnvDefaultSource),
 	)
@@ -380,7 +424,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 	inner = inner.AddCollector(
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(regularEnvTransform()).
+			WithTransform(envFilter(b.envPrefix, b.envIgnore, regularEnvTransform())).
 			WithName("env").
 			WithSourceType(config.EnvSource),
 	)
