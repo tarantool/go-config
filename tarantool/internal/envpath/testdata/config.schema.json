@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "audit_log": {
+      "type": "object",
+      "properties": {
+        "nonblock": { "type": "string" },
+        "file": { "type": "string" }
+      }
+    },
+    "wal": {
+      "type": "object",
+      "properties": {
+        "dir": { "type": "string" }
+      }
+    },
+    "wal_queue_max_size": { "type": "string" },
+    "replication": {
+      "type": "object",
+      "properties": {
+        "failover": { "type": "string" }
+      }
+    },
+    "iproto": {
+      "type": "object",
+      "properties": {
+        "listen": { "type": "string" }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "replicasets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "instances": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "iproto": {
+                        "type": "object",
+                        "properties": {
+                          "listen": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

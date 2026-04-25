@@ -10,6 +10,7 @@ import (
 
 	config "github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
+	"github.com/tarantool/go-config/tarantool/internal/envpath"
 	"github.com/tarantool/go-storage/integrity"
 )
 
@@ -297,10 +298,19 @@ func keyPathFromdKey(key string) config.KeyPath {
 	return config.NewKeyPathFromSegments(filtered)
 }
 
+func resolvePath(resolver *envpath.Node, key string) config.KeyPath {
+	if resolver != nil {
+		return resolver.Resolve(key)
+	}
+
+	return keyPathFromdKey(key)
+}
+
 // regularEnvTransform returns a transform function for the regular env
 // collector. It skips variables ending with "_DEFAULT" (those belong to the
-// default-env collector), lowercases the remainder, and splits by "_".
-func regularEnvTransform() func(string) config.KeyPath {
+// default-env collector) and resolves the remainder via the schema trie
+// when available, otherwise via naive underscore split.
+func regularEnvTransform(resolver *envpath.Node) func(string) config.KeyPath {
 	suffix := defaultEnvSuffix
 
 	return func(key string) config.KeyPath {
@@ -308,14 +318,15 @@ func regularEnvTransform() func(string) config.KeyPath {
 			return nil
 		}
 
-		return keyPathFromdKey(key)
+		return resolvePath(resolver, key)
 	}
 }
 
 // defaultEnvTransform returns a transform function for the default-env
 // collector. It filters for variables ending with "_DEFAULT", strips that
-// suffix, lowercases the remainder, and splits by "_" into a key path.
-func defaultEnvTransform(_ string) func(string) config.KeyPath {
+// suffix, and resolves the remainder via the schema trie when available,
+// otherwise via naive underscore split.
+func defaultEnvTransform(resolver *envpath.Node) func(string) config.KeyPath {
 	suffix := defaultEnvSuffix
 
 	return func(key string) config.KeyPath {
@@ -328,7 +339,7 @@ func defaultEnvTransform(_ string) func(string) config.KeyPath {
 			return nil
 		}
 
-		return keyPathFromdKey(key)
+		return resolvePath(resolver, key)
 	}
 }
 
@@ -340,13 +351,31 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 		return config.Builder{}, err
 	}
 
+	// Resolve the schema once: env transforms need the resolver, schema
+	// validation needs the raw bytes.
+	var (
+		schemaBytes []byte
+		resolver    *envpath.Node
+	)
+
+	if !b.skipSchema {
+		schemaBytes, err = b.resolveSchema(ctx)
+		if err != nil {
+			return config.Builder{}, err
+		}
+
+		// Malformed schemas surface via WithJSONSchema below; a nil resolver
+		// falls back to the naive underscore split.
+		resolver, _ = envpath.Build(schemaBytes)
+	}
+
 	inner := config.NewBuilder()
 
 	// 1. Default env vars (lowest priority).
 	inner = inner.AddCollector(
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(defaultEnvTransform(b.envPrefix)).
+			WithTransform(defaultEnvTransform(resolver)).
 			WithName("env-default").
 			WithSourceType(config.EnvDefaultSource),
 	)
@@ -380,19 +409,14 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 	inner = inner.AddCollector(
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(regularEnvTransform()).
+			WithTransform(regularEnvTransform(resolver)).
 			WithName("env").
 			WithSourceType(config.EnvSource),
 	)
 
 	// 5. Schema validation.
 	if !b.skipSchema {
-		schema, schemaErr := b.resolveSchema(ctx)
-		if schemaErr != nil {
-			return config.Builder{}, schemaErr
-		}
-
-		inner, err = inner.WithJSONSchema(bytes.NewReader(schema))
+		inner, err = inner.WithJSONSchema(bytes.NewReader(schemaBytes))
 		if err != nil {
 			return config.Builder{}, fmt.Errorf("json schema: %w", err)
 		}
