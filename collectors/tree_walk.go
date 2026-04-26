@@ -24,7 +24,11 @@ func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any
 
 		switch val := value.(type) {
 		case map[string]any:
-			flattenMapIntoTree(node, path, val, keepOrder)
+			if len(val) == 0 {
+				node.Set(path, map[string]any{})
+			} else {
+				flattenMapIntoTree(node, path, val, keepOrder)
+			}
 		default:
 			node.Set(path, value)
 		}

@@ -86,6 +86,12 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 			flattenYamlIntoTree(node, *child, prefix)
 		}
 	case yaml.MappingNode:
+		if len(yamlNode.Content) == 0 {
+			node.Set(prefix, map[string]any{})
+
+			return
+		}
+
 		for i := 0; i < len(yamlNode.Content); i += 2 {
 			key := yamlNode.Content[i]
 			value := yamlNode.Content[i+1]
