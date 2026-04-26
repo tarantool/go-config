@@ -233,7 +233,6 @@ instance). It supports:
 ```go
 builder = builder.WithInheritance(
     config.Levels(config.Global, "groups", "replicasets", "instances"),
-    config.WithInheritMerge("roles", config.MergeAppend),
     config.WithInheritMerge("credentials", config.MergeDeep),
     config.WithNoInherit("leader"),
     config.WithDefaults(map[string]any{

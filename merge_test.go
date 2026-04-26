@@ -173,6 +173,57 @@ func TestMergeCollector_SliceReplacement(t *testing.T) {
 	assert.Equal(t, "third", itemsNode.Source)
 }
 
+func TestMergeValue_PreservesIsArrayForNumericKeys(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	col := collectors.NewMock().
+		WithEntry(config.NewKeyPath("roles/0"), "foo").
+		WithEntry(config.NewKeyPath("roles/1"), "bar").
+		WithName("test")
+
+	err := config.MergeCollector(t.Context(), root, col)
+	require.NoError(t, err)
+
+	rolesNode := root.Get(config.NewKeyPath("roles"))
+	require.NotNil(t, rolesNode)
+	assert.True(t, rolesNode.IsArray(),
+		"parent of numeric children should be marked as array")
+
+	raw := tree.ToAny(rolesNode)
+	assert.Equal(t, []any{"foo", "bar"}, raw)
+}
+
+func TestMergeValue_PreservesIsArrayForNestedNumericKeys(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	col := collectors.NewMock().
+		WithEntry(config.NewKeyPath("outer/0/inner/0"), "a").
+		WithEntry(config.NewKeyPath("outer/0/inner/1"), "b").
+		WithEntry(config.NewKeyPath("outer/1/value"), "c").
+		WithName("test")
+
+	err := config.MergeCollector(t.Context(), root, col)
+	require.NoError(t, err)
+
+	outerNode := root.Get(config.NewKeyPath("outer"))
+	require.NotNil(t, outerNode)
+	assert.True(t, outerNode.IsArray(),
+		"outer should be marked as array")
+
+	innerNode := root.Get(config.NewKeyPath("outer/0/inner"))
+	require.NotNil(t, innerNode)
+	assert.True(t, innerNode.IsArray(),
+		"inner should be marked as array")
+
+	raw := tree.ToAny(outerNode)
+	assert.Equal(t, []any{
+		map[string]any{"inner": []any{"a", "b"}},
+		map[string]any{"value": "c"},
+	}, raw)
+}
+
 func TestMergeCollectorWithMerger_ErrorInMergeValue(t *testing.T) {
 	t.Parallel()
 
