@@ -33,6 +33,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   value fails to parse causes `Collectors` to return an error wrapping
   `ErrFormatParse` that identifies the offending storage key, instead of
   being silently dropped.
+* Remove redundant `roles` merge strategy from `tarantool.Builder` defaults
+  since `MergeReplace` is already the default inheritance behavior
+  ([#34](https://github.com/tarantool/go-config/issues/34)).
 
 ### Fixed
 
@@ -42,6 +45,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * Fix empty YAML mappings (`{}`) being silently dropped during parsing,
   which caused `EffectiveAll()` to miss leaf entities with empty configs
   ([#32](https://github.com/tarantool/go-config/issues/32)).
+* Preserve `isArray` flag when merging numeric children into the config tree,
+  so YAML sequences are correctly represented as arrays after inheritance
+  resolution
+  ([#34](https://github.com/tarantool/go-config/issues/34)).
 
 ## [v1.0.0] - 2026-03-10
 

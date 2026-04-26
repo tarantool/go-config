@@ -21,7 +21,7 @@ import (
 //   - two groups (routers, storages) with group-level overrides
 //   - multiple replicasets per group with replicaset-level overrides
 //   - multiple instances per replicaset with instance-level overrides
-//   - inheritance corner-cases: credentials (MergeDeep), roles (MergeAppend),
+//   - inheritance corner-cases: credentials (MergeDeep), roles (MergeReplace),
 //     leader (NoInherit), and scalar overrides (MergeReplace)
 const bigTarantoolConfig = `
 credentials:
@@ -301,13 +301,13 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	assert.Equal(t, "0.0.0.0:3311", rInstanceURI,
 		"instance iproto.listen should override group value")
 
-	// MergeAppend: group roles inherited.
+	// MergeReplace: group roles inherited.
 	var rRole0 string
 
 	_, err = routerCfg.Get(config.NewKeyPath("roles/0"), &rRole0)
 	require.NoError(t, err)
 	assert.Equal(t, "roles.metrics-export", rRole0,
-		"MergeAppend: group-level role should be present")
+		"group-level role should be present")
 
 	// 7b. Storage instance s-001-a.
 	s001aCfg, err := cfg.Effective(
@@ -356,13 +356,13 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0.0:3321", sInstanceURI)
 
-	// MergeAppend: group roles.
+	// MergeReplace: group roles.
 	var sRole0 string
 
 	_, err = s001aCfg.Get(config.NewKeyPath("roles/0"), &sRole0)
 	require.NoError(t, err)
 	assert.Equal(t, "roles.crud-storage", sRole0,
-		"MergeAppend: group-level role should be present")
+		"group-level role should be present")
 
 	// 7c. Storage instance s-001-b — shares replicaset with s-001-a.
 	s001bCfg, err := cfg.Effective(
@@ -405,9 +405,7 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	assert.Equal(t, "global-admin-pw", s002aAdminPw,
 		"MergeDeep: global admin still present in s-002-a")
 
-	// roles: replicaset-level roles replace group-level roles because
-	// MergeAppend falls back to Replace when array nodes lose their
-	// isArray marking through the builder merge pipeline.
+	// roles: replicaset-level roles replace group-level roles.
 	var s002Role0 string
 
 	_, err = s002aCfg.Get(config.NewKeyPath("roles/0"), &s002Role0)
@@ -447,18 +445,12 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	}
 }
 
-// TestTarantool_Integration_WithRealSchema validates a config against the
-// embedded Tarantool schema bundle.
-//
-// Note: config uses only scalar and map fields (no YAML arrays) because
-// the builder merge pipeline currently does not preserve the isArray flag,
-// which causes array-typed fields to appear as maps to the JSON Schema
-// validator.
-func TestTarantool_Integration_WithRealSchema(t *testing.T) {
+func writeRealSchemaConfig(t *testing.T) string {
+	t.Helper()
+
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 
-	// Config using only scalar/map fields that pass the real schema.
 	writeTestFile(t, cfgPath, `
 log:
   level: info
@@ -470,26 +462,42 @@ replication:
 
 groups:
   storages:
+    roles:
+      - roles.crud-storage
     replicasets:
       s-001:
         instances:
           s-001-a: {}
+          s-001-b:
+            roles:
+              - roles.metrics-export
 `)
 
-	ctx := context.Background()
+	return cfgPath
+}
 
-	// Use an isolated env prefix to prevent ambient TT_* variables from
-	// entering the config and violating the real schema.
+func buildRealSchemaConfig(t *testing.T) config.Config {
+	t.Helper()
+
+	cfgPath := writeRealSchemaConfig(t)
+
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
 		WithEnvPrefix("TT_TESTONLY_").
-		Build(ctx)
+		Build(context.Background())
 	require.NoError(t, err, "config should pass real Tarantool schema validation")
 
-	// Verify basic values.
+	return cfg
+}
+
+// TestTarantool_Integration_WithRealSchema_Build validates a config against
+// the embedded Tarantool schema bundle and reads top-level values.
+func TestTarantool_Integration_WithRealSchema_Build(t *testing.T) {
+	cfg := buildRealSchemaConfig(t)
+
 	var logLevel string
 
-	_, err = cfg.Get(config.NewKeyPath("log/level"), &logLevel)
+	_, err := cfg.Get(config.NewKeyPath("log/level"), &logLevel)
 	require.NoError(t, err)
 	assert.Equal(t, "info", logLevel)
 
@@ -498,25 +506,48 @@ groups:
 	_, err = cfg.Get(config.NewKeyPath("replication/failover"), &failover)
 	require.NoError(t, err)
 	assert.Equal(t, "election", failover)
+}
 
-	// Verify inheritance with real schema.
-	instanceCfg, err := cfg.Effective(
+// TestTarantool_Integration_WithRealSchema_Inheritance checks that
+// inheritance works correctly for instances with and without own roles.
+func TestTarantool_Integration_WithRealSchema_Inheritance(t *testing.T) {
+	cfg := buildRealSchemaConfig(t)
+
+	instanceACfg, err := cfg.Effective(
 		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
 	require.NoError(t, err)
 
 	var inheritedLevel string
 
-	_, err = instanceCfg.Get(config.NewKeyPath("log/level"), &inheritedLevel)
+	_, err = instanceACfg.Get(config.NewKeyPath("log/level"), &inheritedLevel)
 	require.NoError(t, err)
 	assert.Equal(t, "info", inheritedLevel,
 		"global log.level should be inherited")
 
 	var inheritedFailover string
 
-	_, err = instanceCfg.Get(config.NewKeyPath("replication/failover"), &inheritedFailover)
+	_, err = instanceACfg.Get(config.NewKeyPath("replication/failover"), &inheritedFailover)
 	require.NoError(t, err)
 	assert.Equal(t, "election", inheritedFailover,
 		"global replication.failover should be inherited")
+
+	var rolesA []string
+
+	_, err = instanceACfg.Get(config.NewKeyPath("roles"), &rolesA)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"roles.crud-storage"}, rolesA,
+		"instance without own roles should inherit group roles")
+
+	instanceBCfg, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-b"))
+	require.NoError(t, err)
+
+	var rolesB []string
+
+	_, err = instanceBCfg.Get(config.NewKeyPath("roles"), &rolesB)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"roles.metrics-export"}, rolesB,
+		"instance-level roles should replace group-level roles")
 }
 
 // TestTarantool_Integration_BuildMutable_WithEtcd tests BuildMutable with
