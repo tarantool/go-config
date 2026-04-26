@@ -36,6 +36,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * Remove redundant `roles` merge strategy from `tarantool.Builder` defaults
   since `MergeReplace` is already the default inheritance behavior
   ([#34](https://github.com/tarantool/go-config/issues/34)).
+* Remove hardcoded `leader` exclusion from `tarantool.Builder` default
+  inheritance options so `leader` is now inherited down the hierarchy
+  like other keys. Users who need the old behavior can opt out via
+  `WithInheritanceOption(config.WithNoInherit("leader"))`
+  ([#36](https://github.com/tarantool/go-config/issues/36)).
 
 ### Fixed
 

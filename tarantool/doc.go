@@ -18,7 +18,6 @@
 // The builder registers the Tarantool hierarchy
 // (Global → groups → replicasets → instances) with default merge strategies:
 //   - credentials — MergeDeep
-//   - leader      — NoInherit
 //
 // # Schema Validation
 //

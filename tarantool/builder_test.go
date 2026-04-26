@@ -298,9 +298,49 @@ groups:
 	require.NoError(t, err)
 	assert.Equal(t, "manual", failover)
 
-	// leader should NOT be inherited (NoInherit).
+	// leader should be inherited from replicaset level by default.
+	var leader string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("leader"), &leader)
+	require.NoError(t, err)
+	assert.Equal(t, "s-001-a", leader)
+}
+
+func TestBuild_Inheritance_LeaderCanBeExcluded(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	writeFile(t, cfgPath, `
+replication:
+  failover: manual
+groups:
+  storages:
+    replicasets:
+      s-001:
+        leader: s-001-a
+        instances:
+          s-001-a:
+            iproto:
+              listen: 3301
+`)
+
+	ctx := context.Background()
+
+	cfg, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithoutSchema().
+		WithInheritanceOption(config.WithNoInherit("leader")).
+		Build(ctx)
+	require.NoError(t, err)
+
+	instanceCfg, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	// leader should NOT be inherited when explicitly excluded.
 	_, ok := instanceCfg.Lookup(config.NewKeyPath("leader"))
-	assert.False(t, ok, "leader should not be inherited")
+	assert.False(t, ok, "leader should not be inherited when excluded")
 }
 
 func TestBuild_InheritanceMergeDeep(t *testing.T) {
