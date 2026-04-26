@@ -22,7 +22,7 @@ import (
 //   - multiple replicasets per group with replicaset-level overrides
 //   - multiple instances per replicaset with instance-level overrides
 //   - inheritance corner-cases: credentials (MergeDeep), roles (MergeReplace),
-//     leader (NoInherit), and scalar overrides (MergeReplace)
+//     leader (inherited by default), and scalar overrides (MergeReplace)
 const bigTarantoolConfig = `
 credentials:
   users:
@@ -336,10 +336,13 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	assert.Equal(t, "op-pw-s001", sOpPw,
 		"MergeDeep: replicaset-level operator should be present")
 
-	// NoInherit: leader should NOT be in the instance config.
-	_, leaderFound := s001aCfg.Lookup(config.NewKeyPath("leader"))
-	assert.False(t, leaderFound,
-		"leader should not be inherited (NoInherit)")
+	// leader is inherited by default from replicaset level.
+	var leader string
+
+	_, err = s001aCfg.Get(config.NewKeyPath("leader"), &leader)
+	require.NoError(t, err)
+	assert.Equal(t, "s-001-a", leader,
+		"leader should be inherited from replicaset")
 
 	// Replicaset-level override: synchro_timeout = 10.
 	var synchroTimeout int64
