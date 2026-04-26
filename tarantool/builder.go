@@ -54,7 +54,7 @@ type Builder struct {
 // New creates a Builder with Tarantool defaults:
 //   - env prefix: "TT_"
 //   - inheritance: Global → groups → replicasets → instances
-//   - default inheritance options: credentials(MergeDeep), leader(NoInherit)
+//   - default inheritance options: credentials(MergeDeep)
 //   - schema: the newest embedded Tarantool version is used offline by default
 func New() *Builder {
 	return &Builder{ //nolint:exhaustruct
@@ -192,7 +192,7 @@ func (b *Builder) WithoutSchema() *Builder {
 }
 
 // WithInheritanceOption adds extra inheritance options on top of the
-// Tarantool defaults (credentials=MergeDeep, leader=NoInherit).
+// Tarantool defaults (credentials=MergeDeep).
 func (b *Builder) WithInheritanceOption(opts ...config.InheritanceOption) *Builder {
 	b.inheritanceOpts = append(b.inheritanceOpts, opts...)
 	return b
@@ -288,7 +288,6 @@ func ConfigPrefix(base string) string {
 func tarantoolInheritanceOpts() []config.InheritanceOption {
 	return []config.InheritanceOption{
 		config.WithInheritMerge("credentials", config.MergeDeep),
-		config.WithNoInherit("leader"),
 	}
 }
 
