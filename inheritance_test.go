@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1319,4 +1321,50 @@ func TestConfig_Walk_ContextCancellation(t *testing.T) {
 		// Optional: check val.
 		_ = val
 	}
+}
+
+func TestWithInheritance_YamlArrayPreserved(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yamlData := `groups:
+  storages:
+    roles:
+      - global-role
+    replicasets:
+      s-001:
+        instances:
+          s-001-a:
+            roles:
+              - instance-role
+`
+	err := os.WriteFile(cfgPath, []byte(yamlData), 0o600)
+	require.NoError(t, err)
+
+	collector, err := collectors.NewSource(
+		t.Context(), collectors.NewFile(cfgPath), collectors.NewYamlFormat())
+	require.NoError(t, err)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collector)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("roles", config.MergeAppend),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+	require.NotNil(t, cfg)
+
+	instanceCfg, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var roles []string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("roles"), &roles)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"global-role", "instance-role"}, roles)
 }
