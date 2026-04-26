@@ -63,6 +63,26 @@ func TestYaml_Parse(t *testing.T) {
 	assert.Equal(t, "default-cluster", val)
 }
 
+func TestYaml_Parse_EmptyMapping(t *testing.T) {
+	t.Parallel()
+
+	data := []byte("groups:\n  storages:\n    replicasets:\n      r-001:\n        instances:\n          inst1: {}")
+
+	format := collectors.NewYamlFormat().From(bytes.NewReader(data))
+	require.NotNil(t, format)
+
+	root, err := format.Parse()
+	require.NoError(t, err)
+	require.NotNil(t, root)
+
+	node := root.Get(config.NewKeyPath("groups/storages/replicasets/r-001/instances/inst1"))
+	require.NotNil(t, node)
+
+	val, ok := node.Value.(map[string]any)
+	require.True(t, ok)
+	assert.Empty(t, val)
+}
+
 func TestYaml_Parse_Invalid(t *testing.T) {
 	t.Parallel()
 

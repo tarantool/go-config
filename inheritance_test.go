@@ -827,6 +827,48 @@ func TestWithInheritance_EffectiveAllMultipleLeafs(t *testing.T) {
 	}
 }
 
+func TestWithInheritance_EffectiveAll_EmptyMappingLeaf(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"failover": "manual"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"r-001": map[string]any{
+						"instances": map[string]any{
+							"inst1": map[string]any{},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+	require.NotNil(t, cfg)
+
+	all, err := cfg.EffectiveAll()
+	require.NoError(t, err)
+	assert.Len(t, all, 1)
+
+	instanceCfg, ok := all["groups/storages/replicasets/r-001/instances/inst1"]
+	assert.True(t, ok)
+
+	var failover string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "manual", failover)
+}
+
 func TestLevels_Panic(t *testing.T) {
 	t.Parallel()
 
