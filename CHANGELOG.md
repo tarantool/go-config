@@ -39,6 +39,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `collectors.Storage` no longer silently skips documents with invalid YAML,
   which could mask partially-loaded configurations
   ([#26](https://github.com/tarantool/go-config/issues/26)).
+* Fix empty YAML mappings (`{}`) being silently dropped during parsing,
+  which caused `EffectiveAll()` to miss leaf entities with empty configs
+  ([#32](https://github.com/tarantool/go-config/issues/32)).
 
 ## [v1.0.0] - 2026-03-10
 
