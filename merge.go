@@ -9,6 +9,21 @@ import (
 	"github.com/tarantool/go-config/tree"
 )
 
+// isNumericString reports whether str consists only of ASCII digits.
+func isNumericString(str string) bool {
+	if str == "" {
+		return false
+	}
+
+	for i := range len(str) {
+		if str[i] < '0' || str[i] > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
 // MergeCollector reads all values from a collector and merges them into the tree
 // using the default merging logic.
 // The collector's priority is determined by the caller (higher priority collectors
@@ -81,6 +96,10 @@ func mergeValue(root *tree.Node, keyPath keypath.KeyPath, value any, col Collect
 
 			child = tree.New()
 			node.SetChild(segment, child)
+		}
+
+		if !isLast && isNumericString(keyPath[i+1]) {
+			child.MarkArray()
 		}
 
 		if isLast {

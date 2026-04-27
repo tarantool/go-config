@@ -155,10 +155,10 @@ func WithNoInheritFrom(level string, keys ...string) InheritanceOption {
 //
 // Example:
 //
-//	WithInheritMerge("roles", config.MergeAppend)
+//	WithInheritMerge("roles", config.MergeReplace)
 //
 // means when group has roles=[storage] and instance has roles=[metrics],
-// the effective roles for that instance will be [storage, metrics].
+// the effective roles for that instance will be [metrics].
 func WithInheritMerge(key string, strategy InheritMergeStrategy) InheritanceOption {
 	return func(ic *inheritanceConfig) {
 		if ic.mergeStrategies == nil {
