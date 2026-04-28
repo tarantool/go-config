@@ -160,3 +160,59 @@ func TestConfigBuilder_Lookup_NonExistentKey(t *testing.T) {
 	_, ok := cfg.Lookup(config.NewKeyPath("nonexistent"))
 	assert.False(t, ok)
 }
+
+func TestConfigBuilder_NilCollector_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(nil)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Len(t, errs, 1)
+	require.ErrorIs(t, errs[0], config.ErrNilCollector)
+
+	_, ok := cfg.Lookup(config.NewKeyPath("anything"))
+	assert.False(t, ok)
+}
+
+func TestConfigBuilder_WithJSONSchema_NilReader(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	_, err := builder.WithJSONSchema(nil)
+	require.ErrorIs(t, err, config.ErrNilSchemaReader)
+}
+
+func TestConfigBuilder_WithInheritance_NilOption(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	require.NotPanics(t, func() {
+		builder = builder.WithInheritance([]string{"groups"}, nil)
+	})
+
+	_, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+}
+
+func TestConfigBuilder_NilCollector_DoesNotAffectOthers(t *testing.T) {
+	t.Parallel()
+
+	col := collectors.NewMap(map[string]any{"foo": "bar"}).WithName("ok")
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(nil)
+	builder = builder.AddCollector(col)
+	builder = builder.AddCollector(nil)
+
+	_, errs := builder.Build(t.Context())
+	require.Len(t, errs, 2)
+
+	for _, err := range errs {
+		require.ErrorIs(t, err, config.ErrNilCollector)
+	}
+}

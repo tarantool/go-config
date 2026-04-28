@@ -18,6 +18,10 @@ var (
 	ErrNoInheritance = errors.New("no inheritance hierarchy configured")
 	// ErrHierarchyMismatch is returned by Effective() when path doesn't match any hierarchy.
 	ErrHierarchyMismatch = errors.New("path does not match any inheritance hierarchy")
+	// ErrNilCollector is returned by Build() when a nil collector was added to the Builder.
+	ErrNilCollector = errors.New("nil collector")
+	// ErrNilSchemaReader is returned by WithJSONSchema() when the schema io.Reader is nil.
+	ErrNilSchemaReader = errors.New("nil schema reader")
 )
 
 // CollectorError wraps an error that occurred while processing a collector,

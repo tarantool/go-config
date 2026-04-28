@@ -59,7 +59,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * env vars with compound schema keys (e.g. `TT_AUDIT_LOG_NONBLOCK`,
   `TT_WAL_QUEUE_MAX_SIZE`, `TT_REPLICATION_FAILOVER`) now resolve to the
   correct config path when a JSON schema is supplied.
-
+* `Builder.AddCollector`, `Builder.Build`, `Builder.WithValidator`,
+  `Builder.WithJSONSchema`, `Builder.MustWithJSONSchema`, `Builder.WithMerger`,
+  and `Builder.WithInheritance` no longer panic on nil inputs.
 
 ## [v1.0.0] - 2026-03-10
 
