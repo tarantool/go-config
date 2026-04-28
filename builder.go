@@ -35,20 +35,31 @@ func NewBuilder() Builder {
 // The order of adding collectors is critical: each subsequent
 // collector has higher priority than the previous one. Its values
 // will override values from earlier collectors when keys match.
+//
+// A nil collector is accepted here but causes Build to return an
+// ErrNilCollector error (annotated with the collector's index)
+// instead of panicking. Other collectors are still processed.
 func (b *Builder) AddCollector(collector Collector) Builder {
 	b.collectors = append(b.collectors, collector)
 	return *b
 }
 
 // WithValidator sets a custom validator for configuration validation.
+// Passing nil clears any previously configured validator; Build
+// then skips the validation step entirely.
 func (b *Builder) WithValidator(validator validator.Validator) Builder {
 	b.validator = validator
 	return *b
 }
 
 // WithJSONSchema creates a JSON Schema validator and sets it.
-// Returns error if schema parsing fails.
+// Returns ErrNilSchemaReader if schema is nil, or a wrapped error
+// if schema parsing fails. The Builder is returned unchanged on error.
 func (b *Builder) WithJSONSchema(schema io.Reader) (Builder, error) {
+	if schema == nil {
+		return *b, fmt.Errorf("failed to create JSON schema validator: %w", ErrNilSchemaReader)
+	}
+
 	validator, err := jsonschema.NewFromReader(schema)
 	if err != nil {
 		return *b, fmt.Errorf("failed to create JSON schema validator: %w", err)
@@ -60,7 +71,8 @@ func (b *Builder) WithJSONSchema(schema io.Reader) (Builder, error) {
 }
 
 // MustWithJSONSchema is like WithJSONSchema but panics on error.
-// Useful for static schema definitions.
+// Useful for static schema definitions. Panics with ErrNilSchemaReader
+// if schema is nil.
 func (b *Builder) MustWithJSONSchema(schema io.Reader) Builder {
 	result, err := b.WithJSONSchema(schema)
 	if err != nil {
@@ -71,7 +83,8 @@ func (b *Builder) MustWithJSONSchema(schema io.Reader) Builder {
 }
 
 // WithMerger sets a custom merger for the configuration assembly.
-// If not set, the default merging logic is used.
+// If not set, or if nil is passed, the default merging logic
+// (Default) is used at Build time.
 func (b *Builder) WithMerger(merger Merger) Builder {
 	b.merger = merger
 	return *b
@@ -86,6 +99,9 @@ func (b *Builder) WithMerger(merger Merger) Builder {
 // Inheritance is resolved during Build(), after collector merging
 // but before validation. This ensures the validator sees the effective
 // (fully resolved) config for each leaf entity.
+//
+// A nil levels slice is accepted and registers an empty hierarchy.
+// Any nil entries in opts are skipped silently.
 func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Builder {
 	inheritanceCfg := inheritanceConfig{
 		levels:          levels,
@@ -94,7 +110,12 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 		noInheritFrom:   nil,
 		mergeStrategies: nil,
 	}
+
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+
 		opt(&inheritanceCfg)
 	}
 
@@ -106,6 +127,10 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 // Build starts the configuration assembly process.
 // It performs reading data from all collectors, merging them,
 // validation against the schema, and returns a ready Config object or an error.
+//
+// Nil collectors (top-level or returned from a MultiCollector) are not
+// dereferenced: each contributes an ErrNilCollector entry to the returned
+// error slice and is skipped. The remaining collectors are still processed.
 func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	root := tree.New()
 
@@ -116,7 +141,13 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 		merger = Default
 	}
 
-	for _, col := range b.collectors {
+	for i, col := range b.collectors {
+		if col == nil {
+			errs = append(errs, fmt.Errorf("%w at index %d", ErrNilCollector, i))
+
+			continue
+		}
+
 		multiCol, isMulti := col.(MultiCollector)
 		if !isMulti {
 			err := MergeCollectorWithMerger(ctx, root, col, merger)
@@ -134,7 +165,14 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 			continue
 		}
 
-		for _, sub := range subs {
+		for j, sub := range subs {
+			if sub == nil {
+				errs = append(errs, NewCollectorError(col.Name(),
+					fmt.Errorf("%w at sub-index %d", ErrNilCollector, j)))
+
+				continue
+			}
+
 			err := MergeCollectorWithMerger(ctx, root, sub, merger)
 			if err != nil {
 				errs = append(errs, err)
