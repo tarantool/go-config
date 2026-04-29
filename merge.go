@@ -59,6 +59,12 @@ func MergeCollectorWithMerger(ctx context.Context, root *tree.Node, col Collecto
 			errs = append(errs, fmt.Errorf("merge value at %s: %w", meta.Key.String(), err))
 			continue
 		}
+
+		// If the source value carries a format-specific annotation
+		// (e.g., the YAML node it was parsed from), forward it onto
+		// the destination tree node so that marshalers can reproduce
+		// scalar style and comments.
+		copyAnnotation(root, meta.Key, val)
 	}
 
 	err := mergeCtx.ApplyOrdering(root)
@@ -144,6 +150,27 @@ func mergeNodeValue(node *tree.Node, value any, col Collector) {
 	// Update node metadata.
 	node.Source = col.Name()
 	node.Revision = string(col.Revision())
+}
+
+// copyAnnotation forwards the format-specific annotation from a source Value
+// onto the destination tree node at path, when the source exposes one.
+func copyAnnotation(root *tree.Node, path keypath.KeyPath, src Value) {
+	carrier, ok := src.(interface{ Annotation() any })
+	if !ok {
+		return
+	}
+
+	anno := carrier.Annotation()
+	if anno == nil {
+		return
+	}
+
+	dest := root.Get(path)
+	if dest == nil {
+		return
+	}
+
+	dest.SetAnnotation(anno)
 }
 
 // mergeMapIntoNode merges a map into a node's children recursively.

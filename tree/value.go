@@ -65,6 +65,18 @@ func (v *valueImpl) Meta() meta.Info {
 	}
 }
 
+// Annotation returns the opaque annotation attached to the underlying tree
+// node, if any. Code that consumes Values can type-assert to discover this
+// method when it needs to forward format-specific metadata (such as YAML
+// comment and style information) through the merge pipeline.
+func (v *valueImpl) Annotation() any {
+	if v.node == nil {
+		return nil
+	}
+
+	return v.node.Annotation()
+}
+
 // nodeToValue converts a tree node into a generic Go value.
 // If the node is a leaf (no children), returns node.Value (which may be a slice, map, or primitive).
 // For array nodes, builds a []any from children in order.

@@ -314,21 +314,6 @@ func (c *Config) EffectiveAll() (map[string]Config, error) {
 	return result, nil
 }
 
-// String returns a string with the current representation of the configuration according to the YAML format.
-func (c *Config) String() string {
-	//nolint:godox
-	// TODO: implement YAML serialization.
-	return ""
-}
-
-// MarshalYAML serializes the Config object into YAML format.
-// Thanks to key order preservation, the resulting YAML will have a predictable and stable structure.
-func (c *Config) MarshalYAML() ([]byte, error) {
-	//nolint:godox
-	// TODO: implement YAML marshaling.
-	return nil, nil
-}
-
 // collectLeafEntities recursively finds all leaf entities in the hierarchy
 // and resolves their effective config.
 //
