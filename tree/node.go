@@ -24,6 +24,12 @@ type Node struct {
 	// Range indicates the position in source file where this node was defined.
 	Range Range
 
+	// annotation holds an opaque, format-specific representation of this node
+	// (e.g., the original *yaml.Node it came from). It is preserved across
+	// cloning and read by format-aware marshalers to reproduce style and
+	// comments. The tree package treats it as opaque.
+	annotation any
+
 	// isArray indicates that this node represents a YAML sequence (array).
 	// Children are indexed by "0", "1", "2", etc.
 	isArray bool
@@ -43,10 +49,25 @@ func New() *Node {
 		Revision: "",
 		Range:    Range{Start: Position{Line: 0, Column: 0}, End: Position{Line: 0, Column: 0}},
 
-		isArray:  false,
-		children: nil,
-		orderSet: false,
+		annotation: nil,
+		isArray:    false,
+		children:   nil,
+		orderSet:   false,
 	}
+}
+
+// Annotation returns the opaque annotation attached to this node, if any.
+// Format-specific collectors may set this to retain information (such as
+// comments and scalar style) that the tree itself does not model.
+func (n *Node) Annotation() any {
+	return n.annotation
+}
+
+// SetAnnotation attaches an opaque annotation to this node.
+// The tree package does not interpret it; readers (e.g., a YAML marshaler)
+// type-assert to recover format-specific data.
+func (n *Node) SetAnnotation(a any) {
+	n.annotation = a
 }
 
 // IsLeaf returns true if the node has no children.

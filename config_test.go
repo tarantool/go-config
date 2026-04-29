@@ -244,7 +244,7 @@ func TestConfig_Walk_FromSubPath(t *testing.T) {
 	assert.Equal(t, 2, count)
 }
 
-func TestConfig_String_ReturnsEmpty(t *testing.T) {
+func TestConfig_String_EmptyConfig(t *testing.T) {
 	t.Parallel()
 
 	data := map[string]any{}
@@ -259,7 +259,7 @@ func TestConfig_String_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, cfg.String())
 }
 
-func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
+func TestConfig_MarshalYAML_EmptyConfig(t *testing.T) {
 	t.Parallel()
 
 	data := map[string]any{}
@@ -271,9 +271,9 @@ func TestConfig_MarshalYAML_ReturnsNil(t *testing.T) {
 	cfg, errs := builder.Build(t.Context())
 	require.Empty(t, errs)
 
-	bytes, err := cfg.MarshalYAML()
+	out, err := cfg.MarshalYAML()
 	require.NoError(t, err)
-	assert.Nil(t, bytes)
+	assert.Empty(t, out)
 }
 
 func TestMutableConfig_Set_NotImplemented(t *testing.T) {

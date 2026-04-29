@@ -72,36 +72,50 @@ func (y YamlFormat) Parse() (*tree.Node, error) {
 
 	root := tree.New()
 
-	flattenYamlIntoTree(root, node, config.NewKeyPath(""))
+	flattenYamlIntoTree(root, nil, node, config.NewKeyPath(""))
 
 	return root, nil
 }
 
-func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
+func flattenYamlIntoTree(node *tree.Node, key *yaml.Node, yamlNode yaml.Node,
 	prefix config.KeyPath,
 ) {
 	switch yamlNode.Kind {
 	case yaml.DocumentNode:
 		for _, child := range yamlNode.Content {
-			flattenYamlIntoTree(node, *child, prefix)
+			flattenYamlIntoTree(node, nil, *child, prefix)
 		}
 	case yaml.MappingNode:
 		if len(yamlNode.Content) == 0 {
 			node.Set(prefix, map[string]any{})
 
+			if target := node.Get(prefix); target != nil {
+				yamlNodeCopy := yamlNode
+				target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
+			}
+
 			return
 		}
 
+		// Ensure the mapping node exists so we can attach the annotation.
+		if len(prefix) > 0 && node.Get(prefix) == nil {
+			node.Set(prefix, nil)
+
+			node.Get(prefix).Value = nil
+		}
+
+		if target := node.Get(prefix); target != nil {
+			yamlNodeCopy := yamlNode
+			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
+		}
+
 		for i := 0; i < len(yamlNode.Content); i += 2 {
-			key := yamlNode.Content[i]
+			k := yamlNode.Content[i]
 			value := yamlNode.Content[i+1]
 
-			// key.HeadComment - over the line.
-			// key.LineComment - in the line.
+			newPrefix := prefix.Append(k.Value)
 
-			newPrefix := prefix.Append(key.Value)
-
-			flattenYamlIntoTree(node, *value, newPrefix)
+			flattenYamlIntoTree(node, k, *value, newPrefix)
 		}
 	case yaml.SequenceNode:
 		// Ensure the array node exists even for empty sequences.
@@ -112,23 +126,30 @@ func flattenYamlIntoTree(node *tree.Node, yamlNode yaml.Node,
 		arrNode := node.Get(prefix)
 		arrNode.MarkArray()
 
+		yamlNodeCopy := yamlNode
+		arrNode.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
+
 		for i, item := range yamlNode.Content {
 			newPrefix := prefix.Append(strconv.Itoa(i))
 
-			flattenYamlIntoTree(node, *item, newPrefix)
+			flattenYamlIntoTree(node, nil, *item, newPrefix)
 		}
 	case yaml.AliasNode:
 		// Field `Value` contains name of the anchor.
 		// Field `Alias` contains pointer to the anchor.
-		flattenYamlIntoTree(node, *yamlNode.Alias, prefix)
+		flattenYamlIntoTree(node, key, *yamlNode.Alias, prefix)
 	case yaml.ScalarNode:
 		node.Set(prefix, resolveYamlScalar(yamlNode))
 
-		if n := node.Get(prefix); n != nil {
-			n.Range = tree.Range{
+		target := node.Get(prefix)
+		if target != nil {
+			target.Range = tree.Range{
 				Start: tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
 				End:   tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
 			}
+
+			yamlNodeCopy := yamlNode
+			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 		}
 	default:
 	}
