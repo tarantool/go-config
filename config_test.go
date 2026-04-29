@@ -868,3 +868,55 @@ func TestMutableConfig_Effective_AfterMutation(t *testing.T) {
 		assert.False(t, ok, "Effective should not see a key removed via Delete")
 	})
 }
+
+func TestMutableConfig_Snapshot_Isolation(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"key": "original"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	snap := cfg.Snapshot()
+
+	// Mutate the live config after taking the snapshot.
+	require.NoError(t, cfg.Set(config.NewKeyPath("key"), "updated"))
+
+	// Snapshot keeps the original value.
+	var snapVal string
+
+	_, err := snap.Get(config.NewKeyPath("key"), &snapVal)
+	require.NoError(t, err)
+	assert.Equal(t, "original", snapVal)
+
+	// Live config sees the new value.
+	var liveVal string
+
+	_, err = cfg.Get(config.NewKeyPath("key"), &liveVal)
+	require.NoError(t, err)
+	assert.Equal(t, "updated", liveVal)
+}
+
+func TestMutableConfig_Snapshot_KeyAddedAfterSnapshotInvisible(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{"existing": "value"}
+	col := collectors.NewMap(data)
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(col)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	snap := cfg.Snapshot()
+
+	require.NoError(t, cfg.Set(config.NewKeyPath("added"), "later"))
+
+	_, ok := snap.Lookup(config.NewKeyPath("added"))
+	assert.False(t, ok, "snapshot should not observe keys added after Snapshot()")
+}
