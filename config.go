@@ -462,6 +462,16 @@ func (mc *MutableConfig) EffectiveAll() (map[string]Config, error) {
 	return mc.Config.EffectiveAll()
 }
 
+// Snapshot returns a deep copy of the current configuration as a read-only Config.
+// The returned value is decoupled from the live MutableConfig, so concurrent mutations
+// after Snapshot returns are not observed by the snapshot.
+func (mc *MutableConfig) Snapshot() Config {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return newConfig(cloneNode(mc.root), mc.inheritances)
+}
+
 // Set sets or overwrites a value at the specified path.
 // The key's metadata is updated: Source becomes "modified", and Revision is incremented.
 // If validation fails, the tree is restored to its previous state.

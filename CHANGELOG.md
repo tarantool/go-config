@@ -15,6 +15,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   state on failure, and read methods (`Get`, `Lookup`, `Stat`, `Walk`, `Slice`,
   `Effective`, `EffectiveAll`) take a read lock. Modified keys get a bumped
   revision and `"modified"` source.
+* `MutableConfig.Snapshot()` returns a deep-copied read-only `Config` decoupled
+  from the live tree, so a long-lived reader can keep a stable view while other
+  goroutines continue mutating the configuration.
 
 ### Changed
 
