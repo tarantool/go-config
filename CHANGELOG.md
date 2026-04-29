@@ -10,15 +10,27 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
-* Offline JSON Schema by default, plus opt-in HTTP fetching via
-  `WithSchemaURLDefault`, `WithSchemaURL`, `WithHTTPClient`, and
-  `DefaultSchemaURL`.
-* Embed gzipped minified schemas for Tarantool 3.3.0 – 3.7.0, decompressed at
-  package init.
+### Changed
+
+### Fixed
+
+## [v1.1.0] - 2026-04-29
+
+This release ships offline JSON Schema validation by default with embedded
+schemas for Tarantool 3.3.0 – 3.7.0, makes the Storage collector strict about
+parse errors, and includes fixes for env-var resolution, tree merging, and
+nil-input handling on the builder. `collectors.NewSource` and
+`tarantool.New()` defaults change in backward-incompatible ways — see below.
+
+### Added
+
+* Offline JSON Schema validation with embedded schemas for Tarantool
+  3.3.0 – 3.7.0, plus opt-in HTTP fetching via `WithSchemaURLDefault`,
+  `WithSchemaURL`, `WithHTTPClient`, and `DefaultSchemaURL` (#27).
 * `collectors.Storage.WithSkipInvalid(bool)` to silently skip documents that
-  failed to parse.
-* `tarantool.Builder.WithEnvIgnore(patterns ...string)` shell-glob patterns
-  for env-var names to drop before the env transform runs.
+  failed to parse, restoring the pre-1.1 lenient behavior (#29).
+* `tarantool.Builder.WithEnvIgnore(patterns ...string)` accepts shell-glob
+  patterns for env-var names to drop before the env transform runs (#30).
 
 ### Changed
 
@@ -26,42 +38,37 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   Previously the function created `context.Background()` internally; callers
   must now supply a context, which is forwarded to `DataSource.FetchStream`.
   Migrate `NewSource(src, fmt)` to `NewSource(ctx, src, fmt)`. This is a
-  breaking change.
-* `tarantool.New()` now uses the newest embedded JSON Schema by default instead
-  of fetching `https://download.tarantool.org/tarantool/schema/config.schema.json`
-  at `Build()` time. This is a breaking change in default behavior.
-* Schema selectors on `tarantool.Builder` are now mutually exclusive.
-* `collectors.Storage.Collectors` is now strict by default: a document whose
-  value fails to parse causes `Collectors` to return an error wrapping
-  `ErrFormatParse` that identifies the offending storage key, instead of
-  being silently dropped.
+  breaking change (#27).
+* `tarantool.New()` now uses the newest embedded JSON Schema by default
+  instead of fetching
+  `https://download.tarantool.org/tarantool/schema/config.schema.json` at
+  `Build()` time, and schema selectors on `tarantool.Builder` are now mutually
+  exclusive. This is a breaking change in default behavior (#27).
+* `collectors.Storage` is now strict by default: a document whose value fails
+  to parse causes `Collectors` to return an error wrapping `ErrFormatParse`
+  that identifies the offending storage key, instead of being silently
+  dropped. Use `WithSkipInvalid(true)` to restore the previous lenient
+  behavior (#26).
 * Remove redundant `roles` merge strategy from `tarantool.Builder` defaults
-  since `MergeReplace` is already the default inheritance behavior
-  ([#34](https://github.com/tarantool/go-config/issues/34)).
+  since `MergeReplace` is already the default inheritance behavior (#34).
 * Remove hardcoded `leader` exclusion from `tarantool.Builder` default
-  inheritance options so `leader` is now inherited down the hierarchy
-  like other keys. Users who need the old behavior can opt out via
-  `WithInheritanceOption(config.WithNoInherit("leader"))`
-  ([#36](https://github.com/tarantool/go-config/issues/36)).
+  inheritance options so `leader` is now inherited down the hierarchy like
+  other keys. Users who need the old behavior can opt out via
+  `WithInheritanceOption(config.WithNoInherit("leader"))` (#36).
 
 ### Fixed
 
-* `collectors.Storage` no longer silently skips documents with invalid YAML,
-  which could mask partially-loaded configurations
-  ([#26](https://github.com/tarantool/go-config/issues/26)).
 * Fix empty YAML mappings (`{}`) being silently dropped during parsing,
-  which caused `EffectiveAll()` to miss leaf entities with empty configs
-  ([#32](https://github.com/tarantool/go-config/issues/32)).
+  which caused `EffectiveAll()` to miss leaf entities with empty configs (#32).
 * Preserve `isArray` flag when merging numeric children into the config tree,
   so YAML sequences are correctly represented as arrays after inheritance
-  resolution
-  ([#34](https://github.com/tarantool/go-config/issues/34)).
-* env vars with compound schema keys (e.g. `TT_AUDIT_LOG_NONBLOCK`,
+  resolution (#34).
+* Env vars with compound schema keys (e.g. `TT_AUDIT_LOG_NONBLOCK`,
   `TT_WAL_QUEUE_MAX_SIZE`, `TT_REPLICATION_FAILOVER`) now resolve to the
-  correct config path when a JSON schema is supplied.
+  correct config path when a JSON schema is supplied (#31).
 * `Builder.AddCollector`, `Builder.Build`, `Builder.WithValidator`,
   `Builder.WithJSONSchema`, `Builder.MustWithJSONSchema`, `Builder.WithMerger`,
-  and `Builder.WithInheritance` no longer panic on nil inputs.
+  and `Builder.WithInheritance` no longer panic on nil inputs (#39).
 
 ## [v1.0.0] - 2026-03-10
 
