@@ -42,8 +42,8 @@ type Config struct {
 	Logger      *slog.Logger
 }
 
-// Run prints exactly one stdout line of the form "added=<csv>" as the
-// machine-readable handoff to the workflow step that opens the PR.
+// Run prints exactly one stdout line of the form "added=<v1>, <v2>, ..." as
+// the machine-readable handoff to the workflow step that opens the PR.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.HTTPClient == nil {
 		return errNilHTTPClient
@@ -104,7 +104,7 @@ func Run(ctx context.Context, cfg Config) error {
 		added = append(added, version)
 	}
 
-	_, err = fmt.Fprintf(os.Stdout, "added=%s\n", strings.Join(added, ","))
+	_, err = fmt.Fprintf(os.Stdout, "added=%s\n", strings.Join(added, ", "))
 	if err != nil {
 		return fmt.Errorf("write stdout: %w", err)
 	}

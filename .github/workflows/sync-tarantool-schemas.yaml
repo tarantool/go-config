@@ -75,9 +75,17 @@ jobs:
           branch: ${{ env.PR_BRANCH }}
           base: master
           add-paths: tarantool/schemas
-          commit-message: "tarantool: embed JSON Schemas for ${{ steps.schemasync.outputs.added }}"
+          commit-message: |
+            tarantool: embed new JSON Schemas
+
+            Automated sync of Tarantool JSON Schemas.
+
+            Added versions: ${{ steps.schemasync.outputs.added }}.
           committer: "${{ env.BOT_NAME }} <${{ env.BOT_EMAIL }}>"
           author: "${{ env.BOT_NAME }} <${{ env.BOT_EMAIL }}>"
-          title: "tarantool: embed JSON Schemas for ${{ steps.schemasync.outputs.added }}"
-          body: "Automated sync of Tarantool JSON Schemas. Added versions: ${{ steps.schemasync.outputs.added }}."
+          title: "tarantool: embed new JSON Schemas"
+          body: |
+            Automated sync of Tarantool JSON Schemas.
+
+            Added versions: ${{ steps.schemasync.outputs.added }}.
           delete-branch: true
