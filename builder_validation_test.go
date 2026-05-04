@@ -243,6 +243,91 @@ func TestBuilder_WithoutValidation_SkipsBuildTimeValidation(t *testing.T) {
 	assert.Equal(t, 80, port)
 }
 
+func TestConfig_Validate_AfterWithoutValidation(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockValidator{
+		errors: []validator.ValidationError{
+			{
+				Path:    config.NewKeyPath("port"),
+				Range:   validator.NewEmptyRange(),
+				Code:    "range",
+				Message: "port must be between 1024 and 65535",
+			},
+		},
+	}
+
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(mock)
+	builder = builder.WithoutValidation()
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"port": 80,
+	}))
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs, "Build-time validation must be skipped")
+
+	// Deferred validation must surface the same errors that Build would have.
+	validateErrs := cfg.Validate()
+	require.Len(t, validateErrs, 1)
+	assert.Contains(t, validateErrs[0].Error(), "port must be between 1024 and 65535")
+
+	// Validate is non-destructive: data is still readable afterwards.
+	var port int
+
+	_, err := cfg.Get(config.NewKeyPath("port"), &port)
+	require.NoError(t, err)
+	assert.Equal(t, 80, port)
+}
+
+func TestConfig_Validate_NoValidator(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"port": 8080,
+	}))
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	// Without a validator attached, Validate is a no-op.
+	assert.Nil(t, cfg.Validate())
+}
+
+func TestMutableConfig_Validate_AfterWithoutValidation(t *testing.T) {
+	t.Parallel()
+
+	schema := `{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type": "object",
+		"properties": {
+			"port": { "type": "integer", "minimum": 1024 }
+		}
+	}`
+
+	builder := config.NewBuilder()
+
+	builder = builder.MustWithJSONSchema(strings.NewReader(schema))
+	builder = builder.WithoutValidation()
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"port": 80,
+	}))
+
+	mcfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	// Initial state fails the schema; Validate reports it.
+	validateErrs := mcfg.Validate()
+	require.NotEmpty(t, validateErrs)
+
+	// After fixing the value, Validate should succeed.
+	require.NoError(t, mcfg.Set(config.NewKeyPath("port"), 8080))
+	assert.Empty(t, mcfg.Validate())
+}
+
 func TestBuilder_WithoutValidation_MutableConfigStillValidates(t *testing.T) {
 	t.Parallel()
 
