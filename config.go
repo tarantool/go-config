@@ -109,11 +109,15 @@ type Config struct {
 	root *tree.Node
 	// inheritances holds inheritance configurations for lazy resolution.
 	inheritances []inheritanceConfig
+	// validator is the validator carried over from the Builder. It is
+	// invoked on demand by [Config.Validate] (and, for MutableConfig,
+	// by Set/Merge/Update via validateOrRestore).
+	validator validator.Validator
 }
 
 // newConfig creates a Config from a tree node.
-func newConfig(root *tree.Node, inheritances []inheritanceConfig) Config {
-	return Config{root: root, inheritances: inheritances}
+func newConfig(root *tree.Node, inheritances []inheritanceConfig, val validator.Validator) Config {
+	return Config{root: root, inheritances: inheritances, validator: val}
 }
 
 // Get is the primary, most convenient method for retrieving a value.
@@ -166,6 +170,32 @@ func (c *Config) Stat(path KeyPath) (MetaInfo, bool) {
 	val := tree.NewValue(node, path)
 
 	return val.Meta(), true
+}
+
+// Validate runs the validator carried over from the [Builder] on the current
+// configuration tree. It is intended for callers who used
+// [Builder.WithoutValidation] and want to validate the assembled config later
+// (e.g. after merging additional sources or restoring from a snapshot).
+//
+// Returns nil if no validator is attached or the tree is empty. On failure,
+// returns the validation errors as a slice of *[validator.ValidationError]
+// (matching the shape of [Builder.Build]). The tree itself is not modified.
+func (c *Config) Validate() []error {
+	if c.validator == nil || c.root == nil {
+		return nil
+	}
+
+	validationErrs := c.validator.Validate(c.root)
+	if len(validationErrs) == 0 {
+		return nil
+	}
+
+	errs := make([]error, len(validationErrs))
+	for i := range validationErrs {
+		errs[i] = &validationErrs[i]
+	}
+
+	return errs
 }
 
 // Walk returns a channel through which you can iterate over all keys and values in the configuration.
@@ -238,17 +268,21 @@ func walkNodes(ctx context.Context, node *tree.Node, prefix KeyPath, depth int, 
 // Used to obtain a sub-configuration as a separate Config object.
 // If the path does not correspond to an object, returns an error.
 // If path is empty (or `nil`), returns a copy of the current Config object.
+//
+// The returned sub-Config does not carry the validator: the configured schema
+// describes the full root, not arbitrary subtrees, so [Config.Validate] would
+// be meaningless on a slice.
 func (c *Config) Slice(path KeyPath) (Config, error) {
 	if c.root == nil {
 		if len(path) == 0 {
-			return newConfig(nil, c.inheritances), nil
+			return newConfig(nil, c.inheritances, nil), nil
 		}
 
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
 	if len(path) == 0 {
-		return newConfig(c.root, c.inheritances), nil
+		return newConfig(c.root, c.inheritances, nil), nil
 	}
 
 	root := c.root.Get(path)
@@ -256,7 +290,7 @@ func (c *Config) Slice(path KeyPath) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
-	return newConfig(root, c.inheritances), nil
+	return newConfig(root, c.inheritances, nil), nil
 }
 
 // Effective returns the resolved (post-inheritance) config for a specific
@@ -284,7 +318,7 @@ func (c *Config) Effective(path KeyPath) (Config, error) {
 
 		result := resolveEffective(layers, inheritanceCfg)
 
-		return newConfig(result, c.inheritances), nil
+		return newConfig(result, c.inheritances, nil), nil
 	}
 
 	// No hierarchy matched — fall back to raw subtree.
@@ -293,7 +327,7 @@ func (c *Config) Effective(path KeyPath) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
-	return newConfig(cloneNode(node), c.inheritances), nil
+	return newConfig(cloneNode(node), c.inheritances, nil), nil
 }
 
 // EffectiveAll returns resolved configs for ALL leaf entities found in the
@@ -354,7 +388,7 @@ func (c *Config) collectLeafEntities(
 
 			resolved := resolveEffective(layers, inheritanceCfg)
 
-			result[entityPath.String()] = newConfig(resolved, c.inheritances)
+			result[entityPath.String()] = newConfig(resolved, c.inheritances, nil)
 		}
 
 		return
@@ -374,13 +408,15 @@ func (c *Config) collectLeafEntities(
 
 // MutableConfig is an extension of Config that allows safe runtime modifications.
 // Note: MutableConfig is not implemented yet and is under active development.
+//
+// The validator (if any) lives on the embedded [Config]. Set/Merge/Update use
+// it to validate every mutation; [MutableConfig.Validate] re-runs it on the
+// current tree on demand.
 type MutableConfig struct {
 	Config // Embeds the read-only interface.
 
 	// mu provides synchronization for thread-safe configuration changes.
 	mu sync.RWMutex
-	// validator validates configuration changes (Set/Merge/Update).
-	validator validator.Validator
 }
 
 // nextRevision increments a revision string. Non-numeric or empty revisions start from "1".
@@ -427,13 +463,22 @@ func (mc *MutableConfig) Stat(path KeyPath) (MetaInfo, bool) {
 	return mc.Config.Stat(path)
 }
 
+// Validate runs the configured validator on the current tree under the
+// read-lock. See [Config.Validate] for semantics.
+func (mc *MutableConfig) Validate() []error {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.Config.Validate()
+}
+
 // Walk returns a channel of all key-value pairs with read-lock protection.
 // The tree is cloned under the lock so the channel can be consumed safely after unlock.
 func (mc *MutableConfig) Walk(ctx context.Context, path KeyPath, depth int) (<-chan Value, error) {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
-	snap := newConfig(cloneNode(mc.root), mc.inheritances)
+	snap := newConfig(cloneNode(mc.root), mc.inheritances, mc.validator)
 
 	return snap.Walk(ctx, path, depth)
 }
@@ -469,7 +514,7 @@ func (mc *MutableConfig) Snapshot() Config {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
-	return newConfig(cloneNode(mc.root), mc.inheritances)
+	return newConfig(cloneNode(mc.root), mc.inheritances, mc.validator)
 }
 
 // Set sets or overwrites a value at the specified path.

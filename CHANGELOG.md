@@ -21,6 +21,12 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `Builder.WithoutValidation()` skips the Build-time validation pass while
   retaining the configured validator: `BuildMutable` still attaches it to the
   resulting `MutableConfig` so runtime mutations remain validated.
+* `Config.Validate()` runs the validator carried over from the `Builder` on
+  the current tree, so callers who used `Builder.WithoutValidation()` can
+  validate the assembled config later (e.g. after enriching it from another
+  source). `MutableConfig.Validate()` is the read-lock-protected counterpart.
+  Sub-configs from `Slice`/`Effective` do not carry the validator (the
+  schema describes the full root, not subtrees).
 * `tarantool.Builder.WithoutValidation()` loads the schema for env-path
   resolution but skips JSON-Schema validation at Build time, enabling
   schema-aware env-var routing for intentionally-partial configs.

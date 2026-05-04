@@ -203,7 +203,7 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil, inheritances: nil}, errs
+		return Config{root: nil, inheritances: nil, validator: nil}, errs
 	}
 
 	if b.validator != nil && !b.skipValidation {
@@ -214,10 +214,10 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil, inheritances: nil}, errs
+		return Config{root: nil, inheritances: nil, validator: nil}, errs
 	}
 
-	return newConfig(root, b.inheritances), nil
+	return newConfig(root, b.inheritances, b.validator), nil
 }
 
 // BuildMutable starts the configuration assembly process but returns
@@ -225,8 +225,8 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 func (b *Builder) BuildMutable(ctx context.Context) (MutableConfig, []error) {
 	cfg, errs := b.Build(ctx)
 	if len(errs) > 0 {
-		return MutableConfig{Config: Config{root: nil, inheritances: nil}, mu: sync.RWMutex{}, validator: nil}, errs
+		return MutableConfig{Config: Config{root: nil, inheritances: nil, validator: nil}, mu: sync.RWMutex{}}, errs
 	}
 
-	return MutableConfig{Config: cfg, mu: sync.RWMutex{}, validator: b.validator}, nil
+	return MutableConfig{Config: cfg, mu: sync.RWMutex{}}, nil
 }
