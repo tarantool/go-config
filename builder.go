@@ -20,6 +20,9 @@ type Builder struct {
 	collectors []Collector
 	// Validator for validation of the final configuration.
 	validator validator.Validator
+	// skipValidation, when true, bypasses the Build-time Validate pass.
+	// The validator is still carried into MutableConfig.
+	skipValidation bool
 	// Inheritance hierarchies for configuration inheritance.
 	inheritances []inheritanceConfig
 	// Merger defines how values are merged into the configuration tree.
@@ -28,7 +31,13 @@ type Builder struct {
 
 // NewBuilder creates a new instance of Builder.
 func NewBuilder() Builder {
-	return Builder{collectors: nil, validator: nil, inheritances: nil, merger: nil}
+	return Builder{
+		collectors:     nil,
+		validator:      nil,
+		skipValidation: false,
+		inheritances:   nil,
+		merger:         nil,
+	}
 }
 
 // AddCollector adds a new data source to the build pipeline.
@@ -80,6 +89,19 @@ func (b *Builder) MustWithJSONSchema(schema io.Reader) Builder {
 	}
 
 	return result
+}
+
+// WithoutValidation skips the Build-time validation pass. Any validator
+// configured via [Builder.WithValidator] or [Builder.WithJSONSchema] is
+// retained: [Builder.BuildMutable] still attaches it to the resulting
+// [MutableConfig], so runtime mutations (Set/Merge/Update) remain validated.
+//
+// Useful when initial sources are intentionally partial (e.g. completed
+// later by env vars or a remote storage layer) but mutation-time
+// validation is still desired.
+func (b *Builder) WithoutValidation() Builder {
+	b.skipValidation = true
+	return *b
 }
 
 // WithMerger sets a custom merger for the configuration assembly.
@@ -184,7 +206,7 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 		return Config{root: nil, inheritances: nil}, errs
 	}
 
-	if b.validator != nil {
+	if b.validator != nil && !b.skipValidation {
 		validationErrs := b.validator.Validate(root)
 		for i := range validationErrs {
 			errs = append(errs, &validationErrs[i])

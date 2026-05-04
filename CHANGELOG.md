@@ -18,6 +18,12 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `MutableConfig.Snapshot()` returns a deep-copied read-only `Config` decoupled
   from the live tree, so a long-lived reader can keep a stable view while other
   goroutines continue mutating the configuration.
+* `Builder.WithoutValidation()` skips the Build-time validation pass while
+  retaining the configured validator: `BuildMutable` still attaches it to the
+  resulting `MutableConfig` so runtime mutations remain validated.
+* `tarantool.Builder.WithoutValidation()` loads the schema for env-path
+  resolution but skips JSON-Schema validation at Build time, enabling
+  schema-aware env-var routing for intentionally-partial configs.
 
 ### Changed
 

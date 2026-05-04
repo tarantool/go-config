@@ -38,14 +38,15 @@ type Builder struct {
 	storage    *integrity.Typed[[]byte]
 	storageKey string
 
-	schema        []byte
-	schemaFile    string
-	schemaVersion string
-	schemaURL     string
-	schemaURLSet  bool
-	schemaHTTP    bool
-	skipSchema    bool
-	httpClient    *http.Client
+	schema         []byte
+	schemaFile     string
+	schemaVersion  string
+	schemaURL      string
+	schemaURLSet   bool
+	schemaHTTP     bool
+	skipSchema     bool
+	skipValidation bool
+	httpClient     *http.Client
 
 	inheritanceOpts []config.InheritanceOption
 
@@ -188,6 +189,18 @@ func (b *Builder) WithHTTPClient(client *http.Client) *Builder {
 // [ErrConflictingSchemaOptions] at [Builder.Build] time.
 func (b *Builder) WithoutSchema() *Builder {
 	b.skipSchema = true
+
+	return b
+}
+
+// WithoutValidation loads the schema for env-path resolution but skips
+// JSON-Schema validation at [Builder.Build] time. Independent of the
+// `With*Schema*` source selection — pair it with any of them to get
+// schema-aware env-var routing without enforcing the full schema on the
+// merged tree. Has no effect when combined with [Builder.WithoutSchema]
+// (no schema is loaded in that case).
+func (b *Builder) WithoutValidation() *Builder {
+	b.skipValidation = true
 
 	return b
 }
@@ -456,7 +469,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 	)
 
 	// 5. Schema validation.
-	if !b.skipSchema {
+	if !b.skipSchema && !b.skipValidation {
 		inner, err = inner.WithJSONSchema(bytes.NewReader(schemaBytes))
 		if err != nil {
 			return config.Builder{}, fmt.Errorf("json schema: %w", err)

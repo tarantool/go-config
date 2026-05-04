@@ -210,3 +210,63 @@ func TestBuilder_BuildMutable_Validation(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "properties")
 }
+
+func TestBuilder_WithoutValidation_SkipsBuildTimeValidation(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockValidator{
+		errors: []validator.ValidationError{
+			{
+				Path:    config.NewKeyPath("port"),
+				Range:   validator.NewEmptyRange(),
+				Code:    "range",
+				Message: "port must be between 1024 and 65535",
+			},
+		},
+	}
+
+	builder := config.NewBuilder()
+
+	builder = builder.WithValidator(mock)
+	builder = builder.WithoutValidation()
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"port": 80,
+	}))
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs, "Build-time validation must be skipped")
+
+	var port int
+
+	_, err := cfg.Get(config.NewKeyPath("port"), &port)
+	require.NoError(t, err)
+	assert.Equal(t, 80, port)
+}
+
+func TestBuilder_WithoutValidation_MutableConfigStillValidates(t *testing.T) {
+	t.Parallel()
+
+	schema := `{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type": "object",
+		"properties": {
+			"port": { "type": "integer", "minimum": 1024 }
+		}
+	}`
+
+	builder := config.NewBuilder()
+
+	builder = builder.MustWithJSONSchema(strings.NewReader(schema))
+	builder = builder.WithoutValidation()
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"port": 80, // would normally fail validation.
+	}))
+
+	mcfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs, "Build-time validation must be skipped")
+
+	// The validator survives — runtime mutations are still validated.
+	err := mcfg.Set(config.NewKeyPath("port"), 100)
+	require.Error(t, err, "MutableConfig must keep validating runtime mutations")
+	assert.Contains(t, err.Error(), "properties")
+}

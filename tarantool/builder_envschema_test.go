@@ -139,6 +139,63 @@ func TestBuild_Env_NoSchema_HeuristicUnchanged(t *testing.T) {
 		"without schema, naive split sends the value to the wrong path")
 }
 
+func TestBuild_WithoutValidation_KeepsSchemaAwareEnvRouting(t *testing.T) {
+	schema := []byte(`{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type": "object",
+		"properties": {
+			"audit_log": {
+				"type": "object",
+				"properties": {
+					"nonblock": { "type": "boolean" }
+				}
+			}
+		},
+		"additionalProperties": false
+	}`)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	writeFile(t, cfgPath, "audit_log:\n  nonblock: not-a-bool\n")
+
+	t.Setenv("TT_AUDIT_LOG_NONBLOCK", "still-not-a-bool")
+
+	ctx := context.Background()
+
+	cfg, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithSchema(schema).
+		WithoutValidation().
+		Build(ctx)
+	require.NoError(t, err, "validation must be skipped despite invalid types")
+
+	var nonblock string
+
+	_, err = cfg.Get(config.NewKeyPath("audit_log/nonblock"), &nonblock)
+	require.NoError(t, err)
+	assert.Equal(t, "still-not-a-bool", nonblock,
+		"env var must be routed via the schema trie, not the naive split")
+}
+
+func TestBuild_WithoutValidation_SchemaStillRequired(t *testing.T) {
+	t.Setenv("TT_AUDIT_LOG_NONBLOCK", "true")
+
+	ctx := context.Background()
+
+	cfg, err := tarantool.New().
+		WithSchemaFile(fixtureSchemaPath).
+		WithoutValidation().
+		Build(ctx)
+	require.NoError(t, err)
+
+	var nonblock string
+
+	_, err = cfg.Get(config.NewKeyPath("audit_log/nonblock"), &nonblock)
+	require.NoError(t, err)
+	assert.Equal(t, "true", nonblock,
+		"WithoutValidation alone keeps schema-aware env routing intact")
+}
+
 func TestBuild_Env_SchemaAware_Wildcard(t *testing.T) {
 	t.Setenv("TT_GROUPS_FOO_REPLICASETS_BAR_INSTANCES_BAZ_IPROTO_LISTEN", "3302")
 
