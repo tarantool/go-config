@@ -23,6 +23,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* Bump `google.golang.org/grpc` to v1.79.3 to fix GO-2026-4762
+  (authorization bypass via missing leading slash in `:path`).
+* Bump `go.opentelemetry.io/otel/sdk` to v1.40.0 to fix GO-2026-4394
+  (arbitrary code execution via PATH hijacking).
+
 ## [v1.1.0] - 2026-04-29
 
 This release ships offline JSON Schema validation by default with embedded
