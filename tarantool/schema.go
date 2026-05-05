@@ -32,12 +32,7 @@ func (b *Builder) resolveSchema(ctx context.Context) ([]byte, error) {
 	}
 
 	if b.schemaVersion != "" {
-		schema, ok := Schema(b.schemaVersion)
-		if !ok {
-			return nil, fmt.Errorf("%w: %q", ErrUnknownSchemaVersion, b.schemaVersion)
-		}
-
-		return schema, nil
+		return Schema(b.schemaVersion)
 	}
 
 	if b.schemaURLSet {
@@ -49,9 +44,9 @@ func (b *Builder) resolveSchema(ctx context.Context) ([]byte, error) {
 	}
 
 	// Default: newest embedded version.
-	_, schema, ok := newestEmbeddedSchema()
-	if !ok {
-		return nil, fmt.Errorf("%w: no embedded schemas available", ErrUnknownSchemaVersion)
+	_, schema, err := newestEmbeddedSchema()
+	if err != nil {
+		return nil, err
 	}
 
 	return schema, nil

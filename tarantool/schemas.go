@@ -15,10 +15,17 @@ import (
 //go:embed schemas/*/config.schema.json.gz
 var embeddedSchemas embed.FS
 
-// Sealed after init — read without a mutex on the assumption of no further writes.
+// Embedded versions are discovered (and sorted) once at init from the embed
+// directory listing. The gzipped payload for each version is decompressed
+// lazily on first access via [loadEmbedded] — keeping startup cheap and
+// avoiding ~2 MB of decompressed JSON in memory for callers that only ever
+// touch one version (or none).
 //
 //nolint:gochecknoglobals // sealed after init; treated as read-only.
-var embeddedRegistry = make(map[string][]byte)
+var (
+	embeddedVersions []string                          // sorted ascending by semver.
+	embeddedLoaders  map[string]func() ([]byte, error) // per-version sync.OnceValues.
+)
 
 //nolint:gochecknoglobals // package-level user registry is part of the public API.
 var (
@@ -26,12 +33,15 @@ var (
 	userRegistry   = make(map[string][]byte)
 )
 
-//nolint:gochecknoinits // auto-register embedded schemas at package load
+//nolint:gochecknoinits // discover embedded versions at package load
 func init() {
 	entries, err := embeddedSchemas.ReadDir("schemas")
 	if err != nil {
 		panic("tarantool: failed to read embedded schemas directory: " + err.Error())
 	}
+
+	embeddedLoaders = make(map[string]func() ([]byte, error), len(entries))
+	embeddedVersions = make([]string, 0, len(entries))
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -41,23 +51,59 @@ func init() {
 		version := entry.Name()
 		path := "schemas/" + version + "/config.schema.json.gz"
 
-		compressed, readErr := fs.ReadFile(embeddedSchemas, path)
-		if readErr != nil {
-			panic(fmt.Sprintf("tarantool: failed to read embedded schema for version %s: %s", version, readErr))
-		}
+		embeddedVersions = append(embeddedVersions, version)
+		embeddedLoaders[version] = sync.OnceValues(func() ([]byte, error) {
+			compressed, err := fs.ReadFile(embeddedSchemas, path)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s: %w", ErrSchemaLoad, version, err)
+			}
 
-		data, decompErr := gunzip(compressed)
-		if decompErr != nil {
-			panic(fmt.Sprintf("tarantool: failed to decompress embedded schema for version %s: %s", version, decompErr))
-		}
+			data, err := gunzip(compressed)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s: %w", ErrSchemaLoad, version, err)
+			}
 
-		_, compErr := jsonschema.NewCompiler().Compile(data)
-		if compErr != nil {
-			panic(fmt.Sprintf("tarantool: embedded schema for version %s failed to compile: %s", version, compErr))
-		}
-
-		embeddedRegistry[version] = data
+			return data, nil
+		})
 	}
+
+	sortSemverAsc(embeddedVersions)
+}
+
+// sortSemverAsc sorts the slice in place ascending by [compareSemver] using
+// insertion sort — the embedded version list is small (<100), so we avoid
+// pulling in the sort package for a single call site.
+//
+//nolint:varnamelen // standard insertion-sort indices
+func sortSemverAsc(versions []string) {
+	for i := 1; i < len(versions); i++ {
+		key := versions[i]
+
+		j := i - 1
+		for j >= 0 && compareSemver(versions[j], key) > 0 {
+			versions[j+1] = versions[j]
+			j--
+		}
+
+		versions[j+1] = key
+	}
+}
+
+// loadEmbedded returns the (cached, lazily-decompressed) schema bytes for an
+// embedded version. The bool reports whether the version is in the embedded
+// registry; the error reports a load/decompression failure (wrapping
+// [ErrSchemaLoad]) for a known version. The returned slice is shared across
+// callers and must not be modified — callers handing it back to the public
+// API are responsible for taking a defensive copy.
+func loadEmbedded(version string) ([]byte, bool, error) {
+	loader, ok := embeddedLoaders[version]
+	if !ok {
+		return nil, false, nil
+	}
+
+	data, err := loader()
+
+	return data, true, err
 }
 
 // gunzip decompresses gzip-encoded bytes and returns the plaintext.
@@ -102,8 +148,11 @@ func RegisterSchema(version string, schema []byte) error {
 
 // Schema returns a defensive copy of the schema bytes registered for version.
 // User registrations take precedence over embedded versions with the same key.
-// Returns (nil, false) if the version is not known to either registry.
-func Schema(version string) ([]byte, bool) {
+//
+// Returns an error wrapping [ErrUnknownSchemaVersion] if the version is not
+// known to either registry, or [ErrSchemaLoad] if the embedded payload exists
+// but failed to read or decompress.
+func Schema(version string) ([]byte, error) {
 	userRegistryMu.RLock()
 
 	stored, ok := userRegistry[version]
@@ -111,16 +160,22 @@ func Schema(version string) ([]byte, bool) {
 	userRegistryMu.RUnlock()
 
 	if !ok {
-		stored, ok = embeddedRegistry[version]
+		var err error
+
+		stored, ok, err = loadEmbedded(version)
+		if err != nil {
+			return nil, err
+		}
+
 		if !ok {
-			return nil, false
+			return nil, fmt.Errorf("%w: %q", ErrUnknownSchemaVersion, version)
 		}
 	}
 
 	out := make([]byte, len(stored))
 	copy(out, stored)
 
-	return out, true
+	return out, nil
 }
 
 // SchemaVersions returns a slice of all version strings known to either the
@@ -129,10 +184,10 @@ func Schema(version string) ([]byte, bool) {
 func SchemaVersions() []string {
 	userRegistryMu.RLock()
 
-	versions := make([]string, 0, len(embeddedRegistry)+len(userRegistry))
-	seen := make(map[string]struct{}, len(embeddedRegistry)+len(userRegistry))
+	versions := make([]string, 0, len(embeddedVersions)+len(userRegistry))
+	seen := make(map[string]struct{}, len(embeddedVersions)+len(userRegistry))
 
-	for v := range embeddedRegistry {
+	for _, v := range embeddedVersions {
 		versions = append(versions, v)
 		seen[v] = struct{}{}
 	}
@@ -147,44 +202,31 @@ func SchemaVersions() []string {
 
 	userRegistryMu.RUnlock()
 
-	// Sort using semver comparator, not strings.Sort (lexicographic would
-	// misorder e.g. "3.10.0" before "3.5.0").
-	n := len(versions)
-	for i := 1; i < n; i++ {
-		key := versions[i]
-
-		j := i - 1 //nolint:varnamelen // standard insertion-sort index
-		for j >= 0 && compareSemver(versions[j], key) > 0 {
-			versions[j+1] = versions[j]
-			j--
-		}
-
-		versions[j+1] = key
-	}
+	sortSemverAsc(versions)
 
 	return versions
 }
 
 // User registrations are intentionally ignored: the default fallback must be
 // deterministic and unaffected by runtime [RegisterSchema] calls.
-func newestEmbeddedSchema() (string, []byte, bool) {
-	var bestVer string
-
-	var bestBytes []byte
-
-	for v, b := range embeddedRegistry {
-		if bestVer == "" || compareSemver(v, bestVer) > 0 {
-			bestVer = v
-			bestBytes = b
-		}
+//
+// Returns an error wrapping [ErrUnknownSchemaVersion] when no embedded
+// schemas are available, or [ErrSchemaLoad] when the newest payload fails to
+// load.
+func newestEmbeddedSchema() (string, []byte, error) {
+	if len(embeddedVersions) == 0 {
+		return "", nil, fmt.Errorf("%w: no embedded schemas available", ErrUnknownSchemaVersion)
 	}
 
-	if bestVer == "" {
-		return "", nil, false
+	bestVer := embeddedVersions[len(embeddedVersions)-1]
+
+	stored, _, err := loadEmbedded(bestVer)
+	if err != nil {
+		return "", nil, err
 	}
 
-	out := make([]byte, len(bestBytes))
-	copy(out, bestBytes)
+	out := make([]byte, len(stored))
+	copy(out, stored)
 
-	return bestVer, out, true
+	return bestVer, out, nil
 }

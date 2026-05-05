@@ -27,8 +27,8 @@ func TestRegisterSchema_ValidSchema(t *testing.T) {
 	err := tarantool.RegisterSchema(ver, minimalValidSchema)
 	require.NoError(t, err)
 
-	got, ok := tarantool.Schema(ver)
-	require.True(t, ok)
+	got, err := tarantool.Schema(ver)
+	require.NoError(t, err)
 	assert.Equal(t, minimalValidSchema, got)
 }
 
@@ -42,13 +42,13 @@ func TestRegisterSchema_DefensiveCopy(t *testing.T) {
 	err := tarantool.RegisterSchema(ver, input)
 	require.NoError(t, err)
 
-	got1, ok := tarantool.Schema(ver)
-	require.True(t, ok)
+	got1, err := tarantool.Schema(ver)
+	require.NoError(t, err)
 
 	got1[0] = 'X'
 
-	got2, ok := tarantool.Schema(ver)
-	require.True(t, ok)
+	got2, err := tarantool.Schema(ver)
+	require.NoError(t, err)
 	assert.JSONEq(t, `{"type":"object"}`, string(got2), "stored bytes must not be affected by mutating a returned copy")
 }
 
@@ -66,8 +66,8 @@ func TestRegisterSchema_InputDefensiveCopy(t *testing.T) {
 
 	input[0] = 'Z'
 
-	got, ok := tarantool.Schema(ver)
-	require.True(t, ok)
+	got, err := tarantool.Schema(ver)
+	require.NoError(t, err)
 	assert.Equal(t, original, got, "stored bytes must not be affected by mutating the input slice after registration")
 }
 
@@ -80,8 +80,9 @@ func TestRegisterSchema_InvalidJSON(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIsf(t, err, tarantool.ErrInvalidSchema, "error must wrap ErrInvalidSchema, got: %v", err)
 
-	_, ok := tarantool.Schema(ver)
-	assert.False(t, ok, "Schema() must return (nil, false) after a failed registration")
+	_, err = tarantool.Schema(ver)
+	assert.ErrorIs(t, err, tarantool.ErrUnknownSchemaVersion,
+		"Schema() must report unknown version after a failed registration")
 }
 
 func TestRegisterSchema_InvalidSchema(t *testing.T) {
@@ -93,8 +94,9 @@ func TestRegisterSchema_InvalidSchema(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIsf(t, err, tarantool.ErrInvalidSchema, "error must wrap ErrInvalidSchema, got: %v", err)
 
-	_, ok := tarantool.Schema(ver)
-	assert.False(t, ok, "Schema() must return (nil, false) after a failed registration")
+	_, err = tarantool.Schema(ver)
+	assert.ErrorIs(t, err, tarantool.ErrUnknownSchemaVersion,
+		"Schema() must report unknown version after a failed registration")
 }
 
 func TestRegisterSchema_OverwriteVersion(t *testing.T) {
@@ -111,8 +113,8 @@ func TestRegisterSchema_OverwriteVersion(t *testing.T) {
 	err = tarantool.RegisterSchema(ver, second)
 	require.NoError(t, err)
 
-	got, ok := tarantool.Schema(ver)
-	require.True(t, ok)
+	got, err := tarantool.Schema(ver)
+	require.NoError(t, err)
 	assert.Equal(t, second, got, "second registration must overwrite the first")
 }
 

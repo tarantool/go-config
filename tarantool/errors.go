@@ -13,6 +13,11 @@ var (
 	// ErrSchemaRead is returned when a local schema file cannot be read.
 	ErrSchemaRead = errors.New("tarantool: failed to read schema file")
 
+	// ErrSchemaLoad is returned when an embedded schema payload cannot be
+	// read from the embed FS or fails gzip decompression — a build-time
+	// corruption, surfaced rather than panicked.
+	ErrSchemaLoad = errors.New("tarantool: failed to load embedded schema")
+
 	// ErrInvalidSchema is returned when schema bytes fail JSON Schema compilation.
 	ErrInvalidSchema = errors.New("tarantool: invalid json schema")
 
