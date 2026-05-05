@@ -40,7 +40,11 @@ merging and resolves effective configuration for any entity in the hierarchy.
   environment variables, or centralized key-value storages (etcd, TCS)
 - Order Preservation: maintain insertion order of keys when needed
 - Mutable Configuration: thread-safe runtime modifications with
-  validation
+  validation rollback and stable read snapshots
+- Deferred Validation: assemble a configuration without running the
+  schema, then validate later once it is complete
+- YAML Round-trip: serialize back to YAML preserving key order, scalar
+  style, and source comments
 - Reactive Watch: monitor storage changes via the Watcher interface
 - Custom Mergers: full control over how collector values are merged into
   the configuration tree
@@ -261,10 +265,34 @@ builder, err := builder.WithJSONSchema(schemaReader)
 builder = builder.WithValidator(myValidator)
 ```
 
+#### Deferred Validation
+
+By default `Build()` runs the validator before returning. When a configuration
+is assembled in stages — for example, a partial bootstrap that gets enriched
+from another source later — call `WithoutValidation()` to skip the Build-time
+pass while keeping the validator attached, and run it explicitly once the
+tree is complete:
+
+```go
+cfg, errs := builder.WithoutValidation().Build()
+// ... enrich cfg from another source ...
+if errs := cfg.Validate(); len(errs) > 0 {
+    log.Fatal(errs)
+}
+```
+
+The same toggle exists on `tarantool.Builder`. Schema-aware env-var routing
+still works because the schema is loaded — only the JSON-Schema check on the
+merged tree is skipped. `MutableConfig.Validate()` is the equivalent on a
+mutable config; runtime mutations via `Set`/`Merge`/`Update`/`Delete` always
+validate regardless of this flag.
+
 ### Mutable Configuration
 
 `BuildMutable()` returns a `MutableConfig` that allows thread-safe runtime
-modifications:
+modifications. Every mutation validates the resulting tree and rolls back to
+the previous state on failure, so observers never see a partially-applied
+or invalid configuration:
 
 ```go
 cfg, errs := builder.BuildMutable()
@@ -277,6 +305,32 @@ err = cfg.Merge(&otherConfig)
 
 // Update only existing keys.
 err = cfg.Update(&patchConfig)
+
+// Remove a key.
+removed := cfg.Delete(config.NewKeyPath("server/tls"))
+```
+
+Reads (`Get`, `Lookup`, `Stat`, `Walk`, `Slice`, `Effective`, `EffectiveAll`)
+take a read lock and are safe to call concurrently with mutations. For a
+long-lived reader that needs a stable view across many calls, use
+`Snapshot()` to obtain a deep-copied `Config` decoupled from the live tree:
+
+```go
+snap := cfg.Snapshot()
+// snap is unaffected by subsequent cfg.Set/Merge/Update/Delete calls.
+```
+
+### YAML Output
+
+`Config.MarshalYAML()` and `Config.String()` serialize the configuration
+back to YAML, preserving the key ordering, scalar quoting style, and inline
+and block comments of the source document. This makes the library safe to
+use in tooling that reads, edits, and writes back hand-maintained YAML
+without churning unrelated formatting:
+
+```go
+out, err := cfg.MarshalYAML()
+// out == "# original comment is preserved\nserver:\n  port: 9090\n..."
 ```
 
 ### Examples

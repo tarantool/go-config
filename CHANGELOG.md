@@ -10,35 +10,45 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
-* Thread-safe mutable configuration API on `MutableConfig`: `Set`, `Merge`,
-  `Update`, `Delete` validate the resulting tree and roll back to the previous
-  state on failure, and read methods (`Get`, `Lookup`, `Stat`, `Walk`, `Slice`,
-  `Effective`, `EffectiveAll`) take a read lock. Modified keys get a bumped
-  revision and `"modified"` source.
-* `MutableConfig.Snapshot()` returns a deep-copied read-only `Config` decoupled
-  from the live tree, so a long-lived reader can keep a stable view while other
-  goroutines continue mutating the configuration.
-* `Builder.WithoutValidation()` skips the Build-time validation pass while
-  retaining the configured validator: `BuildMutable` still attaches it to the
-  resulting `MutableConfig` so runtime mutations remain validated.
-* `Config.Validate()` runs the validator carried over from the `Builder` on
-  the current tree, so callers who used `Builder.WithoutValidation()` can
-  validate the assembled config later (e.g. after enriching it from another
-  source). `MutableConfig.Validate()` is the read-lock-protected counterpart.
-  Sub-configs from `Slice`/`Effective` do not carry the validator (the
-  schema describes the full root, not subtrees).
-* `tarantool.Builder.WithoutValidation()` loads the schema for env-path
-  resolution but skips JSON-Schema validation at Build time, enabling
-  schema-aware env-var routing for intentionally-partial configs.
-
 ### Changed
 
 ### Fixed
 
+## [v1.2.0] - 2026-05-05
+
+This release adds a thread-safe mutable configuration API with snapshots
+and validation rollback, deferred validation so callers can assemble
+partial configs and validate them later, and YAML round-trips that
+preserve key ordering, scalar style, and comments. Embedded Tarantool
+schemas now cover the 3.0.x – 3.2.x line in addition to 3.3.x – 3.7.x.
+
+### Added
+
+* Thread-safe `MutableConfig` mutation API: `Set`, `Merge`, `Update`,
+  and `Delete` validate the resulting tree and roll back on failure.
+  Reads are concurrency-safe, and `Snapshot` returns a deep-copied
+  `Config` so a long-lived reader can keep a stable view while other
+  goroutines mutate the live tree (#45, #50).
+* Deferred validation: `Builder.WithoutValidation` skips the Build-time
+  validation pass while keeping the validator attached, and the new
+  `Config.Validate` / `MutableConfig.Validate` methods run it on demand
+  — useful when assembling a configuration from multiple sources before
+  enforcing the schema. `tarantool.Builder.WithoutValidation` mirrors
+  this so schema-aware env-var routing still works on intentionally
+  partial bootstrap configs (#52, #54).
+* `Config.MarshalYAML` and `Config.String` now produce YAML that
+  preserves key ordering, scalar quoting style, and comments from the
+  source document, so write-back paths no longer lose hand-edited
+  formatting (#47).
+* Embedded Tarantool JSON Schemas now cover versions 3.0.0 – 3.2.1 in
+  addition to the previously shipped 3.3.0 – 3.7.0 (#51).
+
+### Fixed
+
 * Bump `google.golang.org/grpc` to v1.79.3 to fix GO-2026-4762
-  (authorization bypass via missing leading slash in `:path`).
+  (authorization bypass via missing leading slash in `:path`) (#53).
 * Bump `go.opentelemetry.io/otel/sdk` to v1.40.0 to fix GO-2026-4394
-  (arbitrary code execution via PATH hijacking).
+  (arbitrary code execution via PATH hijacking) (#53).
 
 ## [v1.1.0] - 2026-04-29
 
