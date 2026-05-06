@@ -148,7 +148,7 @@ func TestBuild_DefaultEnvLowestPriority(t *testing.T) {
 	assert.Equal(t, "default-host", host, "default env should fill missing keys")
 }
 
-func TestBuild_StorageOverridesFile(t *testing.T) {
+func TestBuild_FileOverridesStorage(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -157,7 +157,7 @@ func TestBuild_StorageOverridesFile(t *testing.T) {
 
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "app",
-		[]byte("server:\n  host: storage-host\n"))
+		[]byte("server:\n  host: storage-host\n  region: storage-region\n"))
 
 	typed := testutil.NewRawTyped(mock, "/config/")
 	ctx := context.Background()
@@ -173,13 +173,13 @@ func TestBuild_StorageOverridesFile(t *testing.T) {
 
 	_, err = cfg.Get(config.NewKeyPath("server/host"), &host)
 	require.NoError(t, err)
-	assert.Equal(t, "storage-host", host, "storage should override file")
+	assert.Equal(t, "file-host", host, "file should override storage")
 
-	var port string
+	var region string
 
-	_, err = cfg.Get(config.NewKeyPath("server/port"), &port)
+	_, err = cfg.Get(config.NewKeyPath("server/region"), &region)
 	require.NoError(t, err)
-	assert.Equal(t, "8080", port, "file value should remain for non-overridden keys")
+	assert.Equal(t, "storage-region", region, "storage value should remain for non-overridden keys")
 }
 
 func TestBuild_EnvOverridesStorage(t *testing.T) {

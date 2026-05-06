@@ -424,13 +424,20 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 
 	inner := config.NewBuilder()
 
-	// 1. Default env vars (lowest priority).
-	inner = inner.AddCollector(
+	// Sources in precedence order (highest to lowest), per docs:
+	//   1. TT_* environment variables.
+	//   2. Config file or directory.
+	//   3. Centralized storage.
+	//   4. TT_*_DEFAULT environment variables.
+	var sources []config.Collector
+
+	// 1. TT_* env vars (highest priority).
+	sources = append(sources,
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(envFilter(b.envPrefix, b.envIgnore, defaultEnvTransform(resolver))).
-			WithName("env-default").
-			WithSourceType(config.EnvDefaultSource),
+			WithTransform(envFilter(b.envPrefix, b.envIgnore, regularEnvTransform(resolver))).
+			WithName("env").
+			WithSourceType(config.EnvSource),
 	)
 
 	// 2. Config file or directory.
@@ -444,28 +451,33 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 			return config.Builder{}, fmt.Errorf("config file: %w", sourceErr)
 		}
 
-		inner = inner.AddCollector(source)
+		sources = append(sources, source)
 	} else if b.configDir != "" {
-		inner = inner.AddCollector(
+		sources = append(sources,
 			collectors.NewDirectory(b.configDir, ".yaml", collectors.NewYamlFormat()),
 		)
 	}
 
 	// 3. Centralized storage.
 	if b.storage != nil {
-		inner = inner.AddCollector(
+		sources = append(sources,
 			collectors.NewStorage(b.storage, b.storageKey, collectors.NewYamlFormat()),
 		)
 	}
 
-	// 4. Env vars (highest priority).
-	inner = inner.AddCollector(
+	// 4. TT_*_DEFAULT env vars (lowest priority).
+	sources = append(sources,
 		collectors.NewEnv().
 			WithPrefix(b.envPrefix).
-			WithTransform(envFilter(b.envPrefix, b.envIgnore, regularEnvTransform(resolver))).
-			WithName("env").
-			WithSourceType(config.EnvSource),
+			WithTransform(envFilter(b.envPrefix, b.envIgnore, defaultEnvTransform(resolver))).
+			WithName("env-default").
+			WithSourceType(config.EnvDefaultSource),
 	)
+
+	// AddCollector treats later additions as higher priority, so add in reverse.
+	for i := len(sources) - 1; i >= 0; i-- {
+		inner = inner.AddCollector(sources[i])
+	}
 
 	// 5. Schema validation.
 	if !b.skipSchema && !b.skipValidation {
