@@ -82,19 +82,23 @@ func (ve *validationErrors) addErrors(result *jsonschema.EvaluationResult, baseP
 
 // formatErrorMessage creates a user-friendly error message.
 func formatErrorMessage(err *jsonschema.EvaluationError) string {
+	// err.Message is a raw template with {property}/{received}/{expected} placeholders;
+	// only (*EvaluationError).Error() substitutes them from err.Params.
+	body := err.Error()
+
 	// Format based on keyword type for better readability.
 	switch err.Keyword {
 	case "required":
-		return "missing required property: " + err.Message
+		return "missing required property: " + body
 	case "type":
-		return "invalid type: " + err.Message
+		return "invalid type: " + body
 	case "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum":
-		return "value out of range: " + err.Message
+		return "value out of range: " + body
 	case "pattern":
-		return "value does not match pattern: " + err.Message
+		return "value does not match pattern: " + body
 	case "enum":
-		return "value not in allowed set: " + err.Message
+		return "value not in allowed set: " + body
 	default:
-		return err.Message
+		return body
 	}
 }

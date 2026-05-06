@@ -194,6 +194,63 @@ func TestFormatErrorMessage_Enum(t *testing.T) {
 	assert.Equal(t, "value not in allowed set: must be one of [red, green, blue]", msg)
 }
 
+func TestFormatErrorMessage_SubstitutesParams(t *testing.T) {
+	t.Parallel()
+
+	// Real EvaluationError values carry a template Message plus Params; the
+	// substituted text only appears via Error(). Verify formatErrorMessage no
+	// longer leaks raw {placeholders} for the keywords that trigger this in
+	// practice.
+	tests := []struct {
+		name string
+		err  *jsonschema.EvaluationError
+		want string
+	}{
+		{
+			name: "enum",
+			err: &jsonschema.EvaluationError{
+				Keyword: "enum",
+				Message: "Value {received} should be one of the allowed values: {expected}",
+				Params: map[string]any{
+					"received": "rs",
+					"expected": "[ro, rw]",
+				},
+			},
+			want: "value not in allowed set: Value rs should be one of the allowed values: [ro, rw]",
+		},
+		{
+			name: "type",
+			err: &jsonschema.EvaluationError{
+				Keyword: "type",
+				Message: "Value is {received} but should be {expected}",
+				Params: map[string]any{
+					"received": "string",
+					"expected": "number",
+				},
+			},
+			want: "invalid type: Value is string but should be number",
+		},
+		{
+			name: "default",
+			err: &jsonschema.EvaluationError{
+				Keyword: "properties",
+				Message: "Properties {properties} do not match their schemas",
+				Params: map[string]any{
+					"properties": "[mode]",
+				},
+			},
+			want: "Properties [mode] do not match their schemas",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, formatErrorMessage(tt.err))
+		})
+	}
+}
+
 func TestFormatErrorMessage_Default(t *testing.T) {
 	t.Parallel()
 
