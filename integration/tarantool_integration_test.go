@@ -137,14 +137,19 @@ groups:
                   roles: ['admin']
 `
 
-// storageOverrideYAML is put into etcd to override specific keys
-// from the file-based config.
+// storageOverrideYAML is put into etcd. Per documented precedence,
+// the local YAML file wins on overlapping keys, so this YAML primarily
+// fills keys absent from the file-based config (memtx.memory) while
+// still defining a few overlapping keys to assert that the file wins.
 const storageOverrideYAML = `
 log:
   level: warn
 
 replication:
   connect_timeout: 30
+
+memtx:
+  memory: 268435456
 `
 
 func writeTestFile(t *testing.T, path, content string) {
@@ -162,7 +167,7 @@ func writeTestFile(t *testing.T, path, content string) {
 //   - Inheritance resolution (Effective / EffectiveAll)
 //   - No schema validation (WithoutSchema) to test without network dependency
 //
-// Priority: default-env < file < storage < env.
+// Priority: default-env < storage < file < env.
 func TestTarantool_Integration_FullStack(t *testing.T) {
 	cluster := testutil.NewEtcdTestCluster(t)
 	ctx := context.Background()
@@ -203,26 +208,33 @@ func TestTarantool_Integration_FullStack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "election", failover, "file value should be present")
 
-	// 5b. Storage overrides file: log.level.
+	// 5b. File overrides storage: log.level.
 	var logLevel string
 
 	_, err = cfg.Get(config.NewKeyPath("log/level"), &logLevel)
 	require.NoError(t, err)
-	assert.Equal(t, "warn", logLevel, "storage should override file for log.level")
+	assert.Equal(t, "info", logLevel, "file should override storage for log.level")
 
-	// 5c. Storage overrides file: replication.connect_timeout.
+	// 5c. File overrides storage: replication.connect_timeout.
 	var connectTimeout int64
 
 	_, err = cfg.Get(config.NewKeyPath("replication/connect_timeout"), &connectTimeout)
 	require.NoError(t, err)
-	assert.Equal(t, int64(30), connectTimeout, "storage should override file for connect_timeout")
+	assert.Equal(t, int64(10), connectTimeout, "file should override storage for connect_timeout")
+
+	// 5c'. Storage fills key absent from file: memtx.memory.
+	var memtxMemory int64
+
+	_, err = cfg.Get(config.NewKeyPath("memtx/memory"), &memtxMemory)
+	require.NoError(t, err)
+	assert.Equal(t, int64(268435456), memtxMemory, "storage should fill key absent from file")
 
 	// 5d. Regular env overrides everything: replication.timeout.
 	var timeout string
 
 	_, err = cfg.Get(config.NewKeyPath("replication/timeout"), &timeout)
 	require.NoError(t, err)
-	assert.Equal(t, "99", timeout, "env should override storage+file for timeout")
+	assert.Equal(t, "99", timeout, "env should override file+storage for timeout")
 
 	// 5e. Default env fills missing key.
 	var ioCollect string
@@ -592,12 +604,12 @@ groups:
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	// Storage overrides file: log.level = debug.
+	// File overrides storage: log.level = info.
 	var logLevel string
 
 	_, err = cfg.Get(config.NewKeyPath("log/level"), &logLevel)
 	require.NoError(t, err)
-	assert.Equal(t, "debug", logLevel, "storage should override file")
+	assert.Equal(t, "info", logLevel, "file should override storage")
 
 	// Mutate at runtime.
 	err = cfg.Set(config.NewKeyPath("log/level"), "error")
@@ -659,12 +671,12 @@ groups:
 		Build(ctx)
 	require.NoError(t, err)
 
-	// Storage overrides dir: log.level.
+	// Config dir overrides storage: log.level.
 	var logLevel string
 
 	_, err = cfg.Get(config.NewKeyPath("log/level"), &logLevel)
 	require.NoError(t, err)
-	assert.Equal(t, "error", logLevel, "storage should override config dir")
+	assert.Equal(t, "info", logLevel, "config dir should override storage")
 
 	// Dir value present for non-overridden key.
 	var adminPw string
