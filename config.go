@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/meta"
 	"github.com/tarantool/go-config/tree"
 	"github.com/tarantool/go-config/validator"
 )
@@ -407,7 +408,6 @@ func (c *Config) collectLeafEntities(
 }
 
 // MutableConfig is an extension of Config that allows safe runtime modifications.
-// Note: MutableConfig is not implemented yet and is under active development.
 //
 // The validator (if any) lives on the embedded [Config]. Set/Merge/Update use
 // it to validate every mutation; [MutableConfig.Validate] re-runs it on the
@@ -435,7 +435,7 @@ func markModified(node *tree.Node) {
 		return
 	}
 
-	node.Source = "modified"
+	node.Source = meta.ModifiedSourceName
 	node.Revision = nextRevision(node.Revision)
 }
 
