@@ -237,7 +237,6 @@ func (b *Builder) Build(ctx context.Context) (config.Config, error) {
 
 // BuildMutable is like [Builder.Build] but returns a [config.MutableConfig]
 // that allows runtime modifications.
-// Note: this method is not implemented yet and is under active development.
 func (b *Builder) BuildMutable(ctx context.Context) (*config.MutableConfig, error) {
 	inner, err := b.buildInner(ctx)
 	if err != nil {

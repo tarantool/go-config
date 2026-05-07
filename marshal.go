@@ -6,16 +6,16 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/tarantool/go-config/meta"
 	"github.com/tarantool/go-config/tree"
 	"go.yaml.in/yaml/v3"
 )
 
 const (
-	yamlIndent      = 2
-	yamlFloatTag    = "!!float"
-	yamlNullTag     = "!!null"
-	yamlStringTag   = "!!str"
-	modifiedSrcName = "modified"
+	yamlIndent    = 2
+	yamlFloatTag  = "!!float"
+	yamlNullTag   = "!!null"
+	yamlStringTag = "!!str"
 )
 
 // YAMLAnnotation captures the YAML-specific information needed to faithfully
@@ -110,7 +110,7 @@ func nodeToYAML(node *tree.Node) (*yaml.Node, error) {
 // from the original annotation when the value has not been modified.
 func scalarNodeToYAML(node *tree.Node) (*yaml.Node, error) {
 	annotation := yamlAnnotation(node)
-	mutated := node.Source == modifiedSrcName
+	mutated := node.Source == meta.ModifiedSourceName
 
 	if annotation.Val != nil && !mutated {
 		clone := cloneScalarYAMLNode(annotation.Val)
