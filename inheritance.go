@@ -341,6 +341,82 @@ func (inheritanceCfg *inheritanceConfig) hasSubStrategies(prefix string) bool {
 	return false
 }
 
+// foldScopeChainInto folds one layer's scope chain (the global→…→instance
+// nodes returned by matchHierarchy, any of which may be nil) into result,
+// applying inheritance rules. suppressedByLevel optionally lists, per level,
+// key paths to prune before folding (tombstone suppression); nil disables it.
+func foldScopeChainInto(
+	result *tree.Node,
+	scopeChain []*tree.Node,
+	inheritanceCfg *inheritanceConfig,
+	suppressedByLevel map[int][]keypath.KeyPath,
+) {
+	for levelIdx, layer := range scopeChain {
+		if layer == nil {
+			continue
+		}
+
+		// Apply per-level pruning (tombstone suppression) if requested.
+		if len(suppressedByLevel[levelIdx]) > 0 {
+			layer = cloneNode(layer)
+			for _, kp := range suppressedByLevel[levelIdx] {
+				pruneTreePath(layer, kp)
+			}
+		}
+
+		for _, key := range layer.ChildrenKeys() {
+			keyPath := keypath.NewKeyPath(key)
+
+			// Skip structural keys (groups, replicasets, instances, …).
+			if isStructuralKey(inheritanceCfg, key) {
+				continue
+			}
+
+			// Apply exclusion rules.
+			if !inheritanceCfg.shouldInherit(levelIdx, keyPath) {
+				// Only include at the LEAF level (last entry in the chain).
+				if levelIdx < len(scopeChain)-1 {
+					continue
+				}
+			}
+
+			child := layer.Child(key)
+			mergeIntoResultWithStrategies(result, key, child, inheritanceCfg)
+		}
+	}
+}
+
+// pruneTreePath removes the node at path from root, then walks back up removing
+// any ancestor that became empty as a result.  A nil root, an empty path, or a
+// path that is not present is a no-op.
+func pruneTreePath(root *tree.Node, path keypath.KeyPath) {
+	if root == nil || len(path) == 0 {
+		return
+	}
+
+	if root.Get(path) == nil {
+		return
+	}
+
+	for i := len(path); i > 0; i-- {
+		parentPath := path[:i-1]
+		childKey := path[i-1]
+
+		parent := root.Get(parentPath)
+		if parent == nil {
+			break
+		}
+
+		if !parent.DeleteChild(childKey) {
+			break
+		}
+
+		if len(parentPath) == 0 || !parent.IsLeaf() || parent.Value != nil {
+			break
+		}
+	}
+}
+
 // resolveEffective merges layers from global to leaf with inheritance rules.
 func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *tree.Node {
 	result := tree.New()
@@ -350,32 +426,142 @@ func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *t
 		mergeDefaults(result, inheritanceCfg.defaults)
 	}
 
-	// Merge each layer in order (global first, leaf last = highest priority).
-	for levelIdx, layer := range layers {
-		if layer == nil {
-			continue
+	foldScopeChainInto(result, layers, inheritanceCfg, nil)
+
+	return result
+}
+
+// accumulateLayerResult folds the higher-priority layer srcLayer into dst.
+// MergeAppend/MergeDeep keys use their configured strategy. MergeReplace keys
+// replace the dst value, except that two map nodes are merged recursively so a
+// loader that sets only one sub-key does not drop sibling sub-keys contributed
+// by a lower-priority loader.
+func accumulateLayerResult(dst, srcLayer *tree.Node, inheritanceCfg *inheritanceConfig) {
+	for _, key := range srcLayer.ChildrenKeys() {
+		src := srcLayer.Child(key)
+		strategy, _ := inheritanceCfg.strategyFor(key)
+
+		switch strategy {
+		case MergeAppend, MergeDeep:
+			mergeIntoResultWithStrategies(dst, key, src, inheritanceCfg)
+
+		case MergeReplace:
+			if dstChild := dst.Child(key); isMapNode(dstChild) && isMapNode(src) {
+				mergeTreeInto(dstChild, src)
+			} else {
+				dst.SetChild(key, cloneNode(src))
+			}
 		}
+	}
+}
 
-		for _, key := range layer.ChildrenKeys() {
-			keyPath := keypath.NewKeyPath(key)
+// buildSuppressedByLevel maps each tombstone to the inheritance level it was
+// deleted from: the longest per-level prefix of entityPath that prefixes the
+// tombstone; the remaining config-key suffix is what gets suppressed at that
+// level. Whole-entity/whole-scope deletes (empty suffix) and structural-key
+// suffixes are left out — those are handled by the entityTombstoned guard.
+func buildSuppressedByLevel(
+	tombstones []keypath.KeyPath,
+	inheritanceCfg *inheritanceConfig,
+	entityPath keypath.KeyPath,
+) map[int][]keypath.KeyPath {
+	if len(tombstones) == 0 {
+		return nil
+	}
 
-			// Skip structural keys.
-			if isStructuralKey(inheritanceCfg, key) {
+	numLevels := len(inheritanceCfg.levels)
+
+	// Pre-compute scope paths for each level: entityPath[:levelIdx*segmentsPerLevel].
+	scopePaths := make([]keypath.KeyPath, numLevels)
+	for i := range numLevels {
+		scopePaths[i] = entityPath[:i*segmentsPerLevel]
+	}
+
+	var result map[int][]keypath.KeyPath
+
+	for _, tomb := range tombstones {
+		// Find the longest scope prefix (highest level index) that prefixes tomb.
+		bestLevel := -1
+
+		for i := numLevels - 1; i >= 0; i-- {
+			scopePath := scopePaths[i]
+			if len(scopePath) > len(tomb) {
 				continue
 			}
 
-			// Apply exclusion rules.
-			if !inheritanceCfg.shouldInherit(levelIdx, keyPath) {
-				// Only include if this is the level where it was explicitly set.
-				// For WithNoInherit: only at the LEAF level (last layer).
-				// For WithNoInheritFrom: skip only from the excluded level.
-				if levelIdx < len(layers)-1 {
-					continue
+			match := true
+
+			for j, seg := range scopePath {
+				if tomb[j] != seg {
+					match = false
+					break
 				}
 			}
 
-			child := layer.Child(key)
-			mergeIntoResultWithStrategies(result, key, child, inheritanceCfg)
+			if match {
+				bestLevel = i
+				break
+			}
+		}
+
+		if bestLevel < 0 {
+			continue
+		}
+
+		cfgKey := tomb[len(scopePaths[bestLevel]):]
+
+		if len(cfgKey) == 0 {
+			continue // whole-entity/whole-scope delete: see entityTombstoned.
+		}
+
+		if isStructuralKey(inheritanceCfg, cfgKey[0]) {
+			continue // hierarchy structure, not a config key.
+		}
+
+		if result == nil {
+			result = make(map[int][]keypath.KeyPath)
+		}
+
+		result[bestLevel] = append(result[bestLevel], cfgKey)
+	}
+
+	return result
+}
+
+// resolveEffectiveLayered resolves the effective config for entityPath by
+// resolving each layer's scope chain independently (so scope-depth inheritance
+// applies within a layer) and accumulating the per-layer results in ascending
+// priority order, so a higher-priority loader's value wins regardless of which
+// inheritance scope it sits in. cfg.modified, if any, is folded last (runtime
+// mutations outrank every loader). suppressedByLevel, built from cfg.tombstones,
+// prunes runtime-deleted keys from each layer's scope chain; it is not applied
+// to cfg.modified, which Delete prunes directly.
+func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, entityPath keypath.KeyPath) *tree.Node {
+	result := tree.New()
+
+	if inheritanceCfg.defaults != nil {
+		mergeDefaults(result, inheritanceCfg.defaults)
+	}
+
+	suppressedByLevel := buildSuppressedByLevel(cfg.tombstones, inheritanceCfg, entityPath)
+
+	for _, layer := range cfg.layers {
+		scopeChain, ok := matchHierarchy(layer, inheritanceCfg, entityPath)
+		if !ok {
+			continue
+		}
+
+		layerResult := tree.New()
+		foldScopeChainInto(layerResult, scopeChain, inheritanceCfg, suppressedByLevel)
+		accumulateLayerResult(result, layerResult, inheritanceCfg)
+	}
+
+	if cfg.modified != nil {
+		scopeChain, ok := matchHierarchy(cfg.modified, inheritanceCfg, entityPath)
+		if ok {
+			modResult := tree.New()
+			foldScopeChainInto(modResult, scopeChain, inheritanceCfg, nil)
+			accumulateLayerResult(result, modResult, inheritanceCfg)
 		}
 	}
 

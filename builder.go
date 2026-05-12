@@ -156,7 +156,10 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	root := tree.New()
 
-	var errs []error
+	var (
+		errs   []error
+		layers []*tree.Node
+	)
 
 	merger := b.merger
 	if merger == nil {
@@ -170,40 +173,20 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 			continue
 		}
 
-		multiCol, isMulti := col.(MultiCollector)
-		if !isMulti {
-			err := MergeCollectorWithMerger(ctx, root, col, merger)
-			if err != nil {
-				errs = append(errs, err)
-			}
+		layer, layerErrs, ok := buildLayer(ctx, col, merger)
 
+		errs = append(errs, layerErrs...)
+
+		if !ok {
 			continue
 		}
 
-		subs, err := multiCol.Collectors(ctx)
-		if err != nil {
-			errs = append(errs, NewCollectorError(col.Name(), err))
-
-			continue
-		}
-
-		for j, sub := range subs {
-			if sub == nil {
-				errs = append(errs, NewCollectorError(col.Name(),
-					fmt.Errorf("%w at sub-index %d", ErrNilCollector, j)))
-
-				continue
-			}
-
-			err := MergeCollectorWithMerger(ctx, root, sub, merger)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		}
+		layers = append(layers, layer)
+		mergeTreeInto(root, layer)
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil, inheritances: nil, validator: nil}, errs
+		return newConfig(nil, nil, nil), errs
 	}
 
 	if b.validator != nil && !b.skipValidation {
@@ -214,10 +197,52 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{root: nil, inheritances: nil, validator: nil}, errs
+		return newConfig(nil, nil, nil), errs
 	}
 
-	return newConfig(root, b.inheritances, b.validator), nil
+	return newLayeredConfig(root, layers, b.inheritances, b.validator), nil
+}
+
+// buildLayer merges one top-level collector into a fresh layer tree. For a
+// MultiCollector it expands the sub-collectors and merges each in order.
+// The third result is false only when the collector could not be expanded at
+// all (the MultiCollector.Collectors call failed); per-sub errors are
+// collected but the layer is still returned.
+func buildLayer(ctx context.Context, col Collector, merger Merger) (*tree.Node, []error, bool) {
+	layer := tree.New()
+
+	var errs []error
+
+	multiCol, isMulti := col.(MultiCollector)
+	if !isMulti {
+		err := MergeCollectorWithMerger(ctx, layer, col, merger)
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		return layer, errs, true
+	}
+
+	subs, err := multiCol.Collectors(ctx)
+	if err != nil {
+		return nil, []error{NewCollectorError(col.Name(), err)}, false
+	}
+
+	for j, sub := range subs {
+		if sub == nil {
+			errs = append(errs, NewCollectorError(col.Name(),
+				fmt.Errorf("%w at sub-index %d", ErrNilCollector, j)))
+
+			continue
+		}
+
+		err := MergeCollectorWithMerger(ctx, layer, sub, merger)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return layer, errs, true
 }
 
 // BuildMutable starts the configuration assembly process but returns
@@ -225,7 +250,7 @@ func (b *Builder) Build(ctx context.Context) (Config, []error) {
 func (b *Builder) BuildMutable(ctx context.Context) (MutableConfig, []error) {
 	cfg, errs := b.Build(ctx)
 	if len(errs) > 0 {
-		return MutableConfig{Config: Config{root: nil, inheritances: nil, validator: nil}, mu: sync.RWMutex{}}, errs
+		return MutableConfig{Config: newConfig(nil, nil, nil), mu: sync.RWMutex{}}, errs
 	}
 
 	return MutableConfig{Config: cfg, mu: sync.RWMutex{}}, nil
