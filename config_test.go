@@ -9,6 +9,7 @@ import (
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
+	"github.com/tarantool/go-config/meta"
 )
 
 func TestConfig_Stat_ExistingKey(t *testing.T) {
@@ -919,4 +920,364 @@ func TestMutableConfig_Snapshot_KeyAddedAfterSnapshotInvisible(t *testing.T) {
 
 	_, ok := snap.Lookup(config.NewKeyPath("added"))
 	assert.False(t, ok, "snapshot should not observe keys added after Snapshot()")
+}
+
+// buildLayeredMutable builds a MutableConfig with two collectors and inheritance.
+// Collector 1 (lower priority): sets replication.failover=manual at global scope.
+// Collector 2 (higher priority): sets replication.failover=election at instance scope.
+// Hierarchy: Global → groups → replicasets → instances.
+func buildLayeredMutable(t *testing.T) *config.MutableConfig {
+	t.Helper()
+
+	builder := config.NewBuilder()
+
+	// Lower-priority loader: global-scope key.
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"failover": "manual"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("file"))
+
+	// Higher-priority loader: instance-scope override of the same key.
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"replication": map[string]any{"failover": "election"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("env"))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	return &cfg
+}
+
+func TestMutableConfig_Layered_Set_SourceIsModified(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	// Set overwrites a key at the global scope.
+	require.NoError(t, cfg.Set(config.NewKeyPath("replication/failover"), "supervised"))
+
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	metaInfo, err := eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+
+	// IV3, IV4: the Set value must appear and carry Source=modified.
+	assert.Equal(t, "supervised", failover)
+	assert.Equal(t, meta.ModifiedSourceName, metaInfo.Source.Name, "Source must be %q", meta.ModifiedSourceName)
+
+	// EffectiveAll must reflect the same value.
+	all, err := cfg.EffectiveAll()
+	require.NoError(t, err)
+
+	effFromAll, ok := all["groups/storages/replicasets/s-001/instances/s-001-a"]
+	require.True(t, ok)
+
+	var failoverAll string
+
+	_, err = effFromAll.Get(config.NewKeyPath("replication/failover"), &failoverAll)
+	require.NoError(t, err)
+	assert.Equal(t, "supervised", failoverAll)
+}
+
+func TestMutableConfig_Layered_Delete_FallsBackToScopedLoaderValue(t *testing.T) {
+	t.Parallel()
+
+	// The "file" loader sets replication.failover=manual at the global scope; the
+	// "env" loader sets it to "election" at the instance scope. Deleting the key
+	// tombstones the global-scope contribution, so the instance-scope value survives.
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	require.True(t, cfg.Delete(config.NewKeyPath("replication/failover")))
+
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	_, err = eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "election", failover)
+}
+
+func TestMutableConfig_Layered_Delete_LastContribution_DefaultVisible(t *testing.T) {
+	t.Parallel()
+
+	// Single loader with a default, set only at global scope.
+	// After deleting the only concrete contribution, the inheritance default must appear.
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"failover": "manual"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("file"))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithDefaults(config.DefaultsType{
+			"replication": map[string]any{"failover": "off"},
+		}),
+	)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	// Verify baseline.
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+	eff0, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var base string
+
+	_, err = eff0.Get(config.NewKeyPath("replication/failover"), &base)
+	require.NoError(t, err)
+	assert.Equal(t, "manual", base)
+
+	// Delete the concrete contribution.
+	require.True(t, cfg.Delete(config.NewKeyPath("replication/failover")))
+
+	// Now the default must shine through.
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	_, err = eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "off", failover, "default must be visible after deleting the only concrete contribution")
+}
+
+func TestMutableConfig_Layered_Delete_WholeEntity_ErrPathNotFound(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	// Verify the entity exists before deletion.
+	_, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	// Delete the whole instance entity node from the merged root.
+	require.True(t, cfg.Delete(config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")))
+
+	// Effective must now return ErrPathNotFound.
+	_, err = cfg.Effective(leafPath)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, config.ErrPathNotFound, "expected ErrPathNotFound, got: %v", err)
+}
+
+func TestMutableConfig_Layered_Snapshot_EffectiveConsistent(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	// Apply a Set mutation to override what the env loader contributed.
+	require.NoError(t, cfg.Set(config.NewKeyPath("replication/failover"), "supervised"))
+
+	// Take a snapshot after the mutation.
+	snap := cfg.Snapshot()
+
+	// Snapshot Effective must equal live Effective at this point.
+	liveEff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	snapEff, err := snap.Effective(leafPath)
+	require.NoError(t, err)
+
+	var liveVal, snapVal string
+
+	_, err = liveEff.Get(config.NewKeyPath("replication/failover"), &liveVal)
+	require.NoError(t, err)
+
+	_, err = snapEff.Get(config.NewKeyPath("replication/failover"), &snapVal)
+	require.NoError(t, err)
+	assert.Equal(t, liveVal, snapVal, "Snapshot Effective must match live Effective")
+	assert.Equal(t, "supervised", snapVal)
+
+	// Delete the key from the live config.
+	require.True(t, cfg.Delete(config.NewKeyPath("replication/failover")))
+
+	// Snapshot must still resolve the pre-deletion value.
+	snapEff2, err := snap.Effective(leafPath)
+	require.NoError(t, err)
+
+	var afterDelete string
+
+	_, err = snapEff2.Get(config.NewKeyPath("replication/failover"), &afterDelete)
+	require.NoError(t, err)
+	assert.Equal(t, "supervised", afterDelete, "snapshot Effective must be frozen and unaffected by live Delete")
+}
+
+func TestMutableConfig_Layered_Delete_GetEffectiveConsistent(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	// Delete a key that exists.
+	require.True(t, cfg.Delete(config.NewKeyPath("replication/failover")))
+
+	// Get on the root must not see the deleted key at the root level.
+	// (The env loader's instance-scope value was merged into root, now deleted.)
+	_, ok := cfg.Lookup(config.NewKeyPath("replication/failover"))
+	assert.False(t, ok, "Get must not see the deleted key (IV2: root is authoritative for non-Effective reads)")
+
+	// Effective sees the surviving contribution (env loader's instance-scope fallback).
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	_, err = eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "election", failover, "Effective must see the instance-scoped value from the env layer")
+}
+
+func TestMutableConfig_Layered_DeleteThenSet_ValueReappears(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+	keyPath := config.NewKeyPath("replication/failover")
+
+	// Delete the key, then re-Set it. The re-Set value must reappear in Effective
+	// with Source=modified — the Delete tombstone must not keep suppressing it.
+	require.True(t, cfg.Delete(keyPath))
+	require.NoError(t, cfg.Set(keyPath, "supervised"))
+
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	metaInfo, err := eff.Get(keyPath, &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "supervised", failover, "re-Set value must win over the cleared Delete tombstone")
+	assert.Equal(t, meta.ModifiedSourceName, metaInfo.Source.Name)
+
+	// Get on the root and Effective must agree.
+	var rootVal string
+
+	_, err = cfg.Get(keyPath, &rootVal)
+	require.NoError(t, err)
+	assert.Equal(t, "supervised", rootVal)
+}
+
+func TestMutableConfig_Layered_SetDeleteSet_LastSetWins(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildLayeredMutable(t)
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+	keyPath := config.NewKeyPath("replication/failover")
+
+	require.NoError(t, cfg.Set(keyPath, "first"))
+	require.True(t, cfg.Delete(keyPath))
+	require.NoError(t, cfg.Set(keyPath, "second"))
+
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var failover string
+
+	_, err = eff.Get(keyPath, &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "second", failover)
+}
+
+func TestMutableConfig_Layered_InsertChild_DeleteParent_InsertSibling(t *testing.T) {
+	t.Parallel()
+
+	// A loader contributes a sibling under the parent that gets deleted.
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"a": map[string]any{"loaderkey": "loader"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{"s-001-a": map[string]any{}},
+					},
+				},
+			},
+		},
+	}).WithName("file"))
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.BuildMutable(t.Context())
+	require.Empty(t, errs)
+
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+
+	require.NoError(t, cfg.Set(config.NewKeyPath("a/b"), "v1"))
+	require.True(t, cfg.Delete(config.NewKeyPath("a")))
+	require.NoError(t, cfg.Set(config.NewKeyPath("a/c"), "v2"))
+
+	// After "delete a", only "a/c" exists; "a/b" and the loader's "a/loaderkey"
+	// are gone — and Effective must agree with the raw view on all three.
+	_, okB := cfg.Lookup(config.NewKeyPath("a/b"))
+	_, okC := cfg.Lookup(config.NewKeyPath("a/c"))
+	_, okL := cfg.Lookup(config.NewKeyPath("a/loaderkey"))
+
+	require.False(t, okB)
+	require.True(t, okC)
+	require.False(t, okL)
+
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var valB, valC, valLoader string
+
+	_, errB := eff.Get(config.NewKeyPath("a/b"), &valB)
+	metaC, errC := eff.Get(config.NewKeyPath("a/c"), &valC)
+	_, errLoader := eff.Get(config.NewKeyPath("a/loaderkey"), &valLoader)
+
+	require.Error(t, errB, "Effective must not resurrect a/b after delete a")
+	require.NoError(t, errC)
+	assert.Equal(t, "v2", valC)
+	assert.Equal(t, meta.ModifiedSourceName, metaC.Source.Name)
+	require.Error(t, errLoader, "Effective must not resurrect the loader's a/loaderkey after delete a")
 }

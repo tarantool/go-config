@@ -1323,6 +1323,261 @@ func TestConfig_Walk_ContextCancellation(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Layered Effective / EffectiveAll tests
+// ---------------------------------------------------------------------------.
+
+// TestLayered_LoaderPriorityBeatsScope verifies that a value set at the global
+// scope in a higher-priority loader overrides a value set at the instance scope
+// in a lower-priority loader (IV1).  This is the "audit_log/extract_key" class
+// of bug: instance-scope in loader-A must lose to global-scope in loader-B when
+// loader-B has higher priority.
+// The test also checks that Stat reports the source of the winning value (PC1).
+func TestLayered_LoaderPriorityBeatsScope(t *testing.T) {
+	t.Parallel()
+
+	// Loader 1 (lower priority): sets audit_log/extract_key at instance scope.
+	loader1 := collectors.NewMap(map[string]any{
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"audit_log": map[string]any{
+									"extract_key": "instance-value",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("loader1").WithSourceType(config.FileSource)
+
+	// Loader 2 (higher priority): sets audit_log/extract_key at global scope.
+	loader2 := collectors.NewMap(map[string]any{
+		"audit_log": map[string]any{
+			"extract_key": "global-override",
+		},
+	}).WithName("loader2").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(loader1) // lower priority.
+	builder = builder.AddCollector(loader2) // higher priority.
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	leafPath := config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a")
+	eff, err := cfg.Effective(leafPath)
+	require.NoError(t, err)
+
+	var val string
+
+	_, err = eff.Get(config.NewKeyPath("audit_log/extract_key"), &val)
+	require.NoError(t, err)
+	// Loader2 (global scope, higher priority) must win over loader1 (instance scope).
+	assert.Equal(t, "global-override", val,
+		"higher-priority loader global value must beat lower-priority loader instance value")
+
+	// PC1: Stat must report the originating source (loader2).
+	// Note: SourceType is not stored in tree nodes; only the collector name is.
+	meta, ok := eff.Stat(config.NewKeyPath("audit_log/extract_key"))
+	require.True(t, ok)
+	assert.Equal(t, "loader2", meta.Source.Name,
+		"Stat must report the source name of the winning value")
+}
+
+// TestLayered_MergeAppendAcrossLoaders verifies that MergeAppend composes
+// across loader boundaries (values from different loaders are appended).
+func TestLayered_MergeAppendAcrossLoaders(t *testing.T) {
+	t.Parallel()
+
+	// Loader 1: roles at global scope.
+	loader1 := collectors.NewMap(map[string]any{
+		"roles": []any{"storage"},
+	}).WithName("loader1").WithSourceType(config.FileSource)
+
+	// Loader 2 (higher priority): roles at global scope — should append.
+	loader2 := collectors.NewMap(map[string]any{
+		"roles": []any{"metrics"},
+	}).WithName("loader2").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(loader1)
+	builder = builder.AddCollector(loader2)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("roles", config.MergeAppend),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	// Any leaf path works; there's no explicit instances, so use nonexistent
+	// (matchHierarchy returns ok=true, all nodes nil except global).
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var roles []string
+
+	_, err = eff.Get(config.NewKeyPath("roles"), &roles)
+	require.NoError(t, err)
+	// Loader1 provides ["storage"], loader2 provides ["metrics"].
+	// With MergeAppend both should appear, loader1 first (lower priority), loader2 second.
+	assert.Equal(t, []string{"storage", "metrics"}, roles)
+}
+
+// TestLayered_MergeDeepAcrossLoaders verifies that MergeDeep composes across
+// loader boundaries (users from both loaders are present in effective config).
+func TestLayered_MergeDeepAcrossLoaders(t *testing.T) {
+	t.Parallel()
+
+	// Loader 1: user "admin" at global scope.
+	loader1 := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"admin": map[string]any{"password": "secret"},
+			},
+		},
+	}).WithName("loader1").WithSourceType(config.FileSource)
+
+	// Loader 2 (higher priority): user "monitor" at global scope.
+	loader2 := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"monitor": map[string]any{"password": "mon"},
+			},
+		},
+	}).WithName("loader2").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(loader1)
+	builder = builder.AddCollector(loader2)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("credentials", config.MergeDeep),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var users map[string]any
+
+	_, err = eff.Get(config.NewKeyPath("credentials/users"), &users)
+	require.NoError(t, err)
+	assert.Contains(t, users, "admin", "admin user from loader1 must be present")
+	assert.Contains(t, users, "monitor", "monitor user from loader2 must be present")
+}
+
+// TestLayered_SingleCollector_ScopeDepthUnchanged ensures that when only one
+// collector is used, scope-depth precedence is preserved (AS3): the more
+// specific (leaf) scope wins over the global scope within that collector.
+func TestLayered_SingleCollector_ScopeDepthUnchanged(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"failover": "manual"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replication": map[string]any{"failover": "election"},
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("single").WithSourceType(config.FileSource))
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var failover string
+
+	_, err = eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	// Group level (more specific) must override global level within the same loader.
+	assert.Equal(t, "election", failover,
+		"scope-depth precedence must be preserved with a single collector")
+}
+
+// TestLayered_EffectiveAll_LoaderPriorityBeatsScope verifies that EffectiveAll
+// applies the same loader-priority-over-scope resolution for every leaf.
+func TestLayered_EffectiveAll_LoaderPriorityBeatsScope(t *testing.T) {
+	t.Parallel()
+
+	loader1 := collectors.NewMap(map[string]any{
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"mode": "instance-value",
+							},
+							"s-001-b": map[string]any{
+								"mode": "instance-value",
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("loader1").WithSourceType(config.FileSource)
+
+	loader2 := collectors.NewMap(map[string]any{
+		"mode": "global-override",
+	}).WithName("loader2").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(loader1)
+	builder = builder.AddCollector(loader2)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	all, err := cfg.EffectiveAll()
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+
+	for path, eff := range all {
+		var mode string
+
+		_, err := eff.Get(config.NewKeyPath("mode"), &mode)
+		require.NoError(t, err, "leaf %s", path)
+		assert.Equal(t, "global-override", mode,
+			"higher-priority loader global value must beat instance-scope value for leaf %s", path)
+	}
+}
+
 func TestWithInheritance_YamlArrayPreserved(t *testing.T) {
 	t.Parallel()
 

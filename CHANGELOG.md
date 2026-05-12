@@ -12,6 +12,17 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* `Config.Effective`, `MutableConfig.Effective`, and `EffectiveAll` now
+  resolve a leaf entity by folding loaders in priority order (`env >
+  storage > file > env-default`, with runtime `MutableConfig` mutations
+  highest), so a higher-priority loader's value wins over a lower-priority
+  loader's value set at a deeper inheritance scope (`global → group →
+  replicaset → instance`). Previously scope depth always dominated loader
+  priority, which meant e.g. an env var routed to the global scope lost to
+  a YAML value set per instance. Single-collector configs and
+  global-scope-only keys are unaffected. This is a behavior change worth a
+  minor-version bump.
+
 ### Fixed
 
 ## [v1.2.0] - 2026-05-05
