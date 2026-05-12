@@ -10,6 +10,12 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* `collectors.Struct` collector reads configuration directly from a Go
+  struct via reflection, honoring `config` struct tags (falling back to
+  `yaml`), the `-` skip directive, and the `omitempty` and `inline`
+  options. The helper `collectors.StructToMap` exposes the same struct →
+  `map[string]any` conversion for standalone use.
+
 ### Changed
 
 * `Config.Effective`, `MutableConfig.Effective`, and `EffectiveAll` now

@@ -4,6 +4,8 @@
 // # Collector Types
 //
 //   - [Map] — reads configuration from an in-memory map[string]any.
+//   - [Struct] — reads configuration from a Go struct via reflection, using
+//     `config`/`yaml` tags; see also [StructToMap].
 //   - [Env] — reads configuration from environment variables, with
 //     configurable prefix, delimiter, and key transformation.
 //   - [Storage] — reads multiple configuration documents from a key-value

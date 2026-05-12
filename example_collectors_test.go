@@ -286,3 +286,55 @@ func Example_fileSource() {
 	// Port: 8080
 	// Log level: info
 }
+
+// Example_structCollector demonstrates the Struct collector which reads
+// configuration directly from a Go struct, using `config` (or `yaml`) tags
+// for key names.
+func Example_structCollector() {
+	type DB struct {
+		Host string `config:"host"`
+		Port int    `config:"port"`
+	}
+
+	type AppConfig struct {
+		Name  string `config:"name"`
+		DB    DB     `config:"db"`
+		Debug bool   `config:"debug,omitempty"`
+	}
+
+	collector := collectors.NewStruct(AppConfig{
+		Name: "myapp",
+		DB:   DB{Host: "localhost", Port: 5432},
+	}).WithName("defaults")
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collector)
+
+	cfg, errs := builder.Build(context.Background())
+	if len(errs) > 0 {
+		fmt.Printf("Build errors: %v\n", errs)
+		return
+	}
+
+	var name string
+
+	_, _ = cfg.Get(config.NewKeyPath("name"), &name)
+
+	var host string
+
+	_, _ = cfg.Get(config.NewKeyPath("db/host"), &host)
+
+	var port int
+
+	_, _ = cfg.Get(config.NewKeyPath("db/port"), &port)
+
+	fmt.Printf("name: %s\n", name)
+	fmt.Printf("db.host: %s\n", host)
+	fmt.Printf("db.port: %d\n", port)
+
+	// Output:
+	// name: myapp
+	// db.host: localhost
+	// db.port: 5432
+}
