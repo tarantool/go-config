@@ -26,6 +26,9 @@ var (
 	ErrStorageValidation = errors.New("storage integrity validation failed")
 	// ErrDirectoryRead indicates that reading a directory failed.
 	ErrDirectoryRead = errors.New("directory read failed")
+	// ErrNotStruct indicates that a value expected to be a struct (or a
+	// pointer to one) was something else.
+	ErrNotStruct = errors.New("value is not a struct")
 )
 
 // FormatParseError indicates that parsing a configuration value with the
