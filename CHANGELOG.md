@@ -10,11 +10,25 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
-* `collectors.Struct` collector reads configuration directly from a Go
-  struct via reflection, honoring `config` struct tags (falling back to
-  `yaml`), the `-` skip directive, and the `omitempty` and `inline`
-  options. The helper `collectors.StructToMap` exposes the same struct →
-  `map[string]any` conversion for standalone use.
+### Changed
+
+### Fixed
+
+## [v1.3.0] - 2026-05-19
+
+This release changes how `Effective` resolves values — loader priority now
+outranks inheritance-scope depth — and adds the `collectors.Struct`
+reflection collector. It also aligns Tarantool source precedence with the
+documentation (file > storage), lazy-loads embedded schemas, and fixes
+parameter substitution in JSON Schema validation errors.
+
+### Added
+
+* `collectors.Struct` reads configuration directly from a Go struct via
+  reflection, honoring `config` struct tags (falling back to `yaml`), the
+  `-` skip directive, and the `omitempty` and `inline` options.
+  `collectors.StructToMap` exposes the same struct → `map[string]any`
+  conversion for standalone use (#63).
 
 ### Changed
 
@@ -24,12 +38,21 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   highest), so a higher-priority loader's value wins over a lower-priority
   loader's value set at a deeper inheritance scope (`global → group →
   replicaset → instance`). Previously scope depth always dominated loader
-  priority, which meant e.g. an env var routed to the global scope lost to
-  a YAML value set per instance. Single-collector configs and
-  global-scope-only keys are unaffected. This is a behavior change worth a
-  minor-version bump.
+  priority, so e.g. an env var routed to the global scope lost to a YAML
+  value set per instance. Single-collector configs and global-scope-only
+  keys are unaffected (#64).
+* Embedded Tarantool JSON Schemas are now decompressed and compiled lazily
+  on first use instead of at package init, cutting startup time and memory
+  use for callers that touch only one schema version or none (#57).
 
 ### Fixed
+
+* `tarantool.New()` now honors the documented source precedence
+  (file > storage): values from a local YAML file are no longer silently
+  overridden by centralized storage (#61).
+* JSON Schema validation errors now substitute their parameters instead of
+  showing literal `{received}`/`{expected}`/`{properties}` placeholders for
+  enum, type, and properties violations (#60).
 
 ## [v1.2.0] - 2026-05-05
 
