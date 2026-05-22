@@ -106,6 +106,29 @@ mu: 3
 	assertKeyOrder(t, got, "", []string{"zeta", "alpha", "mu", "inserted"})
 }
 
+// TestMarshal_PreservesNestedMapOrder pins that ordered YAML map entries are
+// kept even when map-valued siblings are flattened into child leaves.
+func TestMarshal_PreservesNestedMapOrder(t *testing.T) {
+	t.Parallel()
+
+	input := `scope:
+    nested:
+        leaf: 1
+    scalar: 2
+    trailing:
+        leaf: 3
+`
+
+	cfg := buildFromYAML(t, input)
+
+	out, err := cfg.MarshalYAML()
+	require.NoError(t, err)
+
+	got := buildFromYAML(t, string(out))
+
+	assertKeyOrder(t, got, "scope", []string{"nested", "scalar", "trailing"})
+}
+
 // TestMarshal_PreservesComments pins that, after a Set on one leaf, head/line/foot
 // comments on neighboring nodes survive the marshal.
 func TestMarshal_PreservesComments(t *testing.T) {

@@ -17,6 +17,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `MutableConfig.Set` now preserves map and slice values as configuration
   subtrees, and `MutableConfig.Merge` keeps YAML sequences as sequences when
   merging them into a path that does not exist yet.
+* `MarshalYAML` now preserves the relative order of map-valued siblings, which
+  was previously lost when collectors flattened nested maps to leaf paths.
 
 ## [v1.3.0] - 2026-05-19
 
