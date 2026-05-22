@@ -114,6 +114,7 @@ func scalarNodeToYAML(node *tree.Node) (*yaml.Node, error) {
 
 	if annotation.Val != nil && !mutated {
 		clone := cloneScalarYAMLNode(annotation.Val)
+		forcePlainStringQuoting(clone)
 
 		return clone, nil
 	}
@@ -140,6 +141,38 @@ func scalarNodeToYAML(node *tree.Node) (*yaml.Node, error) {
 	}
 
 	return out, nil
+}
+
+// forcePlainStringQuoting upgrades a plain (unquoted) string scalar to the
+// quoted style that go.yaml.in/yaml/v3 would itself choose when encoding the
+// same value from scratch.
+//
+// We need this only on the style-preserving path: when a source document
+// contained an unquoted token that is a string under the YAML 1.2 core schema
+// but a boolean or null under YAML 1.1 (off, on, yes, no, y, n, ~, ...), the
+// parser hands us a plain !!str scalar. Re-emitting it plain would let a YAML
+// 1.1 reader — notably Tarantool's libyaml-based config loader — interpret the
+// value as a bool/null instead of the string the rest of the pipeline already
+// treats it as. Quoting it makes the string interpretation explicit without
+// changing its value. yaml/v3's own encoder already quotes such values, so the
+// freshly-encoded (mutated) path is unaffected.
+func forcePlainStringQuoting(node *yaml.Node) {
+	if node.Kind != yaml.ScalarNode || node.Style != 0 {
+		return
+	}
+
+	if node.Tag != "" && node.Tag != yamlStringTag {
+		return
+	}
+
+	var probe yaml.Node
+	if probe.Encode(node.Value) != nil {
+		return
+	}
+
+	if probe.Style != 0 {
+		node.Style = probe.Style
+	}
 }
 
 // fillSpecialFloat fills out.Value/Tag for Inf and NaN values, which yaml.Node.Encode
