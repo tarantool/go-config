@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -588,8 +589,15 @@ func mutableValueNode(value any) *tree.Node {
 			return node
 		}
 
-		for key, childValue := range typedValue {
-			node.SetChild(key, mutableValueNode(childValue))
+		keys := make([]string, 0, len(typedValue))
+		for key := range typedValue {
+			keys = append(keys, key)
+		}
+
+		slices.Sort(keys)
+
+		for _, key := range keys {
+			node.SetChild(key, mutableValueNode(typedValue[key]))
 		}
 	case []any:
 		node.MarkArray()
