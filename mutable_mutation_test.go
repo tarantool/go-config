@@ -29,8 +29,8 @@ func TestMutableConfig_Set_YAMLRoundTrip(t *testing.T) {
 			name:  "map",
 			base:  "root:\n  existing: 1\n",
 			path:  config.NewKeyPath("root/added"),
-			value: map[string]any{"new": "val"},
-			want:  "root:\n  existing: 1\n  added:\n    new: val\n",
+			value: map[string]any{"zebra": "last", "alpha": "first"},
+			want:  "root:\n  existing: 1\n  added:\n    alpha: first\n    zebra: last\n",
 		},
 		{
 			name: "slice",

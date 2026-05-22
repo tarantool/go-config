@@ -19,6 +19,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   merging them into a path that does not exist yet.
 * `MarshalYAML` now preserves the relative order of map-valued siblings, which
   was previously lost when collectors flattened nested maps to leaf paths.
+* Map-valued mutations via `MutableConfig.Set` now emit child keys in a
+  deterministic, sorted order instead of Go's randomized map iteration order.
 
 ## [v1.3.0] - 2026-05-19
 
