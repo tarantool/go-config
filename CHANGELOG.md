@@ -21,6 +21,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   was previously lost when collectors flattened nested maps to leaf paths.
 * Map-valued mutations via `MutableConfig.Set` now emit child keys in a
   deterministic, sorted order instead of Go's randomized map iteration order.
+* `MarshalYAML` now quotes unquoted source tokens that are strings under the
+  YAML 1.2 core schema but booleans/nulls under YAML 1.1 (`off`, `on`, `yes`,
+  `no`, ...), so re-emitted documents are not misread by YAML 1.1 loaders such
+  as libyaml.
 
 ## [v1.3.0] - 2026-05-19
 

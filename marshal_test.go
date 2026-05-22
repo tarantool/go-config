@@ -193,6 +193,63 @@ literal: |
 	assert.Containsf(t, str, "literal: |", "literal block style lost:\n%s", str)
 }
 
+// TestMarshal_QuotesYAML11AmbiguousStrings pins that an unquoted source token
+// that is a string under YAML 1.2 but a bool/null under YAML 1.1 (off, on,
+// yes, ...) is re-emitted quoted, so a YAML 1.1 reader (e.g. Tarantool's
+// libyaml loader) does not reinterpret it as a bool/null. Genuinely plain
+// strings stay plain.
+func TestMarshal_QuotesYAML11AmbiguousStrings(t *testing.T) {
+	t.Parallel()
+
+	input := `failover: off
+toggle: on
+answer: yes
+denied: no
+host: localhost
+mode: manual
+count: 8080
+`
+
+	cfg := buildFromYAML(t, input)
+
+	out, err := cfg.MarshalYAML()
+	require.NoError(t, err)
+
+	str := string(out)
+
+	// Ambiguous tokens become quoted.
+	for _, want := range []string{
+		`failover: "off"`,
+		`toggle: "on"`,
+		`answer: "yes"`,
+		`denied: "no"`,
+	} {
+		assert.Containsf(t, str, want, "ambiguous token not quoted (want %q):\n%s", want, str)
+	}
+
+	// Genuine plain strings and non-string scalars are untouched.
+	assert.Regexpf(t, `(?m)^host: localhost$`, str, "plain string requoted:\n%s", str)
+	assert.Regexpf(t, `(?m)^mode: manual$`, str, "plain string requoted:\n%s", str)
+	assert.Regexpf(t, `(?m)^count: 8080$`, str, "integer requoted:\n%s", str)
+
+	// Values still round-trip as their original strings/ints.
+	got := buildFromYAML(t, str)
+
+	for path, want := range map[string]any{
+		"failover": "off",
+		"toggle":   "on",
+		"answer":   "yes",
+		"host":     "localhost",
+		"count":    int64(8080),
+	} {
+		var actual any
+
+		_, gerr := got.Get(config.NewKeyPath(path), &actual)
+		require.NoErrorf(t, gerr, "path %s missing after round-trip", path)
+		assert.Equalf(t, want, actual, "path %s", path)
+	}
+}
+
 func assertKeyOrder(t *testing.T, cfg *config.MutableConfig, path string, want []string) {
 	t.Helper()
 
