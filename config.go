@@ -551,6 +551,64 @@ func markModified(node *tree.Node) {
 	node.Revision = nextRevision(node.Revision)
 }
 
+// setMutableValue replaces composite mutation values with an equivalent node
+// subtree so maps and slices are not left as opaque leaves.
+func setMutableValue(root *tree.Node, path keypath.KeyPath, value any) *tree.Node {
+	switch value.(type) {
+	case map[string]any, []any:
+		replacement := mutableValueNode(value)
+		if len(path) == 0 {
+			return replacement
+		}
+
+		parentPath := path.Parent()
+		if len(parentPath) > 0 {
+			root.Set(parentPath, nil)
+		}
+
+		parent := root.Get(parentPath)
+		parent.SetChild(path.Leaf(), replacement)
+	default:
+		root.Set(path, value)
+	}
+
+	return root
+}
+
+// mutableValueNode builds the tree representation used by runtime composite
+// mutations. Empty composites keep their raw value so leaf reads still retain
+// the empty map or slice type.
+func mutableValueNode(value any) *tree.Node {
+	node := tree.New()
+
+	switch typedValue := value.(type) {
+	case map[string]any:
+		if len(typedValue) == 0 {
+			node.Value = typedValue
+			return node
+		}
+
+		for key, childValue := range typedValue {
+			node.SetChild(key, mutableValueNode(childValue))
+		}
+	case []any:
+		node.MarkArray()
+
+		if len(typedValue) == 0 {
+			node.Value = typedValue
+			return node
+		}
+
+		for i, childValue := range typedValue {
+			node.SetChild(strconv.Itoa(i), mutableValueNode(childValue))
+		}
+	default:
+		node.Value = value
+	}
+
+	return node
+}
+
 // Get retrieves a value at the specified path with read-lock protection.
 func (mc *MutableConfig) Get(path KeyPath, dest any) (MetaInfo, error) {
 	mc.mu.RLock()
@@ -638,7 +696,7 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 
 	oldRoot := cloneNode(mc.root)
 
-	mc.root.Set(path, value)
+	mc.root = setMutableValue(mc.root, path, value)
 
 	restoreErr := mc.validateOrRestore(oldRoot)
 	if restoreErr != nil {
@@ -652,7 +710,7 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 		mc.modified = tree.New()
 	}
 
-	mc.modified.Set(path, value)
+	mc.modified = setMutableValue(mc.modified, path, value)
 	markModified(mc.modified.Get(path))
 
 	return nil
@@ -660,8 +718,9 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 
 // mergeOp represents a pending merge operation.
 type mergeOp struct {
-	path  keypath.KeyPath
-	value any
+	path       keypath.KeyPath
+	value      any
+	arrayPaths []keypath.KeyPath
 }
 
 // materializeOps walks the other config and collects all leaf values as operations.
@@ -685,10 +744,62 @@ func materializeOps(other *Config) ([]mergeOp, error) {
 			return nil, fmt.Errorf("failed to get value at path %s: %w", path, err)
 		}
 
-		ops = append(ops, mergeOp{path: path, value: dest})
+		node := other.root.Get(path)
+		if node != nil && node.IsArray() {
+			dest = tree.ToAny(node)
+		}
+
+		ops = append(ops, mergeOp{
+			path:       path,
+			value:      dest,
+			arrayPaths: arrayPaths(other.root, path),
+		})
 	}
 
 	return ops, nil
+}
+
+// arrayPaths returns array nodes encountered from root through path. Merge
+// replays leaves into the target tree, so this preserves sequence metadata
+// when a replay creates an array path from scratch.
+func arrayPaths(root *tree.Node, path keypath.KeyPath) []keypath.KeyPath {
+	if root == nil {
+		return nil
+	}
+
+	node := root
+	current := keypath.KeyPath{}
+
+	var paths []keypath.KeyPath
+
+	if node.IsArray() {
+		paths = append(paths, current)
+	}
+
+	for _, segment := range path {
+		node = node.Child(segment)
+		if node == nil {
+			break
+		}
+
+		current = current.Append(segment)
+
+		if node.IsArray() {
+			paths = append(paths, current)
+		}
+	}
+
+	return paths
+}
+
+// markArrayPaths reapplies source sequence metadata after a leaf replay.
+func markArrayPaths(root *tree.Node, paths []keypath.KeyPath) {
+	for _, path := range paths {
+		node := root.Get(path)
+		if node != nil {
+			node.MarkArray()
+		}
+	}
 }
 
 // Merge merges two configurations so that all values from the new configuration
@@ -706,7 +817,8 @@ func (mc *MutableConfig) Merge(other *Config) error {
 	oldRoot := cloneNode(mc.root)
 
 	for _, mergeEntry := range ops {
-		mc.root.Set(mergeEntry.path, mergeEntry.value)
+		mc.root = setMutableValue(mc.root, mergeEntry.path, mergeEntry.value)
+		markArrayPaths(mc.root, mergeEntry.arrayPaths)
 	}
 
 	restoreErr := mc.validateOrRestore(oldRoot)
@@ -721,7 +833,9 @@ func (mc *MutableConfig) Merge(other *Config) error {
 
 	for _, mergeEntry := range ops {
 		markModified(mc.root.Get(mergeEntry.path))
-		mc.modified.Set(mergeEntry.path, mergeEntry.value)
+
+		mc.modified = setMutableValue(mc.modified, mergeEntry.path, mergeEntry.value)
+		markArrayPaths(mc.modified, mergeEntry.arrayPaths)
 		markModified(mc.modified.Get(mergeEntry.path))
 	}
 

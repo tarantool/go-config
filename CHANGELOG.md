@@ -14,6 +14,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* `MutableConfig.Set` now preserves map and slice values as configuration
+  subtrees, and `MutableConfig.Merge` keeps YAML sequences as sequences when
+  merging them into a path that does not exist yet.
+
 ## [v1.3.0] - 2026-05-19
 
 This release changes how `Effective` resolves values — loader priority now

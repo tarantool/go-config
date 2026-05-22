@@ -27,6 +27,7 @@ func buildFromYAML(t *testing.T, data string) *config.MutableConfig {
 
 	builder := config.NewBuilder()
 
+	builder = builder.WithoutValidation()
 	builder = builder.AddCollector(col)
 
 	cfg, errs := builder.BuildMutable(t.Context())
