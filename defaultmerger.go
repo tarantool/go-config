@@ -76,11 +76,12 @@ func (d *DefaultMerger) MergeValue(ctx MergerContext, root *tree.Node, keyPath k
 	col := ctx.Collector()
 	// Use internal mergeValue function.
 	mergeValue(root, keyPath, value, col)
-	// Record ordering if needed.
-	if col.KeepOrder() && len(keyPath) > 0 {
-		parent := keyPath.Parent()
-		child := keyPath.Leaf()
-		ctx.RecordOrdering(parent, child)
+	// Record every ancestor edge. Collectors flatten nested maps to leaves, so
+	// recording only the terminal key loses the relative order of map siblings.
+	if col.KeepOrder() {
+		for i := range keyPath {
+			ctx.RecordOrdering(keyPath[:i], keyPath[i])
+		}
 	}
 
 	return nil
