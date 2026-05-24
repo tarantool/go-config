@@ -704,7 +704,12 @@ func mergeArrayNodes(existing, source *tree.Node) {
 }
 
 // deepMergeNodes recursively merges source children into dst.
-// Source keys override dst keys for leaves; recurse for nested maps.
+// Source keys override dst keys for leaves and for arrays; recurse only
+// for nested maps. Arrays are opaque on purpose — index-merging a
+// higher-priority [a, b] with a lower-priority [x, y, z] would leak z
+// into the effective view, which surprised real Tarantool cluster
+// configs where iproto.listen at the instance scope is expected to fully
+// replace iproto.listen at the global scope.
 func deepMergeNodes(dst, source *tree.Node) {
 	for _, key := range source.ChildrenKeys() {
 		srcChild := source.Child(key)
@@ -715,8 +720,8 @@ func deepMergeNodes(dst, source *tree.Node) {
 			continue
 		}
 
-		// Both non-leaf: recurse.
-		if !dstChild.IsLeaf() && !srcChild.IsLeaf() {
+		// Both sides must be maps (not leaves, not arrays) to recurse.
+		if isMapNode(dstChild) && isMapNode(srcChild) {
 			deepMergeNodes(dstChild, srcChild)
 			continue
 		}

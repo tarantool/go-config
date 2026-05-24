@@ -174,8 +174,10 @@ func copyAnnotation(root *tree.Node, path keypath.KeyPath, src Value) {
 }
 
 // mergeTreeInto folds src into dst at the tree level.
-// Map-into-map is recursive; any other src child replaces the dst child
-// (carrying Source, Revision, Range, annotation, and isArray).
+// Map-into-map is recursive; any other src child (leaf or array) replaces
+// the dst child wholesale (carrying Source, Revision, Range, annotation,
+// and isArray). Arrays are opaque — index-merging would leak orphan
+// lower-priority indices into the result.
 // When src.OrderSet() and !dst.OrderSet() the dst children are reordered
 // to match src's key order and dst.OrderSet() is set true.
 func mergeTreeInto(dst, src *tree.Node) {
@@ -183,8 +185,8 @@ func mergeTreeInto(dst, src *tree.Node) {
 		srcChild := src.Child(key)
 		dstChild := dst.Child(key)
 
-		// Both sides are non-leaf maps → recurse.
-		if dstChild != nil && !dstChild.IsLeaf() && !srcChild.IsLeaf() {
+		// Both sides must be maps (not leaves, not arrays) to recurse.
+		if isMapNode(dstChild) && isMapNode(srcChild) {
 			// Carry ordering before recursing so children see the right dst state.
 			if srcChild.OrderSet() && !dstChild.OrderSet() {
 				_ = dstChild.ReorderChildren(srcChild.ChildrenKeys())

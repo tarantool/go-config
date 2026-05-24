@@ -649,6 +649,596 @@ func TestWithInheritance_CrossScope_ConflictingLeafHigherPriorityWins(t *testing
 	assert.Equal(t, "storage", shardingLogin)
 }
 
+// arrayReplaceCase is a single fixture for the table-driven array-opaque
+// suite below. listenLow / listenHigh become the global-scope and
+// instance-scope iproto.listen values; want is the expected result on the
+// instance's effective view.
+type arrayReplaceCase struct {
+	name       string
+	listenLow  any
+	listenHigh any
+	want       any
+}
+
+// TestWithInheritance_CrossScope_NestedArrayShapes pins that array nodes
+// nested inside a deep-merged map are always replaced wholesale by the
+// higher-priority scope, regardless of element shape (maps, scalars,
+// nested arrays, empty). No index-by-index merge ever leaks an orphan
+// lower-priority element into the effective view.
+func TestWithInheritance_CrossScope_NestedArrayShapes(t *testing.T) {
+	t.Parallel()
+
+	cases := []arrayReplaceCase{
+		{
+			name: "ArrayOfMaps_HigherShorter",
+			listenLow: []any{
+				map[string]any{"uri": "g1"},
+				map[string]any{"uri": "g2"},
+				map[string]any{"uri": "g3"},
+			},
+			listenHigh: []any{
+				map[string]any{"uri": "i1"},
+				map[string]any{"uri": "i2"},
+			},
+			want: []any{
+				map[string]any{"uri": "i1"},
+				map[string]any{"uri": "i2"},
+			},
+		},
+		{
+			name:       "ArrayOfScalars_HigherShorter",
+			listenLow:  []any{"g1", "g2", "g3"},
+			listenHigh: []any{"i1"},
+			want:       []any{"i1"},
+		},
+		{
+			name: "ArrayOfArrays",
+			listenLow: []any{
+				[]any{"g1a", "g1b"},
+				[]any{"g2a", "g2b"},
+			},
+			listenHigh: []any{
+				[]any{"i1a"},
+			},
+			want: []any{
+				[]any{"i1a"},
+			},
+		},
+		{
+			name: "HigherLongerThanLower",
+			listenLow: []any{
+				map[string]any{"uri": "g1"},
+			},
+			listenHigh: []any{
+				map[string]any{"uri": "i1"},
+				map[string]any{"uri": "i2"},
+				map[string]any{"uri": "i3"},
+			},
+			want: []any{
+				map[string]any{"uri": "i1"},
+				map[string]any{"uri": "i2"},
+				map[string]any{"uri": "i3"},
+			},
+		},
+		{
+			name:       "HigherEmptyClears",
+			listenLow:  []any{"g1", "g2"},
+			listenHigh: []any{},
+			want:       []any{},
+		},
+		{
+			name: "ArrayOfMaps_DisjointSubkeysNotMergedPerIndex",
+			listenLow: []any{
+				map[string]any{"a": 1},
+			},
+			listenHigh: []any{
+				map[string]any{"b": 2},
+			},
+			// If index-merging leaked through, this would be {a: 1, b: 2}.
+			want: []any{
+				map[string]any{"b": 2},
+			},
+		},
+	}
+
+	for _, tcase := range cases {
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			builder := config.NewBuilder()
+
+			builder = builder.AddCollector(collectors.NewMap(map[string]any{
+				"iproto": map[string]any{
+					"listen": tcase.listenLow,
+				},
+				"groups": map[string]any{
+					"storages": map[string]any{
+						"replicasets": map[string]any{
+							"s-001": map[string]any{
+								"instances": map[string]any{
+									"s-001-a": map[string]any{
+										"iproto": map[string]any{
+											"listen": tcase.listenHigh,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}).WithName("test").WithSourceType(config.FileSource))
+
+			builder = builder.WithInheritance(
+				config.Levels(config.Global, "groups", "replicasets", "instances"),
+			)
+
+			cfg, errs := builder.Build(t.Context())
+			require.Empty(t, errs)
+
+			eff, err := cfg.Effective(
+				config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+			require.NoError(t, err)
+
+			var got any
+
+			_, err = eff.Get(config.NewKeyPath("iproto/listen"), &got)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.want, got)
+		})
+	}
+}
+
+// TestWithInheritance_CrossScope_TopLevelArrayWholesaleReplace pins the
+// invariant when the array sits directly at the top level of the config
+// (not nested under a deep-merged map). The MergeReplace fallback path in
+// mergeIntoResult handles this case; the nested case goes through
+// deepMergeNodes. Both must agree.
+func TestWithInheritance_CrossScope_TopLevelArrayWholesaleReplace(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"top_list": []any{"g1", "g2", "g3"},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"top_list": []any{"i1"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var got []any
+
+	_, err = eff.Get(config.NewKeyPath("top_list"), &got)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"i1"}, got)
+}
+
+// TestWithInheritance_CrossScope_MapSiblingsPreservedWithArrayReplace
+// verifies that under the same deep-merged parent map, sibling map sub-keys
+// still deep-merge while sibling arrays still wholesale-replace. This is
+// the combined invariant — arrays opaque, maps recursive, both at the same
+// time under one parent.
+func TestWithInheritance_CrossScope_MapSiblingsPreservedWithArrayReplace(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer":     map[string]any{"login": "replicator"},
+				"sharding": map[string]any{"login": "storage"},
+			},
+			"listen": []any{
+				map[string]any{"uri": "g1"},
+				map[string]any{"uri": "g2"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"advertise": map[string]any{
+										"peer": map[string]any{"login": "replicator-instance"},
+									},
+									"listen": []any{
+										map[string]any{"uri": "i1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	// Map merge: instance wins on the conflicting leaf, sibling sub-key
+	// from global survives.
+	var peerLogin string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/advertise/peer/login"), &peerLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "replicator-instance", peerLogin)
+
+	var shardingLogin string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/advertise/sharding/login"), &shardingLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "storage", shardingLogin)
+
+	// Array replace: instance fully replaces global, no leaked global[1].
+	var listen []map[string]string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err)
+	require.Len(t, listen, 1)
+	assert.Equal(t, "i1", listen[0]["uri"])
+}
+
+// TestWithInheritance_CrossScope_ThreeLevelArrayReplace verifies the
+// invariant holds across the full Global → group → replicaset → instance
+// chain — each scope sets the same array path, and only the highest scope
+// that defines it wins (not any partial merge with intermediate scopes).
+func TestWithInheritance_CrossScope_ThreeLevelArrayReplace(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"listen": []any{"global-1", "global-2", "global-3", "global-4"},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"iproto": map[string]any{
+					"listen": []any{"group-1", "group-2", "group-3"},
+				},
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"iproto": map[string]any{
+							"listen": []any{"replicaset-1", "replicaset-2"},
+						},
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"listen": []any{"instance-1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var listen []any
+
+	_, err = eff.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"instance-1"}, listen)
+}
+
+// TestWithInheritance_CrossScope_ArrayMapTypeMismatch exercises the type
+// boundary: when one scope has an array at a path and another has a map at
+// the same path, the higher-priority scope wins wholesale (no attempt to
+// merge incompatible shapes). Runs both directions.
+func TestWithInheritance_CrossScope_ArrayMapTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ArrayLow_MapHigh", func(t *testing.T) {
+		t.Parallel()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(collectors.NewMap(map[string]any{
+			"thing": []any{"g1", "g2"},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{
+								"s-001-a": map[string]any{
+									"thing": map[string]any{"key": "value"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}).WithName("test").WithSourceType(config.FileSource))
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got map[string]string
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"key": "value"}, got)
+	})
+
+	t.Run("MapLow_ArrayHigh", func(t *testing.T) {
+		t.Parallel()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(collectors.NewMap(map[string]any{
+			"thing": map[string]any{"a": 1, "b": 2},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{
+								"s-001-a": map[string]any{
+									"thing": []any{"i1", "i2"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}).WithName("test").WithSourceType(config.FileSource))
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got []any
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, []any{"i1", "i2"}, got)
+
+		// Map sub-keys must be gone.
+		_, err = eff.Get(config.NewKeyPath("thing/a"), new(int))
+		require.Error(t, err)
+	})
+}
+
+// TestWithInheritance_CrossScope_ArrayScalarTypeMismatch verifies the
+// scalar boundary: array ↔ scalar at the same path, higher-priority wins
+// wholesale in both directions.
+func TestWithInheritance_CrossScope_ArrayScalarTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ArrayLow_ScalarHigh", func(t *testing.T) {
+		t.Parallel()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(collectors.NewMap(map[string]any{
+			"thing": []any{"g1", "g2"},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{
+								"s-001-a": map[string]any{"thing": "scalar"},
+							},
+						},
+					},
+				},
+			},
+		}).WithName("test").WithSourceType(config.FileSource))
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got string
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, "scalar", got)
+	})
+
+	t.Run("ScalarLow_ArrayHigh", func(t *testing.T) {
+		t.Parallel()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(collectors.NewMap(map[string]any{
+			"thing": "scalar",
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{
+								"s-001-a": map[string]any{"thing": []any{"i1", "i2"}},
+							},
+						},
+					},
+				},
+			},
+		}).WithName("test").WithSourceType(config.FileSource))
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got []any
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, []any{"i1", "i2"}, got)
+	})
+}
+
+// TestWithInheritance_CrossScope_ExplicitMergeAppendStillAppends verifies
+// that opt-in MergeAppend on a nested array still appends across scopes —
+// the array-opaque default does not break the explicit append strategy.
+func TestWithInheritance_CrossScope_ExplicitMergeAppendStillAppends(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"listen": []any{"g1", "g2"},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"listen": []any{"i1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("iproto/listen", config.MergeAppend),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var listen []string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"g1", "g2", "i1"}, listen)
+}
+
+// TestWithInheritance_CrossScope_ExplicitMergeReplaceMap verifies that
+// opt-in MergeReplace on a map sub-key still wholesale-replaces (i.e. the
+// MergeDeep default does not bleed into explicit MergeReplace usage).
+func TestWithInheritance_CrossScope_ExplicitMergeReplaceMap(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"admin":   map[string]any{"password": "admin-global"},
+				"monitor": map[string]any{"password": "monitor-global"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"credentials": map[string]any{
+									"users": map[string]any{
+										"replicator": map[string]any{"password": "rep-instance"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("credentials/users", config.MergeReplace),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var users map[string]any
+
+	_, err = eff.Get(config.NewKeyPath("credentials/users"), &users)
+	require.NoError(t, err)
+	require.Len(t, users, 1, "explicit MergeReplace must wholesale-replace the map")
+	assert.Contains(t, users, "replicator")
+	assert.NotContains(t, users, "admin")
+	assert.NotContains(t, users, "monitor")
+}
+
 func TestWithInheritance_ChildOverridesParent(t *testing.T) {
 	t.Parallel()
 

@@ -412,6 +412,142 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 	})
 }
 
+// TestDeepMergeNodes_ArraysAreOpaque verifies the unit-level invariant
+// that deepMergeNodes never recurses into a child when either side is an
+// array node — arrays are replaced wholesale, never index-merged. This is
+// the function-boundary safety net for the bug fixed by the array-opaque
+// commit: previously the recursion check used !IsLeaf, which let it walk
+// into array nodes' indexed children and produce hybrid arrays.
+func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
+	t.Parallel()
+
+	// arrayNode builds an array node with the given child leaf values,
+	// keyed by index ("0", "1", ...) and tagged with MarkArray so IsArray
+	// returns true.
+	arrayNode := func(values ...any) *tree.Node {
+		node := tree.New()
+		for i, v := range values {
+			child := tree.New()
+
+			child.Value = v
+
+			node.SetChild(strconv.Itoa(i), child)
+		}
+
+		node.MarkArray()
+
+		return node
+	}
+
+	t.Run("BothArrays_NestedInMap_HigherShorter", func(t *testing.T) {
+		t.Parallel()
+
+		dst := tree.New()
+		dst.SetChild("listen", arrayNode("a", "b", "c"))
+
+		src := tree.New()
+		src.SetChild("listen", arrayNode("x"))
+
+		deepMergeNodes(dst, src)
+
+		listen := dst.Child("listen")
+		require.NotNil(t, listen)
+		assert.True(t, listen.IsArray())
+		assert.Equal(t, []string{"0"}, listen.ChildrenKeys(),
+			"src array must replace dst array wholesale — no leaked dst[1], dst[2]")
+		assert.Equal(t, "x", listen.Child("0").Value)
+	})
+
+	t.Run("BothArrays_NestedInMap_HigherLonger", func(t *testing.T) {
+		t.Parallel()
+
+		dst := tree.New()
+		dst.SetChild("listen", arrayNode("a"))
+
+		src := tree.New()
+		src.SetChild("listen", arrayNode("x", "y", "z"))
+
+		deepMergeNodes(dst, src)
+
+		listen := dst.Child("listen")
+		require.NotNil(t, listen)
+		assert.True(t, listen.IsArray())
+		assert.Equal(t, []string{"0", "1", "2"}, listen.ChildrenKeys())
+		assert.Equal(t, "x", listen.Child("0").Value)
+		assert.Equal(t, "y", listen.Child("1").Value)
+		assert.Equal(t, "z", listen.Child("2").Value)
+	})
+
+	t.Run("DstArraySrcMap_AtSameKey_SrcWins", func(t *testing.T) {
+		t.Parallel()
+
+		dst := tree.New()
+		dst.SetChild("k", arrayNode("a", "b"))
+
+		srcChild := tree.New()
+		leaf := tree.New()
+
+		leaf.Value = "v"
+		srcChild.SetChild("nested", leaf)
+
+		src := tree.New()
+		src.SetChild("k", srcChild)
+
+		deepMergeNodes(dst, src)
+
+		got := dst.Child("k")
+		require.NotNil(t, got)
+		assert.False(t, got.IsArray(), "dst array must be replaced by src map")
+		assert.Equal(t, "v", got.Child("nested").Value)
+	})
+
+	t.Run("DstMapSrcArray_AtSameKey_SrcWins", func(t *testing.T) {
+		t.Parallel()
+
+		dstChild := tree.New()
+		leaf := tree.New()
+
+		leaf.Value = "v"
+		dstChild.SetChild("nested", leaf)
+
+		dst := tree.New()
+		dst.SetChild("k", dstChild)
+
+		src := tree.New()
+		src.SetChild("k", arrayNode("x", "y"))
+
+		deepMergeNodes(dst, src)
+
+		got := dst.Child("k")
+		require.NotNil(t, got)
+		assert.True(t, got.IsArray(), "dst map must be replaced by src array")
+		assert.Nil(t, got.Child("nested"),
+			"map sub-key must be gone after array replace")
+	})
+
+	t.Run("DstArraySrcLeaf_AtSameKey_SrcWins", func(t *testing.T) {
+		t.Parallel()
+
+		dst := tree.New()
+		dst.SetChild("k", arrayNode("a", "b", "c"))
+
+		srcLeaf := tree.New()
+
+		srcLeaf.Value = "scalar"
+
+		src := tree.New()
+		src.SetChild("k", srcLeaf)
+
+		deepMergeNodes(dst, src)
+
+		got := dst.Child("k")
+		require.NotNil(t, got)
+		assert.False(t, got.IsArray())
+		assert.True(t, got.IsLeaf())
+		assert.Equal(t, "scalar", got.Value)
+	})
+}
+
 func TestWalkNodes_CtxCancelled(t *testing.T) {
 	t.Parallel()
 	// Create a leaf node.
