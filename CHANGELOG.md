@@ -27,6 +27,18 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* Explicit `WithInheritMerge(key, MergeReplace)` now wholesale-replaces map
+  values consistently in both single-loader scope-chain resolution and
+  cross-loader accumulation. Previously `accumulateLayerResult` silently
+  recursed into map nodes for `MergeReplace`, contradicting the constant's
+  docstring and producing different effective views for the same explicit
+  user opt-in depending on whether the conflict came from two scopes or two
+  loaders.
+* `mergeNodeValue` (collector-side merge) now uses `isMapNode` to detect
+  maps instead of `!IsLeaf`, so an array node followed by a map value no
+  longer becomes a hybrid node carrying both the array flag and
+  string-keyed children. Replacements (scalar, slice, or a map overwriting
+  an array) also drop the `isArray` flag.
 * Default deep-merge no longer index-merges arrays nested inside merged
   maps. A higher-priority `iproto/listen: [a, b]` nested under a deep-merged
   `iproto` now fully replaces a lower-priority `iproto/listen: [x, y, z]`

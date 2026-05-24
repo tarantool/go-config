@@ -814,3 +814,31 @@ func TestNode_IsArray_LeafNode(t *testing.T) {
 	node.MarkArray()
 	assert.True(t, node.IsArray())
 }
+
+func TestNode_UnmarkArray(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+	node.MarkArray()
+	require.True(t, node.IsArray())
+
+	node.UnmarkArray()
+	assert.False(t, node.IsArray(),
+		"UnmarkArray must drop the array flag so the node is no longer treated as a sequence")
+}
+
+func TestNode_UnmarkArray_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	node := tree.New()
+	require.False(t, node.IsArray())
+
+	node.UnmarkArray()
+	assert.False(t, node.IsArray(),
+		"UnmarkArray on an already-non-array node must be a no-op")
+
+	node.MarkArray()
+	node.UnmarkArray()
+	node.UnmarkArray()
+	assert.False(t, node.IsArray())
+}

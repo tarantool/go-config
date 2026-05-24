@@ -450,26 +450,14 @@ func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *t
 }
 
 // accumulateLayerResult folds the higher-priority layer srcLayer into dst.
-// MergeAppend/MergeDeep keys use their configured strategy. MergeReplace keys
-// replace the dst value, except that two map nodes are merged recursively so a
-// loader that sets only one sub-key does not drop sibling sub-keys contributed
-// by a lower-priority loader.
+// Each key uses its configured strategy — including the implicit default,
+// which is now MergeDeep and handles the cross-loader sibling-sub-key
+// invariant uniformly. Explicit MergeReplace means wholesale replace here
+// just as it does inside a single layer's scope chain.
 func accumulateLayerResult(dst, srcLayer *tree.Node, inheritanceCfg *inheritanceConfig) {
 	for _, key := range srcLayer.ChildrenKeys() {
 		src := srcLayer.Child(key)
-		strategy, _ := inheritanceCfg.strategyFor(key)
-
-		switch strategy {
-		case MergeAppend, MergeDeep:
-			mergeIntoResultWithStrategies(dst, key, src, inheritanceCfg)
-
-		case MergeReplace:
-			if dstChild := dst.Child(key); isMapNode(dstChild) && isMapNode(src) {
-				mergeTreeInto(dstChild, src)
-			} else {
-				dst.SetChild(key, cloneNode(src))
-			}
-		}
+		mergeIntoResultWithStrategies(dst, key, src, inheritanceCfg)
 	}
 }
 

@@ -89,6 +89,12 @@ func (n *Node) MarkArray() {
 	n.isArray = true
 }
 
+// UnmarkArray clears the array flag, e.g. when a path that previously held
+// an array is being converted into a map by an overriding contribution.
+func (n *Node) UnmarkArray() {
+	n.isArray = false
+}
+
 // Children returns the child nodes in insertion order.
 func (n *Node) Children() []*Node {
 	if n.children == nil {
