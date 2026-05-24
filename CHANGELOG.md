@@ -12,6 +12,19 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* The default inheritance merge strategy is now `MergeDeep` (was
+  `MergeReplace`). A higher-priority scope or layer that sets only one
+  sub-key of a map no longer drops sibling sub-keys contributed by a
+  lower-priority scope or layer, aligning single-loader scope-chain
+  resolution with the cross-loader invariant documented on
+  `accumulateLayerResult`. Explicit `WithInheritMerge(key, MergeReplace)`
+  still means wholesale replace.
+* `WithNoInheritFrom` (and `WithNoInherit`) prefix exclusions are now
+  enforced at every depth of a scope's subtree, not just on the layer's
+  top-level keys. Nested-path exclusions like
+  `WithNoInheritFrom(Global, "credentials/users")` now actually fire under
+  the new default deep merge.
+
 ### Fixed
 
 * `MutableConfig.Set` now preserves map and slice values as configuration

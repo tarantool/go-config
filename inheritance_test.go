@@ -97,6 +97,558 @@ func TestWithInheritance_BasicInheritance(t *testing.T) {
 	assert.Equal(t, "127.0.0.1:3301", listen[0]["uri"])
 }
 
+// TestWithInheritance_CrossScope_DeeplyNestedMapMerge verifies that the
+// default deep-merge recurses arbitrarily deep into map structures: a
+// global a/b/c/d/e/{x:1} and an instance a/b/c/d/e/{y:2} both survive
+// end-to-end. The previous wholesale-replace default would have lost x.
+func TestWithInheritance_CrossScope_DeeplyNestedMapMerge(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"a": map[string]any{
+			"b": map[string]any{
+				"c": map[string]any{
+					"d": map[string]any{
+						"e": map[string]any{"x": 1},
+					},
+				},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"a": map[string]any{
+									"b": map[string]any{
+										"c": map[string]any{
+											"d": map[string]any{
+												"e": map[string]any{"y": 2},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var valX, valY int
+
+	_, err = eff.Get(config.NewKeyPath("a/b/c/d/e/x"), &valX)
+	require.NoError(t, err, "deeply nested lower-priority sub-key must survive")
+	assert.Equal(t, 1, valX)
+
+	_, err = eff.Get(config.NewKeyPath("a/b/c/d/e/y"), &valY)
+	require.NoError(t, err, "deeply nested higher-priority sub-key must be present")
+	assert.Equal(t, 2, valY)
+}
+
+// TestWithInheritance_CrossScope_FourLevelMapMerge verifies that every
+// scope in the Global → group → replicaset → instance chain can contribute
+// a disjoint leaf to the same nested map and all four survive the merge.
+// This is the scope-chain version of the existing TestLayered_CrossLoader_
+// non-conflicting test, extended to the maximum hierarchy depth.
+func TestWithInheritance_CrossScope_FourLevelMapMerge(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"failover": "election"}, // global.
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replication": map[string]any{"timeout": 30}, // group.
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"replication": map[string]any{"bootstrap_strategy": "auto"}, // replicaset.
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"replication": map[string]any{"connect_timeout": 5}, // instance.
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var failover, bootstrap string
+
+	var timeout, connect int
+
+	_, err = eff.Get(config.NewKeyPath("replication/failover"), &failover)
+	require.NoError(t, err)
+	assert.Equal(t, "election", failover, "global contribution must survive")
+
+	_, err = eff.Get(config.NewKeyPath("replication/timeout"), &timeout)
+	require.NoError(t, err)
+	assert.Equal(t, 30, timeout, "group contribution must survive")
+
+	_, err = eff.Get(config.NewKeyPath("replication/bootstrap_strategy"), &bootstrap)
+	require.NoError(t, err)
+	assert.Equal(t, "auto", bootstrap, "replicaset contribution must survive")
+
+	_, err = eff.Get(config.NewKeyPath("replication/connect_timeout"), &connect)
+	require.NoError(t, err)
+	assert.Equal(t, 5, connect, "instance contribution must survive")
+}
+
+// TestWithInheritance_CrossScope_MultiLevelConflictPriority verifies that
+// when multiple scopes set the same leaf path, the highest-priority scope
+// that sets it wins — not just the leaf scope (the instance may not
+// override it). With a global=1, group=2, replicaset=3, instance-unset
+// chain, the effective value must be 3.
+func TestWithInheritance_CrossScope_MultiLevelConflictPriority(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"replication": map[string]any{"timeout": 1}, // global.
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replication": map[string]any{"timeout": 2}, // group.
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"replication": map[string]any{"timeout": 3}, // replicaset.
+						"instances": map[string]any{
+							"s-001-a": map[string]any{}, // instance has no replication.
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var timeout int
+
+	_, err = eff.Get(config.NewKeyPath("replication/timeout"), &timeout)
+	require.NoError(t, err)
+	assert.Equal(t, 3, timeout, "highest-priority defined scope must win")
+}
+
+// TestWithInheritance_CrossScope_DefaultMatchesExplicitMergeDeep is a
+// sanity check that the new default strategy is wired exactly to
+// MergeDeep. Two builders with the same input — one relying on the default,
+// one declaring WithInheritMerge("iproto", MergeDeep) — must produce
+// identical effective views.
+func TestWithInheritance_CrossScope_DefaultMatchesExplicitMergeDeep(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{"peer": map[string]any{"login": "replicator"}},
+			"listen":    map[string]any{"params": map[string]any{"transport": "plain"}},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"listen": map[string]any{"uri": "127.0.0.1:3301"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	build := func(explicit bool) config.Config {
+		t.Helper()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(
+			collectors.NewMap(data).WithName("test").WithSourceType(config.FileSource),
+		)
+		if explicit {
+			builder = builder.WithInheritance(
+				config.Levels(config.Global, "groups", "replicasets", "instances"),
+				config.WithInheritMerge("iproto", config.MergeDeep),
+			)
+		} else {
+			builder = builder.WithInheritance(
+				config.Levels(config.Global, "groups", "replicasets", "instances"),
+			)
+		}
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		return cfg
+	}
+
+	for _, label := range []string{"default", "explicit"} {
+		cfg := build(label == "explicit")
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err, label)
+
+		var login string
+
+		_, err = eff.Get(config.NewKeyPath("iproto/advertise/peer/login"), &login)
+		require.NoError(t, err, label)
+		assert.Equal(t, "replicator", login, label)
+
+		var transport string
+
+		_, err = eff.Get(config.NewKeyPath("iproto/listen/params/transport"), &transport)
+		require.NoError(t, err, label)
+		assert.Equal(t, "plain", transport, label)
+
+		var uri string
+
+		_, err = eff.Get(config.NewKeyPath("iproto/listen/uri"), &uri)
+		require.NoError(t, err, label)
+		assert.Equal(t, "127.0.0.1:3301", uri, label)
+	}
+}
+
+// TestWithInheritance_NoInheritFrom_DeepPathPruning extends the prefix-
+// matching test with several deeper-path variants now that exclusions are
+// enforced at every depth (not just top-level iteration keys). Each
+// sub-case configures a different excluded prefix and verifies that the
+// pruned path is gone while siblings survive.
+func TestWithInheritance_NoInheritFrom_DeepPathPruning(t *testing.T) {
+	t.Parallel()
+
+	mkCfg := func(t *testing.T, excluded string) config.Config {
+		t.Helper()
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(collectors.NewMap(map[string]any{
+			"credentials": map[string]any{
+				"users": map[string]any{
+					"admin": map[string]any{
+						"password": "global-admin-pass",
+						"roles":    []any{"super"},
+					},
+					"monitor": map[string]any{
+						"password": "global-monitor-pass",
+					},
+				},
+				"settings": map[string]any{
+					"timeout": 30,
+				},
+			},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{
+								"s-001-a": map[string]any{},
+							},
+						},
+					},
+				},
+			},
+		}).WithName("test").WithSourceType(config.FileSource))
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+			config.WithNoInheritFrom(config.Global, excluded),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		return cfg
+	}
+
+	t.Run("ExcludeSpecificUser", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := mkCfg(t, "credentials/users/admin")
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		// admin pruned away.
+		_, err = eff.Get(config.NewKeyPath("credentials/users/admin/password"), new(string))
+		require.Error(t, err, "excluded sub-tree must be pruned")
+
+		// monitor (sibling under credentials/users) and settings (sibling
+		// under credentials) survive.
+		var monitorPass string
+
+		_, err = eff.Get(config.NewKeyPath("credentials/users/monitor/password"), &monitorPass)
+		require.NoError(t, err)
+		assert.Equal(t, "global-monitor-pass", monitorPass)
+
+		var timeout int
+
+		_, err = eff.Get(config.NewKeyPath("credentials/settings/timeout"), &timeout)
+		require.NoError(t, err)
+		assert.Equal(t, 30, timeout)
+	})
+
+	t.Run("ExcludeLeafFieldOnly", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := mkCfg(t, "credentials/users/admin/roles")
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		// roles pruned, password survives (same admin map).
+		_, err = eff.Get(config.NewKeyPath("credentials/users/admin/roles"), new([]string))
+		require.Error(t, err)
+
+		var pass string
+
+		_, err = eff.Get(config.NewKeyPath("credentials/users/admin/password"), &pass)
+		require.NoError(t, err)
+		assert.Equal(t, "global-admin-pass", pass)
+	})
+
+	t.Run("ExcludeWholeTopLevelKey", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := mkCfg(t, "credentials")
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		// Entire credentials subtree from global is pruned.
+		_, err = eff.Get(config.NewKeyPath("credentials/users/admin/password"), new(string))
+		require.Error(t, err)
+
+		_, err = eff.Get(config.NewKeyPath("credentials/settings/timeout"), new(int))
+		require.Error(t, err)
+	})
+}
+
+// TestWithInheritance_CrossScope_DeepNoInheritStillFires verifies that
+// WithNoInherit (universal exclusion) also applies at every depth via the
+// new pruning path — not just on top-level layer iteration. The excluded
+// sub-tree must vanish from every non-leaf scope while the leaf (instance)
+// can still set the same path for itself.
+func TestWithInheritance_CrossScope_DeepNoInheritStillFires(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer": map[string]any{"login": "global-login"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"iproto": map[string]any{
+					"advertise": map[string]any{
+						"peer": map[string]any{"login": "group-login"},
+					},
+				},
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"advertise": map[string]any{
+										"peer": map[string]any{"login": "instance-login"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithNoInherit("iproto/advertise/peer"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	// Instance's own value (leaf scope) is preserved per the leaf-scope
+	// carve-out.
+	var login string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/advertise/peer/login"), &login)
+	require.NoError(t, err)
+	assert.Equal(t, "instance-login", login)
+}
+
+// TestWithInheritance_CrossScope_NonConflictingSubkeysCoexist is the
+// scope-chain analogue of TestLayered_CrossLoader_NonConflictingSubkeysCoexist:
+// when a single loader sets disjoint sub-keys of the same top-level map at
+// different scopes (e.g. instance sets iproto/listen while global sets
+// iproto/advertise/peer/login), both must survive in the effective view. The
+// higher-priority scope's bare presence of "iproto" must not wipe out the
+// lower-priority scope's sibling sub-keys.
+func TestWithInheritance_CrossScope_NonConflictingSubkeysCoexist(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer": map[string]any{"login": "replicator"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"listen": []any{
+										map[string]any{"uri": "127.0.0.1:3301"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	instanceCfg, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var login string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("iproto/advertise/peer/login"), &login)
+	require.NoError(t, err, "lower-priority scope sub-key must survive")
+	assert.Equal(t, "replicator", login)
+
+	var listen []map[string]string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err, "higher-priority scope sub-key must be present")
+	require.Len(t, listen, 1)
+	assert.Equal(t, "127.0.0.1:3301", listen[0]["uri"])
+}
+
+// TestWithInheritance_CrossScope_ConflictingLeafHigherPriorityWins is the
+// scope-chain analogue of
+// TestLayered_CrossLoader_ConflictingSubkeyHigherPriorityWins: when both a
+// parent and a child scope set the same leaf, the child scope wins, while
+// non-conflicting sibling sub-keys from the parent scope still coexist in
+// the effective view.
+func TestWithInheritance_CrossScope_ConflictingLeafHigherPriorityWins(t *testing.T) {
+	t.Parallel()
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer":     map[string]any{"login": "replicator"},
+				"sharding": map[string]any{"login": "storage"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{
+							"s-001-a": map[string]any{
+								"iproto": map[string]any{
+									"advertise": map[string]any{
+										"peer": map[string]any{"login": "replicator-instance"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}).WithName("test").WithSourceType(config.FileSource))
+
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	instanceCfg, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var peerLogin string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("iproto/advertise/peer/login"), &peerLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "replicator-instance", peerLogin, "instance scope wins on conflict")
+
+	var shardingLogin string
+
+	_, err = instanceCfg.Get(config.NewKeyPath("iproto/advertise/sharding/login"), &shardingLogin)
+	require.NoError(t, err, "non-conflicting sibling from global scope must survive")
+	assert.Equal(t, "storage", shardingLogin)
+}
+
 func TestWithInheritance_ChildOverridesParent(t *testing.T) {
 	t.Parallel()
 
@@ -934,10 +1486,13 @@ func TestWithInheritance_NoInheritFrom_PrefixMatching(t *testing.T) {
 		},
 	}).WithName("test").WithSourceType(config.FileSource))
 
-	// Exclude credentials.users at global level (prefix matching).
+	// Exclude credentials/users at global level (prefix matching). Keys are
+	// "/"-separated; the previous "credentials.users" form silently matched
+	// nothing and only "worked" because the default merge strategy used to
+	// wholesale-replace credentials at the group scope.
 	builder = builder.WithInheritance(
 		config.Levels(config.Global, "groups", "replicasets", "instances"),
-		config.WithNoInheritFrom(config.Global, "credentials.users"),
+		config.WithNoInheritFrom(config.Global, "credentials/users"),
 	)
 
 	cfg, errs := builder.Build(t.Context())
