@@ -505,3 +505,235 @@ func TestLayered_MultiCollector_CountsAsOneLayer(t *testing.T) {
 		"higher-priority top-level collector must beat the whole MultiCollector layer")
 	assert.Equal(t, "top", m.Source.Name)
 }
+
+// ---------------------------------------------------------------------------
+// Cross-loader: arrays are opaque to map-merge (mergeTreeInto path)
+// ---------------------------------------------------------------------------.
+
+// TestLayered_CrossLoader_NestedArrayWholesaleReplace is the cross-loader
+// twin of TestWithInheritance_CrossScope_NestedArrayShapes: arrays nested
+// inside a deep-merged map must be replaced wholesale by the higher-priority
+// loader, with no index-by-index merge that would leak orphan elements.
+func TestLayered_CrossLoader_NestedArrayWholesaleReplace(t *testing.T) {
+	t.Parallel()
+
+	fileLoader := collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"listen": []any{
+				map[string]any{"uri": "file-1"},
+				map[string]any{"uri": "file-2"},
+				map[string]any{"uri": "file-3"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{"s-001-a": map[string]any{}},
+					},
+				},
+			},
+		},
+	}).WithName("file").WithSourceType(config.FileSource)
+
+	envLoader := collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"listen": []any{
+				map[string]any{"uri": "env-1"},
+			},
+		},
+	}).WithName("env").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(fileLoader) // lower priority.
+	builder = builder.AddCollector(envLoader)  // higher priority.
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var listen []map[string]string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err)
+	require.Len(t, listen, 1, "env loader's iproto.listen must replace file loader's wholesale")
+	assert.Equal(t, "env-1", listen[0]["uri"])
+}
+
+// TestLayered_CrossLoader_MapSiblingsPreservedWithArrayReplace verifies the
+// combined invariant for cross-loader merging: sibling map sub-keys still
+// deep-merge across loaders while sibling arrays still wholesale-replace.
+func TestLayered_CrossLoader_MapSiblingsPreservedWithArrayReplace(t *testing.T) {
+	t.Parallel()
+
+	fileLoader := collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer":     map[string]any{"login": "replicator"},
+				"sharding": map[string]any{"login": "storage"},
+			},
+			"listen": []any{
+				map[string]any{"uri": "file-1"},
+				map[string]any{"uri": "file-2"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{"s-001-a": map[string]any{}},
+					},
+				},
+			},
+		},
+	}).WithName("file").WithSourceType(config.FileSource)
+
+	envLoader := collectors.NewMap(map[string]any{
+		"iproto": map[string]any{
+			"advertise": map[string]any{
+				"peer": map[string]any{"login": "replicator-env"},
+			},
+			"listen": []any{
+				map[string]any{"uri": "env-1"},
+			},
+		},
+	}).WithName("env").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(fileLoader)
+	builder = builder.AddCollector(envLoader)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	// Map merge: env wins on the conflicting leaf, sibling sub-key from
+	// file loader survives.
+	var peerLogin string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/advertise/peer/login"), &peerLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "replicator-env", peerLogin)
+
+	var shardingLogin string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/advertise/sharding/login"), &shardingLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "storage", shardingLogin)
+
+	// Array replace: env fully replaces file, no leaked file[1].
+	var listen []map[string]string
+
+	_, err = eff.Get(config.NewKeyPath("iproto/listen"), &listen)
+	require.NoError(t, err)
+	require.Len(t, listen, 1)
+	assert.Equal(t, "env-1", listen[0]["uri"])
+}
+
+// TestLayered_CrossLoader_ArrayMapTypeMismatch exercises the type-boundary
+// invariant across loaders: when one loader has an array and another has
+// a map at the same path, the higher-priority loader wins wholesale.
+func TestLayered_CrossLoader_ArrayMapTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ArrayLow_MapHigh", func(t *testing.T) {
+		t.Parallel()
+
+		fileLoader := collectors.NewMap(map[string]any{
+			"thing": []any{"f1", "f2"},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{"s-001-a": map[string]any{}},
+						},
+					},
+				},
+			},
+		}).WithName("file").WithSourceType(config.FileSource)
+
+		envLoader := collectors.NewMap(map[string]any{
+			"thing": map[string]any{"key": "value"},
+		}).WithName("env").WithSourceType(config.EnvSource)
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(fileLoader)
+		builder = builder.AddCollector(envLoader)
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got map[string]string
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"key": "value"}, got)
+	})
+
+	t.Run("MapLow_ArrayHigh", func(t *testing.T) {
+		t.Parallel()
+
+		fileLoader := collectors.NewMap(map[string]any{
+			"thing": map[string]any{"a": 1, "b": 2},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{"s-001-a": map[string]any{}},
+						},
+					},
+				},
+			},
+		}).WithName("file").WithSourceType(config.FileSource)
+
+		envLoader := collectors.NewMap(map[string]any{
+			"thing": []any{"e1", "e2"},
+		}).WithName("env").WithSourceType(config.EnvSource)
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(fileLoader)
+		builder = builder.AddCollector(envLoader)
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got []any
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, []any{"e1", "e2"}, got)
+
+		_, err = eff.Get(config.NewKeyPath("thing/a"), new(int))
+		require.Error(t, err)
+	})
+}

@@ -27,6 +27,12 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* Default deep-merge no longer index-merges arrays nested inside merged
+  maps. A higher-priority `iproto/listen: [a, b]` nested under a deep-merged
+  `iproto` now fully replaces a lower-priority `iproto/listen: [x, y, z]`
+  instead of leaking the orphan `z` into the effective view. Both
+  `deepMergeNodes` (inheritance) and `mergeTreeInto` (cross-loader) gate on
+  `isMapNode` instead of `!IsLeaf` so arrays stay opaque.
 * `MutableConfig.Set` now preserves map and slice values as configuration
   subtrees, and `MutableConfig.Merge` keeps YAML sequences as sequences when
   merging them into a path that does not exist yet.
