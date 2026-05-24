@@ -18,8 +18,10 @@ const segmentsPerLevel = 2
 type InheritMergeStrategy int
 
 const (
-	// MergeReplace replaces the value from the parent with the child's value.
-	// This is the default strategy for all keys.
+	// MergeReplace replaces the value from the parent with the child's value
+	// wholesale, even for map nodes. Use this when you explicitly want a
+	// higher-priority scope's map to drop sibling sub-keys contributed by a
+	// lower-priority scope. Opt-in only; the default strategy is MergeDeep.
 	MergeReplace InheritMergeStrategy = iota
 	// MergeAppend appends child slice elements to the parent's slice.
 	// If the value is not a slice, behaves like MergeReplace.
@@ -27,6 +29,7 @@ const (
 	// MergeDeep recursively merges maps from parent and child.
 	// Child keys override parent keys; parent-only keys are preserved.
 	// If the value is not a map, behaves like MergeReplace.
+	// This is the default strategy for all keys.
 	MergeDeep
 )
 
@@ -116,11 +119,12 @@ func WithNoInherit(keys ...string) InheritanceOption {
 //
 // Example:
 //
-//	WithNoInheritFrom(config.Global, "snapshot.dir")
+//	WithNoInheritFrom(config.Global, "snapshot/dir")
 //
-// means snapshot.dir set at the global level does not flow into
-// group/replicaset/instance levels. But snapshot.dir set at the group
-// level DOES flow into replicaset/instance levels.
+// means snapshot/dir set at the global level does not flow into
+// group/replicaset/instance levels. But snapshot/dir set at the group
+// level DOES flow into replicaset/instance levels. Keys are split on "/" —
+// dot-separated segments are treated as literal single-segment names.
 func WithNoInheritFrom(level string, keys ...string) InheritanceOption {
 	return func(inheritanceCfg *inheritanceConfig) {
 		// Find level index.
@@ -312,7 +316,12 @@ func (inheritanceCfg *inheritanceConfig) shouldInherit(levelIdx int, key keypath
 
 // strategyFor returns the merge strategy for a key and whether it was
 // explicitly registered. When explicit is false, the returned strategy
-// is the default (MergeReplace).
+// is the default (MergeDeep): scopes of a single loader, and layers across
+// loaders, recursively merge map nodes — so a higher-priority scope/layer
+// that sets only one sub-key does not drop sibling sub-keys contributed by
+// a lower-priority one. Leaves still follow higher-priority-wins. Users who
+// want a top-level map to be replaced wholesale must opt in explicitly via
+// WithInheritMerge(key, MergeReplace).
 func (inheritanceCfg *inheritanceConfig) strategyFor(key string) (InheritMergeStrategy, bool) {
 	if inheritanceCfg.mergeStrategies != nil {
 		if strategy, ok := inheritanceCfg.mergeStrategies[key]; ok {
@@ -320,7 +329,7 @@ func (inheritanceCfg *inheritanceConfig) strategyFor(key string) (InheritMergeSt
 		}
 	}
 
-	return MergeReplace, false
+	return MergeDeep, false
 }
 
 // hasSubStrategies checks if any merge strategy is registered for a sub-path
@@ -351,33 +360,42 @@ func foldScopeChainInto(
 	inheritanceCfg *inheritanceConfig,
 	suppressedByLevel map[int][]keypath.KeyPath,
 ) {
+	leafIdx := len(scopeChain) - 1
+
 	for levelIdx, layer := range scopeChain {
 		if layer == nil {
 			continue
 		}
 
-		// Apply per-level pruning (tombstone suppression) if requested.
+		// Collect prefixes to prune from this layer before folding:
+		//   - tombstones (suppressedByLevel) at every level,
+		//   - WithNoInherit / WithNoInheritFrom exclusions at non-leaf
+		//     levels — the leaf scope always carries its own values.
+		// Pruning (rather than shallow per-iteration filtering) is what makes
+		// nested-path exclusions like WithNoInheritFrom(Global, "a/b/c") fire
+		// once the default merge recurses into sub-trees.
+		var prunes []keypath.KeyPath
+
 		if len(suppressedByLevel[levelIdx]) > 0 {
+			prunes = append(prunes, suppressedByLevel[levelIdx]...)
+		}
+
+		if levelIdx < leafIdx {
+			prunes = append(prunes, inheritanceCfg.noInherit...)
+			prunes = append(prunes, inheritanceCfg.noInheritFrom[levelIdx]...)
+		}
+
+		if len(prunes) > 0 {
 			layer = cloneNode(layer)
-			for _, kp := range suppressedByLevel[levelIdx] {
+			for _, kp := range prunes {
 				pruneTreePath(layer, kp)
 			}
 		}
 
 		for _, key := range layer.ChildrenKeys() {
-			keyPath := keypath.NewKeyPath(key)
-
 			// Skip structural keys (groups, replicasets, instances, …).
 			if isStructuralKey(inheritanceCfg, key) {
 				continue
-			}
-
-			// Apply exclusion rules.
-			if !inheritanceCfg.shouldInherit(levelIdx, keyPath) {
-				// Only include at the LEAF level (last entry in the chain).
-				if levelIdx < len(scopeChain)-1 {
-					continue
-				}
 			}
 
 			child := layer.Child(key)
