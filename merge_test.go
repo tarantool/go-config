@@ -381,3 +381,123 @@ func (v *multiErrorValue) Meta() meta.Info {
 		Revision: "",
 	}
 }
+
+// TestMergeCollector_ArrayToMapConversion pins the array-aware branch of
+// mergeNodeValue. Collector A builds an array node at `things` (numeric
+// segments turn it into a real array node with isArray=true). Collector B
+// then writes a map at the same `things` path. The result must be a clean
+// map node — no leftover indexed children and no isArray flag — not the
+// hybrid node that the older `!IsLeaf()` map-detection would produce.
+func TestMergeCollector_ArrayToMapConversion(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+
+	col1 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things/0"), "a").
+		WithEntry(config.NewKeyPath("things/1"), "b").
+		WithName("first")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
+
+	thingsNode := root.Get(config.NewKeyPath("things"))
+	require.NotNil(t, thingsNode)
+	require.True(t, thingsNode.IsArray(), "sanity: should be an array node after numeric-key build")
+
+	col2 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things"), map[string]any{
+			"port": 9090,
+			"host": "localhost",
+		}).
+		WithName("second")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
+
+	thingsNode = root.Get(config.NewKeyPath("things"))
+	require.NotNil(t, thingsNode)
+	assert.False(t, thingsNode.IsArray(),
+		"node converted from array to map must drop isArray flag")
+	assert.False(t, thingsNode.IsLeaf())
+	assert.Nil(t, thingsNode.Value)
+
+	keys := thingsNode.ChildrenKeys()
+	assert.ElementsMatch(t, []string{"port", "host"}, keys,
+		"only the new map keys should remain — no leaked array indices")
+
+	portNode := thingsNode.Child("port")
+	require.NotNil(t, portNode)
+	assert.Equal(t, 9090, portNode.Value)
+
+	hostNode := thingsNode.Child("host")
+	require.NotNil(t, hostNode)
+	assert.Equal(t, "localhost", hostNode.Value)
+
+	// ToAny should reflect a pure map.
+	raw := tree.ToAny(thingsNode)
+	assert.Equal(t, map[string]any{
+		"port": 9090,
+		"host": "localhost",
+	}, raw)
+}
+
+// TestMergeCollector_ArrayToScalarConversion checks the same boundary for
+// the leaf-replace branch: array → scalar must clear isArray and indexed
+// children, leaving a pure leaf node.
+func TestMergeCollector_ArrayToScalarConversion(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+
+	col1 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things/0"), "a").
+		WithEntry(config.NewKeyPath("things/1"), "b").
+		WithName("first")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
+
+	require.True(t, root.Get(config.NewKeyPath("things")).IsArray())
+
+	col2 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things"), "scalar").
+		WithName("second")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
+
+	thingsNode := root.Get(config.NewKeyPath("things"))
+	require.NotNil(t, thingsNode)
+	assert.True(t, thingsNode.IsLeaf())
+	assert.False(t, thingsNode.IsArray())
+	assert.Equal(t, "scalar", thingsNode.Value)
+	assert.Empty(t, thingsNode.ChildrenKeys())
+}
+
+// TestMergeCollector_MapToArrayConversion verifies the symmetric direction:
+// a map node followed by an array value (a slice leaf) wholesale-replaces
+// into a leaf with the slice as its Value (mirrors TestMergeCollector_
+// SliceReplacement but starting from a real map node, not a slice leaf).
+func TestMergeCollector_MapToArrayConversion(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+
+	col1 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things"), map[string]any{
+			"port": 9090,
+			"host": "localhost",
+		}).
+		WithName("first")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col1))
+
+	thingsNode := root.Get(config.NewKeyPath("things"))
+	require.False(t, thingsNode.IsLeaf())
+	require.False(t, thingsNode.IsArray())
+
+	col2 := collectors.NewMock().
+		WithEntry(config.NewKeyPath("things"), []string{"x", "y", "z"}).
+		WithName("second")
+	require.NoError(t, config.MergeCollector(t.Context(), root, col2))
+
+	thingsNode = root.Get(config.NewKeyPath("things"))
+	require.NotNil(t, thingsNode)
+	assert.True(t, thingsNode.IsLeaf(), "slice values land on the leaf branch")
+	assert.False(t, thingsNode.IsArray())
+	assert.Equal(t, []string{"x", "y", "z"}, thingsNode.Value)
+	assert.Empty(t, thingsNode.ChildrenKeys(),
+		"all prior map children must be cleared")
+}

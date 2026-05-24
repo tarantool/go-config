@@ -125,24 +125,29 @@ func mergeNodeValue(node *tree.Node, value any, col Collector) {
 	//
 	// Slices are always replaced completely (no element‑wise merging).
 	// Primitives are replaced.
+	// Array nodes are treated as opaque (replaced wholesale) — they are not
+	// maps even though they are non-leaf.
 	m, newIsMap := value.(map[string]any)
-	currentIsMap := !node.IsLeaf()
+	currentIsMap := isMapNode(node)
 
 	if newIsMap {
 		if currentIsMap {
 			// Recursive map merging.
 			mergeMapIntoNode(node, m, col)
 		} else {
-			// Convert leaf to map: clear leaf value, then merge map into children.
+			// Convert leaf or array to map: clear value, drop array flag,
+			// drop existing children, then merge the map into a clean slate.
 			node.ClearChildren()
+			node.UnmarkArray()
 
 			node.Value = nil
 			mergeMapIntoNode(node, m, col)
 		}
 	} else {
 		// Replacement (primitive, slice, or map overwriting non‑map).
-		// Clear children and reset order flag.
+		// Clear children, drop array flag, reset order flag.
 		node.ClearChildren()
+		node.UnmarkArray()
 
 		node.Value = value
 	}

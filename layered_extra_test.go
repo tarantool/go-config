@@ -737,3 +737,332 @@ func TestLayered_CrossLoader_ArrayMapTypeMismatch(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Cross-loader: explicit MergeReplace means wholesale replace, both axes
+// ---------------------------------------------------------------------------.
+
+// TestLayered_CrossLoader_ExplicitMergeReplaceMap_WholesaleReplaces verifies
+// that a user who explicitly opts into MergeReplace for a map key gets
+// wholesale replace across loaders — exactly as they would within a single
+// loader's scope chain. The previous accumulateLayerResult special-case
+// silently recursed map merges for MergeReplace, contradicting both the
+// constant's docstring and the matching scope-chain test
+// TestWithInheritance_CrossScope_ExplicitMergeReplaceMap.
+func TestLayered_CrossLoader_ExplicitMergeReplaceMap_WholesaleReplaces(t *testing.T) {
+	t.Parallel()
+
+	fileLoader := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"admin":   map[string]any{"password": "admin-file"},
+				"monitor": map[string]any{"password": "monitor-file"},
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{"s-001-a": map[string]any{}},
+					},
+				},
+			},
+		},
+	}).WithName("file").WithSourceType(config.FileSource)
+
+	envLoader := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"replicator": map[string]any{"password": "rep-env"},
+			},
+		},
+	}).WithName("env").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(fileLoader) // lower priority.
+	builder = builder.AddCollector(envLoader)  // higher priority.
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("credentials/users", config.MergeReplace),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	var users map[string]any
+
+	_, err = eff.Get(config.NewKeyPath("credentials/users"), &users)
+	require.NoError(t, err)
+	require.Len(t, users, 1,
+		"explicit cross-loader MergeReplace must wholesale-replace the map, not recurse")
+	assert.Contains(t, users, "replicator")
+	assert.NotContains(t, users, "admin")
+	assert.NotContains(t, users, "monitor")
+}
+
+// TestLayered_CrossLoader_ExplicitMergeReplaceMatchesScopeChain pins the
+// stronger invariant: the same explicit MergeReplace strategy produces an
+// identical effective view whether the conflicting maps come from two
+// scopes of one loader or two separate loaders. Catches regressions where
+// the two paths drift apart again.
+func TestLayered_CrossLoader_ExplicitMergeReplaceMatchesScopeChain(t *testing.T) {
+	t.Parallel()
+
+	build := func(crossLoader bool) config.Config {
+		t.Helper()
+
+		lowVal := map[string]any{
+			"users": map[string]any{
+				"admin":   map[string]any{"password": "admin-low"},
+				"monitor": map[string]any{"password": "monitor-low"},
+			},
+		}
+		highVal := map[string]any{
+			"users": map[string]any{
+				"replicator": map[string]any{"password": "rep-high"},
+			},
+		}
+
+		builder := config.NewBuilder()
+
+		if crossLoader {
+			builder = builder.AddCollector(collectors.NewMap(map[string]any{
+				"credentials": lowVal,
+				"groups": map[string]any{
+					"storages": map[string]any{
+						"replicasets": map[string]any{
+							"s-001": map[string]any{
+								"instances": map[string]any{"s-001-a": map[string]any{}},
+							},
+						},
+					},
+				},
+			}).WithName("low").WithSourceType(config.FileSource))
+			builder = builder.AddCollector(collectors.NewMap(map[string]any{
+				"credentials": highVal,
+			}).WithName("high").WithSourceType(config.EnvSource))
+		} else {
+			builder = builder.AddCollector(collectors.NewMap(map[string]any{
+				"credentials": lowVal,
+				"groups": map[string]any{
+					"storages": map[string]any{
+						"replicasets": map[string]any{
+							"s-001": map[string]any{
+								"instances": map[string]any{
+									"s-001-a": map[string]any{
+										"credentials": highVal,
+									},
+								},
+							},
+						},
+					},
+				},
+			}).WithName("only").WithSourceType(config.FileSource))
+		}
+
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+			config.WithInheritMerge("credentials/users", config.MergeReplace),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		return cfg
+	}
+
+	for _, label := range []string{"single-loader-scope-chain", "cross-loader"} {
+		cfg := build(label == "cross-loader")
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err, label)
+
+		var users map[string]any
+
+		_, err = eff.Get(config.NewKeyPath("credentials/users"), &users)
+		require.NoError(t, err, label)
+		require.Len(t, users, 1, label)
+		assert.Contains(t, users, "replicator", label)
+		assert.NotContains(t, users, "admin", label)
+	}
+}
+
+// TestLayered_CrossLoader_ExplicitReplaceLeavesDefaultsAlone verifies that
+// using explicit MergeReplace on one specific key path does not bleed into
+// sibling keys — those still use the default deep-merge across loaders.
+// Catches a regression where removing the cross-loader MergeReplace
+// special-case might accidentally degrade default behavior elsewhere.
+func TestLayered_CrossLoader_ExplicitReplaceLeavesDefaultsAlone(t *testing.T) {
+	t.Parallel()
+
+	fileLoader := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"admin": map[string]any{"password": "admin-file"},
+			},
+			"settings": map[string]any{
+				"timeout": 30,
+				"retries": 3,
+			},
+		},
+		"groups": map[string]any{
+			"storages": map[string]any{
+				"replicasets": map[string]any{
+					"s-001": map[string]any{
+						"instances": map[string]any{"s-001-a": map[string]any{}},
+					},
+				},
+			},
+		},
+	}).WithName("file").WithSourceType(config.FileSource)
+
+	envLoader := collectors.NewMap(map[string]any{
+		"credentials": map[string]any{
+			"users": map[string]any{
+				"replicator": map[string]any{"password": "rep-env"},
+			},
+			"settings": map[string]any{
+				"timeout": 60,
+			},
+		},
+	}).WithName("env").WithSourceType(config.EnvSource)
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(fileLoader)
+	builder = builder.AddCollector(envLoader)
+	builder = builder.WithInheritance(
+		config.Levels(config.Global, "groups", "replicasets", "instances"),
+		config.WithInheritMerge("credentials/users", config.MergeReplace),
+	)
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	eff, err := cfg.Effective(
+		config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+	require.NoError(t, err)
+
+	// credentials/users — explicit MergeReplace: only env's contribution.
+	var users map[string]any
+
+	_, err = eff.Get(config.NewKeyPath("credentials/users"), &users)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	assert.Contains(t, users, "replicator")
+	assert.NotContains(t, users, "admin")
+
+	// credentials/settings — default (MergeDeep): both timeout (env override)
+	// and retries (file only) must survive.
+	var timeout, retries int
+
+	_, err = eff.Get(config.NewKeyPath("credentials/settings/timeout"), &timeout)
+	require.NoError(t, err)
+	assert.Equal(t, 60, timeout, "env wins on conflict for default-strategy leaf")
+
+	_, err = eff.Get(config.NewKeyPath("credentials/settings/retries"), &retries)
+	require.NoError(t, err, "file's retries sibling must survive default deep merge")
+	assert.Equal(t, 3, retries)
+}
+
+// TestLayered_CrossLoader_ExplicitMergeReplaceTypeMismatch exercises the
+// explicit-MergeReplace path with incompatible shapes (map ↔ array, map ↔
+// scalar) across loaders. The higher-priority loader always wins
+// wholesale, with no attempt to merge incompatible nodes.
+func TestLayered_CrossLoader_ExplicitMergeReplaceTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("MapLow_ArrayHigh", func(t *testing.T) {
+		t.Parallel()
+
+		fileLoader := collectors.NewMap(map[string]any{
+			"thing": map[string]any{"a": 1, "b": 2},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{"s-001-a": map[string]any{}},
+						},
+					},
+				},
+			},
+		}).WithName("file").WithSourceType(config.FileSource)
+
+		envLoader := collectors.NewMap(map[string]any{
+			"thing": []any{"e1", "e2"},
+		}).WithName("env").WithSourceType(config.EnvSource)
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(fileLoader)
+		builder = builder.AddCollector(envLoader)
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+			config.WithInheritMerge("thing", config.MergeReplace),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got []any
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, []any{"e1", "e2"}, got)
+
+		_, err = eff.Get(config.NewKeyPath("thing/a"), new(int))
+		require.Error(t, err, "map sub-keys must be gone")
+	})
+
+	t.Run("MapLow_ScalarHigh", func(t *testing.T) {
+		t.Parallel()
+
+		fileLoader := collectors.NewMap(map[string]any{
+			"thing": map[string]any{"a": 1, "b": 2},
+			"groups": map[string]any{
+				"storages": map[string]any{
+					"replicasets": map[string]any{
+						"s-001": map[string]any{
+							"instances": map[string]any{"s-001-a": map[string]any{}},
+						},
+					},
+				},
+			},
+		}).WithName("file").WithSourceType(config.FileSource)
+
+		envLoader := collectors.NewMap(map[string]any{
+			"thing": "scalar",
+		}).WithName("env").WithSourceType(config.EnvSource)
+
+		builder := config.NewBuilder()
+
+		builder = builder.AddCollector(fileLoader)
+		builder = builder.AddCollector(envLoader)
+		builder = builder.WithInheritance(
+			config.Levels(config.Global, "groups", "replicasets", "instances"),
+			config.WithInheritMerge("thing", config.MergeReplace),
+		)
+
+		cfg, errs := builder.Build(t.Context())
+		require.Empty(t, errs)
+
+		eff, err := cfg.Effective(
+			config.NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
+		require.NoError(t, err)
+
+		var got string
+
+		_, err = eff.Get(config.NewKeyPath("thing"), &got)
+		require.NoError(t, err)
+		assert.Equal(t, "scalar", got)
+	})
+}
