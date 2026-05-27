@@ -3,11 +3,13 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sort"
 	"sync"
 
 	"github.com/tarantool/go-storage"
 	"github.com/tarantool/go-storage/kv"
+	"github.com/tarantool/go-storage/locker"
 	"github.com/tarantool/go-storage/operation"
 	"github.com/tarantool/go-storage/predicate"
 	"github.com/tarantool/go-storage/tx"
@@ -110,6 +112,26 @@ func (m *MockStorage) Tx(_ context.Context) tx.Tx {
 // Range implements storage.Storage.
 func (m *MockStorage) Range(_ context.Context, _ ...storage.RangeOption) ([]kv.KeyValue, error) {
 	return nil, nil
+}
+
+// TxFactory implements storage.Storage.
+func (m *MockStorage) TxFactory() tx.Factory {
+	return m.Tx
+}
+
+// errLockerUnsupported is returned by the locker stubs — MockStorage is for
+// pure tx/watch tests and does not implement distributed locks.
+var errLockerUnsupported = errors.New("MockStorage: lockers not supported")
+
+// NewLocker implements storage.Storage. The mock has no lock semantics, so
+// it always returns an error; tests that need locks must use the real driver.
+func (m *MockStorage) NewLocker(_ context.Context, _ string, _ ...locker.Option) (locker.Locker, error) {
+	return nil, errLockerUnsupported
+}
+
+// LockerFactory implements storage.Storage.
+func (m *MockStorage) LockerFactory() locker.Factory {
+	return locker.FactoryFunc(m.NewLocker)
 }
 
 // mockTx implements tx.Tx for MockStorage.

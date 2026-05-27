@@ -1,27 +1,20 @@
 package testutil
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/tarantool/go-storage"
 	etcddriver "github.com/tarantool/go-storage/driver/etcd"
-	"go.etcd.io/etcd/client/pkg/v3/testutil"
+	etcdtest "github.com/tarantool/go-storage/test_helpers/etcd"
 	etcdclient "go.etcd.io/etcd/client/v3"
-	etcdfintegration "go.etcd.io/etcd/tests/v3/framework/integration"
 )
 
 const (
-	etcdDialTimeout = 5 * time.Second
+	etcdDialTimeout  = 5 * time.Second
+	etcdResetTimeout = 5 * time.Second
 )
-
-// silentTB wraps a testutil.TB and discards all logs.
-type silentTB struct {
-	testutil.TB
-}
-
-func (s *silentTB) Log(_ ...any)            {}
-func (s *silentTB) Logf(_ string, _ ...any) {}
 
 // EtcdTestCluster holds the resources for an embedded etcd test cluster.
 type EtcdTestCluster struct {
@@ -29,10 +22,25 @@ type EtcdTestCluster struct {
 	Client  *etcdclient.Client
 }
 
-// NewEtcdTestCluster starts an embedded single-node etcd cluster and returns
-// a storage.Storage backed by it along with a raw etcd client for direct access.
-// The cluster is terminated and the client is closed when the test finishes.
-// Tests using this helper are skipped in short mode.
+// sharedEtcd is the LazyCluster injected by TestMain via SetSharedEtcd.
+// Restarting embed per test is expensive and exposes embed's process-global
+// state (Prometheus registry, logger builder) — back-to-back starts have
+// been observed to wedge raft and burn the suite timeout. Sharing one
+// cluster sidesteps that; each test wipes the keyspace and gets a fresh
+// client. The integration package runs tests sequentially (see its package
+// doc), so a shared cluster is safe.
+var sharedEtcd *etcdtest.LazyCluster //nolint:gochecknoglobals
+
+// SetSharedEtcd installs the process-wide embedded etcd used by
+// NewEtcdTestCluster. Call from TestMain before m.Run().
+func SetSharedEtcd(c *etcdtest.LazyCluster) {
+	sharedEtcd = c
+}
+
+// NewEtcdTestCluster returns a storage.Storage and an etcd client backed by
+// the process-wide embedded etcd installed via SetSharedEtcd. The keyspace
+// is wiped before returning so each test sees an empty store. Tests using
+// this helper are skipped in short mode.
 func NewEtcdTestCluster(t *testing.T) *EtcdTestCluster {
 	t.Helper()
 
@@ -40,21 +48,12 @@ func NewEtcdTestCluster(t *testing.T) *EtcdTestCluster {
 		t.Skip("skipping integration tests in short mode")
 	}
 
-	etcdfintegration.BeforeTest(
-		&silentTB{TB: t},
-		etcdfintegration.WithoutGoLeakDetection(),
-	)
-
-	cluster := etcdfintegration.NewCluster(
-		&silentTB{TB: t},
-		&etcdfintegration.ClusterConfig{Size: 1}, //nolint:exhaustruct
-	)
-	t.Cleanup(func() { cluster.Terminate(nil) })
-
-	endpoints := cluster.Client(0).Endpoints()
+	if sharedEtcd == nil {
+		t.Fatal("testutil: shared etcd not initialised; call SetSharedEtcd from TestMain")
+	}
 
 	client, err := etcdclient.New(etcdclient.Config{ //nolint:exhaustruct
-		Endpoints:   endpoints,
+		Endpoints:   sharedEtcd.EndpointsGRPC(),
 		DialTimeout: etcdDialTimeout,
 	})
 	if err != nil {
@@ -62,6 +61,14 @@ func NewEtcdTestCluster(t *testing.T) *EtcdTestCluster {
 	}
 
 	t.Cleanup(func() { _ = client.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), etcdResetTimeout)
+	defer cancel()
+
+	_, err = client.Delete(ctx, "\x00", etcdclient.WithFromKey())
+	if err != nil {
+		t.Fatalf("Failed to clear etcd keyspace: %v", err)
+	}
 
 	driver := etcddriver.New(client)
 
