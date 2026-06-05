@@ -1714,3 +1714,73 @@ func TestValue_Get_UnsupportedDestinationKinds(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported")
 }
+
+func TestValue_Get_EmptyArrayNode_AsSlice(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("empty"), nil)
+
+	node := root.Get(keypath.NewKeyPath("empty"))
+	require.NotNil(t, node)
+	node.MarkArray()
+
+	require.True(t, node.IsLeaf())
+	require.True(t, node.IsArray())
+
+	val := tree.NewValue(node, keypath.NewKeyPath("empty"))
+
+	var got []any
+
+	err := val.Get(&got)
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
+}
+
+func TestValue_Get_EmptyArrayNode_AsAnyIsSlice(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("empty"), nil)
+
+	node := root.Get(keypath.NewKeyPath("empty"))
+	require.NotNil(t, node)
+	node.MarkArray()
+
+	val := tree.NewValue(node, keypath.NewKeyPath("empty"))
+
+	var got any
+
+	err := val.Get(&got)
+	require.NoError(t, err)
+
+	slice, ok := got.([]any)
+	require.True(t, ok)
+	assert.Empty(t, slice)
+}
+
+// An array-marked leaf that carries its slice directly in Value (no child
+// nodes) must not be flattened to an empty slice: handling the array branch
+// before the leaf check would otherwise drop the data.
+func TestValue_Get_ArrayNode_SliceInValue(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("nums"), []any{1, 2, 3})
+
+	node := root.Get(keypath.NewKeyPath("nums"))
+	require.NotNil(t, node)
+	node.MarkArray()
+
+	require.True(t, node.IsLeaf())
+	require.True(t, node.IsArray())
+
+	val := tree.NewValue(node, keypath.NewKeyPath("nums"))
+
+	var got []int
+
+	err := val.Get(&got)
+	require.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3}, got)
+}

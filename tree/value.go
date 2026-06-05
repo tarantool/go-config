@@ -78,19 +78,30 @@ func (v *valueImpl) Annotation() any {
 }
 
 // nodeToValue converts a tree node into a generic Go value.
-// If the node is a leaf (no children), returns node.Value (which may be a slice, map, or primitive).
-// For array nodes, builds a []any from children in order.
-// Otherwise, builds a map[string]any from its children.
+//
+// Array nodes are handled before the leaf check: a populated array yields a
+// []any built from its children in order, while an empty array yields the
+// slice stored directly in node.Value (when set) or an empty []any{} rather
+// than nil. Consulting node.Value for an empty array mirrors tree.ToAny and
+// avoids dropping a slice assigned to an array node that has no children.
+//
+// A non-array leaf returns node.Value (which may be a slice, map, or
+// primitive). Otherwise the node is a map and a map[string]any is built from
+// its children.
 func nodeToValue(node *Node) any {
-	if node.IsLeaf() {
-		return node.Value
-	}
-
-	children := node.Children()
-	keys := node.ChildrenKeys()
-
-	// Array node - return slice.
 	if node.isArray {
+		if node.IsLeaf() {
+			// Empty array node: honor a slice stored directly in Value,
+			// otherwise yield an empty slice rather than nil.
+			if node.Value != nil {
+				return node.Value
+			}
+
+			return []any{}
+		}
+
+		children := node.Children()
+
 		result := make([]any, 0, len(children))
 		for _, child := range children {
 			result = append(result, nodeToValue(child))
@@ -98,6 +109,13 @@ func nodeToValue(node *Node) any {
 
 		return result
 	}
+
+	if node.IsLeaf() {
+		return node.Value
+	}
+
+	children := node.Children()
+	keys := node.ChildrenKeys()
 
 	// Map node - return map.
 	m := make(map[string]any, len(children))

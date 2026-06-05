@@ -56,6 +56,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   YAML 1.2 core schema but booleans/nulls under YAML 1.1 (`off`, `on`, `yes`,
   `no`, ...), so re-emitted documents are not misread by YAML 1.1 loaders such
   as libyaml.
+* `nodeToValue` now reports an empty array node as an empty `[]any{}` slice
+  instead of `nil`, and preserves a slice assigned directly to an array node's
+  `Value` (with no child nodes) instead of flattening it to an empty slice.
 
 ## [v1.3.0] - 2026-05-19
 
