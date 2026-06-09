@@ -12,18 +12,38 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+### Fixed
+
+## [v1.4.0] - 2026-06-09
+
+This release makes `MergeDeep` the default inheritance merge strategy (was
+`MergeReplace`), so a higher-priority scope or layer that sets a single
+sub-key no longer drops sibling sub-keys, and enforces `WithNoInheritFrom`
+exclusions at every depth of a scope's subtree. It also fixes a family of
+merge and value-conversion bugs — arrays stay opaque under deep-merge,
+`MutableConfig.Set`/`Merge` preserve maps and slices as subtrees, and
+`MarshalYAML` preserves sibling order and quotes YAML 1.1-ambiguous tokens.
+Finally, it embeds Tarantool config schemas 3.3.5, 3.5.2, and 3.6.3.
+
+### Added
+
+* Embedded Tarantool JSON Schemas now include versions 3.3.5, 3.5.2, and
+  3.6.3 (#77).
+
+### Changed
+
 * The default inheritance merge strategy is now `MergeDeep` (was
   `MergeReplace`). A higher-priority scope or layer that sets only one
   sub-key of a map no longer drops sibling sub-keys contributed by a
   lower-priority scope or layer, aligning single-loader scope-chain
   resolution with the cross-loader invariant documented on
   `accumulateLayerResult`. Explicit `WithInheritMerge(key, MergeReplace)`
-  still means wholesale replace.
+  still means wholesale replace (#76).
 * `WithNoInheritFrom` (and `WithNoInherit`) prefix exclusions are now
   enforced at every depth of a scope's subtree, not just on the layer's
   top-level keys. Nested-path exclusions like
   `WithNoInheritFrom(Global, "credentials/users")` now actually fire under
-  the new default deep merge.
+  the new default deep merge (#76).
 
 ### Fixed
 
@@ -33,32 +53,35 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   recursed into map nodes for `MergeReplace`, contradicting the constant's
   docstring and producing different effective views for the same explicit
   user opt-in depending on whether the conflict came from two scopes or two
-  loaders.
+  loaders (#76).
 * `mergeNodeValue` (collector-side merge) now uses `isMapNode` to detect
   maps instead of `!IsLeaf`, so an array node followed by a map value no
   longer becomes a hybrid node carrying both the array flag and
   string-keyed children. Replacements (scalar, slice, or a map overwriting
-  an array) also drop the `isArray` flag.
+  an array) also drop the `isArray` flag (#76).
 * Default deep-merge no longer index-merges arrays nested inside merged
   maps. A higher-priority `iproto/listen: [a, b]` nested under a deep-merged
   `iproto` now fully replaces a lower-priority `iproto/listen: [x, y, z]`
   instead of leaking the orphan `z` into the effective view. Both
   `deepMergeNodes` (inheritance) and `mergeTreeInto` (cross-loader) gate on
-  `isMapNode` instead of `!IsLeaf` so arrays stay opaque.
+  `isMapNode` instead of `!IsLeaf` so arrays stay opaque (#76).
 * `MutableConfig.Set` now preserves map and slice values as configuration
   subtrees, and `MutableConfig.Merge` keeps YAML sequences as sequences when
-  merging them into a path that does not exist yet.
+  merging them into a path that does not exist yet (#75).
 * `MarshalYAML` now preserves the relative order of map-valued siblings, which
-  was previously lost when collectors flattened nested maps to leaf paths.
+  was previously lost when collectors flattened nested maps to leaf paths
+  (#75).
 * Map-valued mutations via `MutableConfig.Set` now emit child keys in a
-  deterministic, sorted order instead of Go's randomized map iteration order.
+  deterministic, sorted order instead of Go's randomized map iteration order
+  (#75).
 * `MarshalYAML` now quotes unquoted source tokens that are strings under the
   YAML 1.2 core schema but booleans/nulls under YAML 1.1 (`off`, `on`, `yes`,
   `no`, ...), so re-emitted documents are not misread by YAML 1.1 loaders such
-  as libyaml.
+  as libyaml (#75).
 * `nodeToValue` now reports an empty array node as an empty `[]any{}` slice
   instead of `nil`, and preserves a slice assigned directly to an array node's
-  `Value` (with no child nodes) instead of flattening it to an empty slice.
+  `Value` (with no child nodes) instead of flattening it to an empty slice
+  (#79).
 
 ## [v1.3.0] - 2026-05-19
 
