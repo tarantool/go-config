@@ -33,13 +33,9 @@ func TestToAny_Leaf(t *testing.T) {
 
 			result := tree.ToAny(node)
 
-			expected := tt.value
-			if tt.value == nil {
-				// Leaf with nil value converts to empty map (special case).
-				expected = map[string]any{}
-			}
-
-			assert.Equal(t, expected, result)
+			// A leaf with a nil Value is a null scalar and converts to nil
+			// (it must not be fabricated into an empty map/object).
+			assert.Equal(t, tt.value, result)
 		})
 	}
 }
@@ -68,10 +64,35 @@ func TestToAny_Nested(t *testing.T) {
 func TestToAny_EmptyNode(t *testing.T) {
 	t.Parallel()
 
+	// A bare node with no value and no children is treated as a null scalar.
 	node := tree.New()
 	result := tree.ToAny(node)
-	expected := map[string]any{}
-	assert.Equal(t, any(expected), result)
+	assert.Nil(t, result)
+}
+
+func TestToAny_NullScalarLeaf(t *testing.T) {
+	t.Parallel()
+
+	// A null scalar (e.g. an empty YAML value `key:`) must convert to nil,
+	// not to an empty object, so schema validation sees the declared type
+	// rather than rejecting it as an unexpected object.
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("key"), nil)
+
+	result := tree.ToAny(root)
+	assert.Equal(t, any(map[string]any{"key": nil}), result)
+}
+
+func TestToAny_EmptyMapLeaf(t *testing.T) {
+	t.Parallel()
+
+	// An explicit empty mapping carries a non-nil map Value and keeps its
+	// empty-object shape.
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("key"), map[string]any{})
+
+	result := tree.ToAny(root)
+	assert.Equal(t, any(map[string]any{"key": map[string]any{}}), result)
 }
 
 func TestToAny_MissingChild(t *testing.T) {

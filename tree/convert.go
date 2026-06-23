@@ -5,6 +5,11 @@ package tree
 //   - primitive value for leaf nodes
 //   - []any for array nodes (nodes marked with MarkArray)
 //   - map[string]any for object nodes
+//
+// A leaf with a nil Value is a null scalar (e.g. an empty YAML value like
+// `key:`) and converts to nil. Empty mappings (`{}`) carry a non-nil
+// map[string]any{} Value and empty sequences (`[]`) are marked as arrays, so
+// both keep their respective empty-container shapes via the branches below.
 func ToAny(node *Node) any {
 	switch {
 	case node == nil:
@@ -14,7 +19,7 @@ func ToAny(node *Node) any {
 			return []any{}
 		}
 
-		return map[string]any{}
+		return nil
 	case node.IsLeaf():
 		return node.Value
 	}

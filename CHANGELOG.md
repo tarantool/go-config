@@ -14,6 +14,13 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* `tree.ToAny` no longer converts a null scalar leaf into an empty
+  `map[string]any{}`. An empty YAML value (e.g. `key:`) parses to such a
+  leaf, so it was materialized as an object and JSON-Schema validation
+  rejected it as `object but should be string/array`. It now yields
+  `nil`, matching `nodeToValue`. Empty mappings (`{}`) and empty
+  sequences (`[]`) keep their respective shapes.
+
 ## [v1.4.0] - 2026-06-09
 
 This release makes `MergeDeep` the default inheritance merge strategy (was
