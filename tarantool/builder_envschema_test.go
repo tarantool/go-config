@@ -10,6 +10,7 @@ import (
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/tarantool"
+	"github.com/tarantool/go-config/validators/jsonschema"
 )
 
 const fixtureSchemaPath = "testdata/config.schema.json"
@@ -137,6 +138,41 @@ func TestBuild_Env_NoSchema_HeuristicUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "true", nonblock,
 		"without schema, naive split sends the value to the wrong path")
+}
+
+func TestBuild_NullCoercion_EmptyStringField(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	// wal_queue_max_size is a string field in the fixture schema, left empty
+	// (a null scalar) in the config.
+	writeFile(t, cfgPath, "wal_queue_max_size:\n")
+
+	ctx := context.Background()
+
+	// Default policy (NullLeave) keeps the null, which the string schema rejects.
+	_, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithSchemaFile(fixtureSchemaPath).
+		WithEnvPrefix("TT_TESTONLY_").
+		Build(ctx)
+	require.Error(t, err)
+
+	// WithNullCoercion(NullZero) coerces the empty value to "", so it validates.
+	cfg, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithSchemaFile(fixtureSchemaPath).
+		WithEnvPrefix("TT_TESTONLY_").
+		WithNullCoercion(jsonschema.NullZero).
+		Build(ctx)
+	require.NoError(t, err)
+
+	var size string
+
+	_, err = cfg.Get(config.NewKeyPath("wal_queue_max_size"), &size)
+	require.NoError(t, err)
+	assert.Empty(t, size)
 }
 
 func TestBuild_WithoutValidation_KeepsSchemaAwareEnvRouting(t *testing.T) {

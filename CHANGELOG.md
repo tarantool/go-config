@@ -10,6 +10,16 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* Schema-aware null coercion for JSON-Schema validation. Empty (null)
+  values are coerced to `{}` where the schema expects an object and `[]`
+  where it expects an array (resolving `$ref` and `allOf`/`anyOf`/`oneOf`).
+  The ambiguous scalar case is governed by a configurable
+  `jsonschema.NullCoercion` policy — `NullLeave` (default), `NullDrop`
+  (treat empty as unset) or `NullZero` (typed zero value) — set
+  per-validator via `jsonschema.WithNullCoercion`, per-build via
+  `Builder.WithJSONSchema` options or `tarantool.Builder.WithNullCoercion`,
+  or globally via `jsonschema.DefaultNullCoercion`.
+
 ### Changed
 
 ### Fixed

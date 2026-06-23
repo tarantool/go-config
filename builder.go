@@ -64,12 +64,17 @@ func (b *Builder) WithValidator(validator validator.Validator) Builder {
 // WithJSONSchema creates a JSON Schema validator and sets it.
 // Returns ErrNilSchemaReader if schema is nil, or a wrapped error
 // if schema parsing fails. The Builder is returned unchanged on error.
-func (b *Builder) WithJSONSchema(schema io.Reader) (Builder, error) {
+//
+// Optional jsonschema.Option values configure the validator, e.g.
+// jsonschema.WithNullCoercion to control how empty (null) YAML values are
+// treated. Without an explicit option the global jsonschema.DefaultNullCoercion
+// applies.
+func (b *Builder) WithJSONSchema(schema io.Reader, opts ...jsonschema.Option) (Builder, error) {
 	if schema == nil {
 		return *b, fmt.Errorf("failed to create JSON schema validator: %w", ErrNilSchemaReader)
 	}
 
-	validator, err := jsonschema.NewFromReader(schema)
+	validator, err := jsonschema.NewFromReader(schema, opts...)
 	if err != nil {
 		return *b, fmt.Errorf("failed to create JSON schema validator: %w", err)
 	}
