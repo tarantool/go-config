@@ -12,6 +12,7 @@ import (
 	config "github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
 	"github.com/tarantool/go-config/tarantool/internal/envpath"
+	"github.com/tarantool/go-config/validators/jsonschema"
 	"github.com/tarantool/go-storage/integrity"
 )
 
@@ -47,6 +48,8 @@ type Builder struct {
 	skipSchema     bool
 	skipValidation bool
 	httpClient     *http.Client
+
+	schemaOpts []jsonschema.Option
 
 	inheritanceOpts []config.InheritanceOption
 
@@ -201,6 +204,17 @@ func (b *Builder) WithoutSchema() *Builder {
 // (no schema is loaded in that case).
 func (b *Builder) WithoutValidation() *Builder {
 	b.skipValidation = true
+
+	return b
+}
+
+// WithNullCoercion sets how empty (null) YAML values are treated during schema
+// validation. Object- and array-typed empty values are always coerced to {} /
+// []; this knob governs the ambiguous scalar case (see
+// [jsonschema.NullCoercion]). Without it, the global
+// [jsonschema.DefaultNullCoercion] applies.
+func (b *Builder) WithNullCoercion(policy jsonschema.NullCoercion) *Builder {
+	b.schemaOpts = append(b.schemaOpts, jsonschema.WithNullCoercion(policy))
 
 	return b
 }
@@ -481,7 +495,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 
 	// 5. Schema validation.
 	if !b.skipSchema && !b.skipValidation {
-		inner, err = inner.WithJSONSchema(bytes.NewReader(schemaBytes))
+		inner, err = inner.WithJSONSchema(bytes.NewReader(schemaBytes), b.schemaOpts...)
 		if err != nil {
 			return config.Builder{}, fmt.Errorf("json schema: %w", err)
 		}
