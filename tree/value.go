@@ -5,9 +5,9 @@ import (
 	"math"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/tarantool/go-config/internal/structtag"
 	"github.com/tarantool/go-config/keypath"
 	"github.com/tarantool/go-config/meta"
 	"github.com/tarantool/go-config/value"
@@ -613,18 +613,20 @@ func decodeStruct(src any, dst reflect.Value) error {
 			continue
 		}
 
-		name, opts := parseYAMLTag(field.Tag.Get("yaml"))
+		name, opts := structtag.Parse(field.Tag.Get("yaml"))
 
-		// Inline (embedded) struct: decode the same source map into it
-		// so its fields are looked up at the current level rather than
-		// under a key.
-		if opts["inline"] && (field.Anonymous || name == "") {
-			err := decode(src, dst.Field(i))
+		// Inline field: an anonymous or explicitly-unnamed field tagged
+		// `,inline` is flattened, i.e. its own fields are looked up in the
+		// parent map at the current level rather than under a key.
+		if opts.Has("inline") && (field.Anonymous || name == "") {
+			handled, err := decodeInlineField(src, dst.Field(i), field.Name)
 			if err != nil {
-				return fmt.Errorf("inline field %q: %w", field.Name, err)
+				return err
 			}
 
-			continue
+			if handled {
+				continue
+			}
 		}
 
 		if name == "" {
@@ -651,24 +653,30 @@ func decodeStruct(src any, dst reflect.Value) error {
 	return nil
 }
 
-// parseYAMLTag splits a yaml struct tag into the field name and the
-// set of options that follow it. An empty name means the tag carried
-// no explicit name.
-func parseYAMLTag(tag string) (string, map[string]bool) {
-	opts := map[string]bool{}
-
-	name := tag
-	if before, after, found := strings.Cut(tag, ","); found {
-		name = before
-
-		for opt := range strings.SplitSeq(after, ",") {
-			if opt != "" {
-				opts[opt] = true
-			}
-		}
+// decodeInlineField flattens a field tagged `,inline` by decoding the parent
+// source map into it, and reports whether it consumed the field.
+//
+// Only structs and pointers-to-struct flatten. A map tagged `,inline` (the
+// go-yaml catch-all) is deliberately not supported: decoding the whole parent
+// map into it would let it swallow keys that sibling fields already own, and
+// implementing it correctly requires assigning only the leftover keys. Such a
+// field is left unhandled so the caller falls back to a normal by-name lookup.
+func decodeInlineField(src any, fieldVal reflect.Value, fieldName string) (bool, error) {
+	elemType := fieldVal.Type()
+	if elemType.Kind() == reflect.Pointer {
+		elemType = elemType.Elem()
 	}
 
-	return name, opts
+	if elemType.Kind() != reflect.Struct {
+		return false, nil
+	}
+
+	err := decode(src, fieldVal)
+	if err != nil {
+		return true, fmt.Errorf("inline field %q: %w", fieldName, err)
+	}
+
+	return true, nil
 }
 
 // decodePtr converts src to pointer.
