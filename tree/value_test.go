@@ -1760,6 +1760,96 @@ func TestValue_Get_EmptyArrayNode_AsAnyIsSlice(t *testing.T) {
 	assert.Empty(t, slice)
 }
 
+func TestValue_Get_StructInlineEmbedded(t *testing.T) {
+	t.Parallel()
+
+	type Base struct {
+		ID   int    `yaml:"id"`
+		Name string `yaml:"name"`
+	}
+
+	type Config struct {
+		Base `yaml:",inline"`
+
+		Enabled bool `yaml:"enabled"`
+	}
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("cfg/id"), 7)
+	root.Set(keypath.NewKeyPath("cfg/name"), "svc")
+	root.Set(keypath.NewKeyPath("cfg/enabled"), true)
+
+	node := root.Get(keypath.NewKeyPath("cfg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("cfg"))
+
+	var cfg Config
+
+	err := val.Get(&cfg)
+	require.NoError(t, err)
+	assert.Equal(t, 7, cfg.ID)
+	assert.Equal(t, "svc", cfg.Name)
+	assert.True(t, cfg.Enabled)
+}
+
+func TestValue_Get_StructInlineNamedField(t *testing.T) {
+	t.Parallel()
+
+	type Base struct {
+		ID   int    `yaml:"id"`
+		Name string `yaml:"name"`
+	}
+
+	type Config struct {
+		Base    Base `yaml:",inline"`
+		Enabled bool `yaml:"enabled"`
+	}
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("cfg/id"), 3)
+	root.Set(keypath.NewKeyPath("cfg/name"), "inline")
+	root.Set(keypath.NewKeyPath("cfg/enabled"), true)
+
+	node := root.Get(keypath.NewKeyPath("cfg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("cfg"))
+
+	var cfg Config
+
+	err := val.Get(&cfg)
+	require.NoError(t, err)
+	assert.Equal(t, 3, cfg.Base.ID)
+	assert.Equal(t, "inline", cfg.Base.Name)
+	assert.True(t, cfg.Enabled)
+}
+
+func TestValue_Get_StructInlineEmbeddedPointer(t *testing.T) {
+	t.Parallel()
+
+	type Base struct {
+		ID int `yaml:"id"`
+	}
+
+	type Config struct {
+		*Base `yaml:",inline"`
+
+		Enabled bool `yaml:"enabled"`
+	}
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("cfg/id"), 42)
+	root.Set(keypath.NewKeyPath("cfg/enabled"), true)
+
+	node := root.Get(keypath.NewKeyPath("cfg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("cfg"))
+
+	var cfg Config
+
+	err := val.Get(&cfg)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Base)
+	assert.Equal(t, 42, cfg.ID)
+	assert.True(t, cfg.Enabled)
+}
+
 // An array-marked leaf that carries its slice directly in Value (no child
 // nodes) must not be flattened to an empty slice: handling the array branch
 // before the leaf check would otherwise drop the data.
