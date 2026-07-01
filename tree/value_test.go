@@ -1850,6 +1850,32 @@ func TestValue_Get_StructInlineEmbeddedPointer(t *testing.T) {
 	assert.True(t, cfg.Enabled)
 }
 
+func TestValue_Get_StructInlineMapNotSwallowed(t *testing.T) {
+	t.Parallel()
+
+	// A map tagged `,inline` is not a supported catch-all: it must not
+	// swallow keys owned by sibling fields. It falls through to a normal
+	// by-name lookup ("Rest"), which is absent here, leaving it nil.
+	type Config struct {
+		Enabled bool           `yaml:"enabled"`
+		Rest    map[string]any `yaml:",inline"`
+	}
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("cfg/enabled"), true)
+	root.Set(keypath.NewKeyPath("cfg/extra"), 1)
+
+	node := root.Get(keypath.NewKeyPath("cfg"))
+	val := tree.NewValue(node, keypath.NewKeyPath("cfg"))
+
+	var cfg Config
+
+	err := val.Get(&cfg)
+	require.NoError(t, err)
+	assert.True(t, cfg.Enabled)
+	assert.NotContains(t, cfg.Rest, "enabled")
+}
+
 // An array-marked leaf that carries its slice directly in Value (no child
 // nodes) must not be flattened to an empty slice: handling the array branch
 // before the leaf check would otherwise drop the data.
