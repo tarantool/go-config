@@ -10,6 +10,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* Decoding a `tree.Value` into a struct now honors the yaml `inline`
+  tag option: a field tagged `,inline` that is anonymous or has no
+  explicit name is decoded from the parent map, flattening embedded
+  structs instead of looking them up under a nested key.
+
 * Schema-aware null coercion for JSON-Schema validation. Empty (null)
   values are coerced to `{}` where the schema expects an object and `[]`
   where it expects an array (resolving `$ref` and `allOf`/`anyOf`/`oneOf`).

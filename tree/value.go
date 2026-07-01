@@ -613,20 +613,27 @@ func decodeStruct(src any, dst reflect.Value) error {
 			continue
 		}
 
-		// Get yaml tag.
-		tag := field.Tag.Get("yaml")
-		if tag == "" {
-			// Fallback to field name.
-			tag = field.Name
-		} else {
-			// Handle yaml tag options like "omitempty".
-			if comma := strings.Index(tag, ","); comma != -1 {
-				tag = tag[:comma]
+		name, opts := parseYAMLTag(field.Tag.Get("yaml"))
+
+		// Inline (embedded) struct: decode the same source map into it
+		// so its fields are looked up at the current level rather than
+		// under a key.
+		if opts["inline"] && (field.Anonymous || name == "") {
+			err := decode(src, dst.Field(i))
+			if err != nil {
+				return fmt.Errorf("inline field %q: %w", field.Name, err)
 			}
+
+			continue
+		}
+
+		if name == "" {
+			// Fallback to field name.
+			name = field.Name
 		}
 
 		// Look up key in source map.
-		key := reflect.ValueOf(tag)
+		key := reflect.ValueOf(name)
 
 		val := srcVal.MapIndex(key)
 		if !val.IsValid() {
@@ -642,6 +649,26 @@ func decodeStruct(src any, dst reflect.Value) error {
 	}
 
 	return nil
+}
+
+// parseYAMLTag splits a yaml struct tag into the field name and the
+// set of options that follow it. An empty name means the tag carried
+// no explicit name.
+func parseYAMLTag(tag string) (string, map[string]bool) {
+	opts := map[string]bool{}
+
+	name := tag
+	if before, after, found := strings.Cut(tag, ","); found {
+		name = before
+
+		for opt := range strings.SplitSeq(after, ",") {
+			if opt != "" {
+				opts[opt] = true
+			}
+		}
+	}
+
+	return name, opts
 }
 
 // decodePtr converts src to pointer.
