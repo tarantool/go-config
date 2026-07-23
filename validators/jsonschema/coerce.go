@@ -3,6 +3,7 @@ package jsonschema
 import (
 	"regexp"
 	"slices"
+	"strconv"
 
 	"github.com/kaptinlin/jsonschema"
 )
@@ -80,6 +81,74 @@ func coerceNulls(data any, schema *jsonschema.Schema, policy NullCoercion) any {
 	default:
 		return data
 	}
+}
+
+// coerceScalars walks data alongside the schema and, where the schema at a
+// location expects a scalar type (boolean, integer or number) but the value is
+// a string, parses the string into that type. This is the shape produced by
+// collectors that carry only strings — most importantly environment variables:
+// LUAMERGE_DEBUG=true arrives as the string "true", which would otherwise be
+// rejected by a strict `{"type": "boolean"}` schema.
+//
+// A string is coerced only when the schema does not also permit "string" (a
+// union like `["boolean", "string"]` keeps the string as-is) and only when it
+// parses; an unparsable string is left unchanged so the validator reports a
+// proper type error rather than the coercion masking it. The (possibly
+// mutated) data is returned.
+//
+// Like coerceNulls, this rewrites the copy used for validation only; it does
+// not alter the configuration tree, whose typed decode handles string scalars
+// on its own.
+func coerceScalars(data any, schema *jsonschema.Schema) any {
+	schema = effectiveSchema(schema)
+
+	switch typed := data.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			typed[key] = coerceScalars(child, subschemaForProperty(schema, key))
+		}
+
+		return typed
+	case []any:
+		for i, item := range typed {
+			typed[i] = coerceScalars(item, subschemaForItem(schema, i))
+		}
+
+		return typed
+	case string:
+		return coerceScalarString(typed, schema)
+	default:
+		return data
+	}
+}
+
+// coerceScalarString parses str into the scalar type the schema demands, unless
+// that type is (or includes) string. On any parse failure the original string
+// is returned unchanged.
+func coerceScalarString(str string, schema *jsonschema.Schema) any {
+	if schema == nil || schemaAllows(schema, "string") {
+		return str
+	}
+
+	switch {
+	case schemaAllows(schema, "boolean"):
+		parsed, err := strconv.ParseBool(str)
+		if err == nil {
+			return parsed
+		}
+	case schemaAllows(schema, "integer"):
+		parsed, err := strconv.ParseInt(str, 10, 64)
+		if err == nil {
+			return parsed
+		}
+	case schemaAllows(schema, "number"):
+		parsed, err := strconv.ParseFloat(str, 64)
+		if err == nil {
+			return parsed
+		}
+	}
+
+	return str
 }
 
 // coerceNull resolves a single null value against its schema.

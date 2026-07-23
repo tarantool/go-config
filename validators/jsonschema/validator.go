@@ -60,6 +60,7 @@ func (v *Validator) Validate(root *tree.Node) []validator.ValidationError {
 	data := tree.ToAny(root)
 
 	data = coerceNulls(data, v.schema, v.nullCoerce)
+	data = coerceScalars(data, v.schema)
 
 	result := v.schema.Validate(data)
 	if result.IsValid() {

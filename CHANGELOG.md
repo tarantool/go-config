@@ -25,6 +25,18 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   `Builder.WithJSONSchema` options or `tarantool.Builder.WithNullCoercion`,
   or globally via `jsonschema.DefaultNullCoercion`.
 
+* Schema-aware scalar coercion for JSON-Schema validation. When the schema
+  at a location expects a scalar type (`boolean`, `integer` or `number`)
+  but the value is a string — the shape environment-variable collectors
+  produce — the string is parsed into that type before validation
+  (resolving `$ref` and combinators). A string is coerced only when the
+  schema does not also permit `string` (a `["boolean", "string"]` union
+  keeps the string) and only when it parses; an unparsable string is left
+  unchanged so validation still reports a type error. Like null coercion
+  this rewrites the validation copy only, not the config tree. This lets a
+  strict `{"type": "boolean"}` field accept `MYAPP_FLAG=true` from the env
+  collector without widening the schema to a string union.
+
 ### Changed
 
 ### Fixed
