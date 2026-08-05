@@ -10,10 +10,25 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [v1.5.0] - 2026-08-05
+
+The release adds schema-aware coercion for JSON-Schema validation: null
+values are coerced to the container shape the schema expects, and string
+scalars from environment collectors are parsed into the expected
+boolean/integer/number types, with a configurable `NullCoercion` policy.
+Struct decoding now honors the yaml `inline` tag option, and `tree.ToAny`
+no longer turns null leaves into empty maps.
+
+### Added
+
 * Decoding a `tree.Value` into a struct now honors the yaml `inline`
   tag option: a field tagged `,inline` that is anonymous or has no
   explicit name is decoded from the parent map, flattening embedded
-  structs instead of looking them up under a nested key.
+  structs instead of looking them up under a nested key (#82).
 
 * Schema-aware null coercion for JSON-Schema validation. Empty (null)
   values are coerced to `{}` where the schema expects an object and `[]`
@@ -23,7 +38,7 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   (treat empty as unset) or `NullZero` (typed zero value) — set
   per-validator via `jsonschema.WithNullCoercion`, per-build via
   `Builder.WithJSONSchema` options or `tarantool.Builder.WithNullCoercion`,
-  or globally via `jsonschema.DefaultNullCoercion`.
+  or globally via `jsonschema.DefaultNullCoercion` (#81).
 
 * Schema-aware scalar coercion for JSON-Schema validation. When the schema
   at a location expects a scalar type (`boolean`, `integer` or `number`)
@@ -35,9 +50,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   unchanged so validation still reports a type error. Like null coercion
   this rewrites the validation copy only, not the config tree. This lets a
   strict `{"type": "boolean"}` field accept `MYAPP_FLAG=true` from the env
-  collector without widening the schema to a string union.
+  collector without widening the schema to a string union (#84).
 
-### Changed
+* Embedded Tarantool JSON Schemas now include versions 3.6.4, 3.7.1, and
+  3.8.0 (#83).
 
 ### Fixed
 
@@ -46,7 +62,7 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   leaf, so it was materialized as an object and JSON-Schema validation
   rejected it as `object but should be string/array`. It now yields
   `nil`, matching `nodeToValue`. Empty mappings (`{}`) and empty
-  sequences (`[]`) keep their respective shapes.
+  sequences (`[]`) keep their respective shapes (#81).
 
 ## [v1.4.0] - 2026-06-09
 
