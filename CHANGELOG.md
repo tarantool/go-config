@@ -55,6 +55,11 @@ no longer turns null leaves into empty maps.
 * Embedded Tarantool JSON Schemas now include versions 3.6.4, 3.7.1, and
   3.8.0 (#83).
 
+### Changed
+
+* Updated the `github.com/tarantool/go-storage` dependency from a
+  development pseudo-version to the v1.6.1 release (#86).
+
 ### Fixed
 
 * `tree.ToAny` no longer converts a null scalar leaf into an empty
