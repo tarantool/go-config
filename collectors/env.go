@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/internal/environ"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/internal/environ"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // Env reads configuration data from environment variables.

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	config "github.com/tarantool/go-config"
+	config "github.com/tarantool/go-config/v2"
 )
 
 func TestHTTPFetchSchema_RequestShape(t *testing.T) {

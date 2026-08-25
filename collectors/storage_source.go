@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tarantool/go-config"
+	"github.com/tarantool/go-config/v2"
 	storage "github.com/tarantool/go-storage/v2"
 	"github.com/tarantool/go-storage/v2/crypto"
 	"github.com/tarantool/go-storage/v2/hasher"

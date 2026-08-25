@@ -6,8 +6,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/meta"
+	"github.com/tarantool/go-config/v2/tree"
 	"go.yaml.in/yaml/v3"
 )
 

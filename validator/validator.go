@@ -1,7 +1,7 @@
 package validator
 
 import (
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // Validator validates configuration against a schema.

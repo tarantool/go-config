@@ -6,7 +6,7 @@ import (
 
 	etcdtest "github.com/tarantool/go-storage/v2/test_helpers/etcd"
 
-	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/v2/internal/testutil"
 )
 
 // TestMain owns the lifecycle of the embedded etcd shared across the

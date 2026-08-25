@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/validator"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/validator"
 )
 
 const (

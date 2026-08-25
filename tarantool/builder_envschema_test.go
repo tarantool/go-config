@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tarantool"
-	"github.com/tarantool/go-config/validators/jsonschema"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tarantool"
+	"github.com/tarantool/go-config/v2/validators/jsonschema"
 )
 
 const fixtureSchemaPath = "testdata/config.schema.json"

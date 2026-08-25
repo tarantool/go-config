@@ -1,6 +1,6 @@
 package value
 
-import "github.com/tarantool/go-config/meta"
+import "github.com/tarantool/go-config/v2/meta"
 
 // Value represents a single value in the configuration.
 type Value interface {

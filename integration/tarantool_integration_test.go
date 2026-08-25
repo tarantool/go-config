@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/internal/testutil"
-	"github.com/tarantool/go-config/tarantool"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/internal/testutil"
+	"github.com/tarantool/go-config/v2/tarantool"
 )
 
 // bigTarantoolConfig is a realistic multi-group, multi-replicaset

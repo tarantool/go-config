@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/internal/environ"
-	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/v2/internal/environ"
+	"github.com/tarantool/go-config/v2/internal/testutil"
 )
 
 func TestParse(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/v2/internal/testutil"
 )
 
 func TestDrain_ClosedChannel(t *testing.T) {

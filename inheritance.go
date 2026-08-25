@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 const segmentsPerLevel = 2

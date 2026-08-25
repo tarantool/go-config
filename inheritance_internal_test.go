@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 func TestMatchHierarchy(t *testing.T) {

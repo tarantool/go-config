@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tarantool/go-config"
+	"github.com/tarantool/go-config/v2"
 )
 
 // Node is a trie node keyed by lowercased schema segment names.

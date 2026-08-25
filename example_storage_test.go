@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
-	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
+	"github.com/tarantool/go-config/v2/internal/testutil"
 )
 
 // Example_storageCollector demonstrates reading multiple configuration

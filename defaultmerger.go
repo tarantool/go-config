@@ -3,8 +3,8 @@ package config
 import (
 	"slices"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // defaultMergerContext implements MergerContext.

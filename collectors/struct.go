@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // Struct reads configuration data from a Go struct using reflection.

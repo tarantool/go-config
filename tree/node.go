@@ -3,8 +3,8 @@ package tree
 import (
 	"slices"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/omap"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/omap"
 )
 
 // Value represents a configuration value.

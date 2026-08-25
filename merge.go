@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // isNumericString reports whether str consists only of ASCII digits.

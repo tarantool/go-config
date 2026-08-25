@@ -3,7 +3,7 @@ package collectors
 import (
 	"io"
 
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // Format represents way to convert some data into the tree.Node.

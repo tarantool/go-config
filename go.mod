@@ -1,4 +1,4 @@
-module github.com/tarantool/go-config
+module github.com/tarantool/go-config/v2
 
 go 1.26.5
 
@@ -86,3 +86,5 @@ exclude (
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
 	google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215
 )
+
+retract v2.0.0 // Broken release.

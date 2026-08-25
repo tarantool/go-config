@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/v2/keypath"
 )
 
 // KeyPath represents a hierarchical key.

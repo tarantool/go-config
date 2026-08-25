@@ -19,9 +19,9 @@ import (
 
 	"github.com/tarantool/go-storage/v2/kv"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
-	"github.com/tarantool/go-config/internal/testutil"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
+	"github.com/tarantool/go-config/v2/internal/testutil"
 )
 
 const configPrefix = "/config/"

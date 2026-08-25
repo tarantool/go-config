@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	config "github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tarantool"
+	config "github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tarantool"
 )
 
 var errSchemaTransport = errors.New("schema transport failed")

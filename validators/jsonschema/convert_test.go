@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/v2/keypath"
 )
 
 func TestJsonPointerToKeyPath(t *testing.T) {

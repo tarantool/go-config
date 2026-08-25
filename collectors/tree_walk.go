@@ -4,8 +4,8 @@ import (
 	"context"
 	"slices"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any, keepOrder bool) {

@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 func TestDefaultMerger_CreateContext(t *testing.T) {
