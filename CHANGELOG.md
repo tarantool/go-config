@@ -14,6 +14,26 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+## [v2.0.0] - 2026-08-25
+
+This release migrates the storage integration from
+`github.com/tarantool/go-storage` v1 to
+[`github.com/tarantool/go-storage/v2`](https://github.com/tarantool/go-storage)
+v2.0.0, and bumps the minimum Go version to 1.26.5. It's a breaking change for
+callers of `tarantool.Builder.WithStorage`, `collectors.NewStorage`, and
+`collectors.NewStorageSource`.
+
+### Changed
+
+* Migrated from `github.com/tarantool/go-storage` v1 to
+  `github.com/tarantool/go-storage/v2` v2.0.0. `tarantool.Builder.WithStorage`
+  and `collectors.NewStorage` now take an `*integrity.Store[[]byte]` (was
+  `*integrity.Typed[[]byte]`), and `collectors.NewStorageSource` now returns
+  an error, since namespace prefixing and namer construction can fail
+  (`storage.Prefixed`, `namer.New`) (#87).
+
+* Bumped the minimum Go version from 1.25.0 to 1.26.5.
+
 ## [v1.5.0] - 2026-08-05
 
 The release adds schema-aware coercion for JSON-Schema validation: null
