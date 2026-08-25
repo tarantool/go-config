@@ -8,7 +8,7 @@ import (
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-storage/integrity"
+	"github.com/tarantool/go-storage/v2/integrity"
 )
 
 // Storage implements config.Collector for reading multiple configuration
@@ -22,17 +22,17 @@ type Storage struct {
 	revision    config.RevisionType
 	keepOrder   bool
 	skipInvalid bool
-	typed       *integrity.Typed[[]byte]
+	typed       *integrity.Store[[]byte]
 	format      Format
 	prefix      string
 	delimiter   string
 }
 
 // NewStorage creates a new Storage collector that reads all keys under the
-// prefix managed by the given integrity.Typed storage. Each key's value is
+// prefix managed by the given integrity.Store storage. Each key's value is
 // parsed using the provided Format.
 func NewStorage(
-	typed *integrity.Typed[[]byte],
+	typed *integrity.Store[[]byte],
 	prefix string,
 	format Format,
 ) *Storage {

@@ -1,6 +1,6 @@
 package collectors
 
-// rawBytesMarshaller implements marshaller.TypedMarshaller[[]byte] by passing
+// rawBytesMarshaller implements marshaller.Marshaller[[]byte] by passing
 // bytes through without any encoding. Use this when the bytes already contain
 // serialized content (e.g., pre-built YAML) to avoid double-encoding.
 type rawBytesMarshaller struct{}

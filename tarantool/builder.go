@@ -13,7 +13,7 @@ import (
 	"github.com/tarantool/go-config/collectors"
 	"github.com/tarantool/go-config/tarantool/internal/envpath"
 	"github.com/tarantool/go-config/validators/jsonschema"
-	"github.com/tarantool/go-storage/integrity"
+	"github.com/tarantool/go-storage/v2/integrity"
 )
 
 const (
@@ -36,7 +36,7 @@ type Builder struct {
 	envPrefix  string
 	envIgnore  []string
 
-	storage    *integrity.Typed[[]byte]
+	storage    *integrity.Store[[]byte]
 	storageKey string
 
 	schema         []byte
@@ -83,11 +83,11 @@ func (b *Builder) WithConfigDir(path string) *Builder {
 }
 
 // WithStorage sets the centralized storage backend.
-// The [integrity.Typed] instance must already be configured with the
+// The [integrity.Store] instance must already be configured with the
 // correct prefix (use [ConfigPrefix] to build it). The caller is
 // responsible for building the instance with appropriate
-// hashers/verifiers via [integrity.NewTypedBuilder].
-func (b *Builder) WithStorage(typed *integrity.Typed[[]byte]) *Builder {
+// hashers/verifiers via [integrity.NewCodecBuilder].
+func (b *Builder) WithStorage(typed *integrity.Store[[]byte]) *Builder {
 	b.storage = typed
 	return b
 }
@@ -306,7 +306,7 @@ func (b *Builder) validate() error {
 // ConfigPrefix builds the full storage config prefix by combining the base
 // prefix with [DefaultStorageKey]: "<base>/config/".
 // This matches the layout used by the tt CLI tool's getConfigPrefix.
-// Use this when constructing the prefix for [integrity.NewTypedBuilder].
+// Use this when constructing the prefix for [storage.Prefixed].
 func ConfigPrefix(base string) string {
 	return strings.TrimRight(base, "/") + "/" + DefaultStorageKey + "/"
 }

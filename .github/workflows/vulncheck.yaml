@@ -12,7 +12,7 @@ on:
         default: false
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.26.5"
   # Track latest; pre-v1.3.0 panics in the SSA builder on generic
   # signatures used by github.com/go-json-experiment/json.
   GOVULNCHECK_VERSION: latest

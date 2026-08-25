@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	etcdclient "go.etcd.io/etcd/client/v3"
 
-	"github.com/tarantool/go-storage/kv"
+	"github.com/tarantool/go-storage/v2/kv"
 
 	"github.com/tarantool/go-config"
 	"github.com/tarantool/go-config/collectors"
@@ -156,7 +156,8 @@ func TestStorageSource_Integration_Etcd(t *testing.T) {
 	assert.NotEmpty(t, kvs)
 
 	// Create a StorageSource for a single document.
-	source := collectors.NewStorageSource(cluster.Storage, prefix, "myapp", nil, nil)
+	source, err := collectors.NewStorageSource(cluster.Storage, prefix, "myapp", nil, nil)
+	require.NoError(t, err)
 
 	collector, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.NoError(t, err)
