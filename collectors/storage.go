@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tree"
 	"github.com/tarantool/go-storage/v2/integrity"
 )
 

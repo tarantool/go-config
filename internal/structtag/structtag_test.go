@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/internal/structtag"
+	"github.com/tarantool/go-config/v2/internal/structtag"
 )
 
 func TestParse(t *testing.T) {

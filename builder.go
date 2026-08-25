@@ -6,9 +6,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validator"
-	"github.com/tarantool/go-config/validators/jsonschema"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validator"
+	"github.com/tarantool/go-config/v2/validators/jsonschema"
 )
 
 // DefaultsType is a wrapper for default values in inheritance zones.

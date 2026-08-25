@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config/internal/testutil"
-	"github.com/tarantool/go-config/omap"
+	"github.com/tarantool/go-config/v2/internal/testutil"
+	"github.com/tarantool/go-config/v2/omap"
 )
 
 func TestOrderedMap_Set_Get_single(t *testing.T) {

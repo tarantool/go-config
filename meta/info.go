@@ -1,7 +1,7 @@
 package meta
 
 import (
-	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/v2/keypath"
 )
 
 // Info contains metadata about a value in the configuration.

@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/value"
+	"github.com/tarantool/go-config/v2/meta"
+	"github.com/tarantool/go-config/v2/value"
 )
 
 // SourceType defines the type of configuration source.

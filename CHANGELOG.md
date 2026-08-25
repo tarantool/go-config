@@ -14,6 +14,14 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+## [v2.0.1] - 2026-08-25
+
+This release bumps the project path to `github.com/tarantool/go-config/v2`.
+
+### Changed
+
+* Changed project path to `github.com/tarantool/go-config/v2`.
+
 ## [v2.0.0] - 2026-08-25
 
 This release migrates the storage integration from

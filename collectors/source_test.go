@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
 )
 
 func TestNewFile(t *testing.T) {

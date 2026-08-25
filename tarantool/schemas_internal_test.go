@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config/internal/race"
+	"github.com/tarantool/go-config/v2/internal/race"
 )
 
 // Replaces the eager init-time validation: ensures every shipped schema

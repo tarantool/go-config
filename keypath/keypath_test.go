@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/v2/keypath"
 )
 
 func formatTestName(in string) string {

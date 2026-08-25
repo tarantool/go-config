@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validators/jsonschema"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validators/jsonschema"
 )
 
 func TestNew_ValidSchema(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config"
+	"github.com/tarantool/go-config/v2"
 )
 
 func formatTestName(in string) string {

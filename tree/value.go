@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tarantool/go-config/internal/structtag"
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/value"
+	"github.com/tarantool/go-config/v2/internal/structtag"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/meta"
+	"github.com/tarantool/go-config/v2/value"
 )
 
 // valueImpl is the internal implementation of the value.Value interface.

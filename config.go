@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validator"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/meta"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validator"
 )
 
 // MergerContext holds state for merging a single collector's values.

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 func TestPosition_Structure(t *testing.T) {

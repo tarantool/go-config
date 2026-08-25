@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tarantool"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tarantool"
 )
 
 func ExampleBuilder_WithConfigFile() {

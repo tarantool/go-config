@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validator"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validator"
 )
 
 func TestRangeFromTree_Basic(t *testing.T) {

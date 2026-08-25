@@ -3,7 +3,7 @@ package jsonschema
 import (
 	"strings"
 
-	"github.com/tarantool/go-config/keypath"
+	"github.com/tarantool/go-config/v2/keypath"
 )
 
 // jsonPointerToKeyPath converts "/path/to/field" to KeyPath{"path", "to", "field"}.

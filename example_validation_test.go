@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validator"
-	"github.com/tarantool/go-config/validators/jsonschema"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validator"
+	"github.com/tarantool/go-config/v2/validators/jsonschema"
 )
 
 // Example_validation demonstrates JSON Schema validation of configuration.

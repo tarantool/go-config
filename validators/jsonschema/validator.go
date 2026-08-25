@@ -6,8 +6,8 @@ import (
 
 	"github.com/kaptinlin/jsonschema"
 
-	"github.com/tarantool/go-config/tree"
-	"github.com/tarantool/go-config/validator"
+	"github.com/tarantool/go-config/v2/tree"
+	"github.com/tarantool/go-config/v2/validator"
 )
 
 // Validator validates configuration against JSON Schema.

@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // DataSource represent data source.

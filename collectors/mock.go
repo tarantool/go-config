@@ -3,8 +3,8 @@ package collectors
 import (
 	"context"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // Mock is a testing collector that returns a predefined set of values.

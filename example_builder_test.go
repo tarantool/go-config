@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
 )
 
 // Example_multipleCollectorPriority demonstrates priority-based merging

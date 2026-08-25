@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/tarantool/internal/envpath"
+	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/tarantool/internal/envpath"
 )
 
 func loadFixtureSchema(t *testing.T) []byte {

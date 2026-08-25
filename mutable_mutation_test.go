@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config"
+	"github.com/tarantool/go-config/v2"
 )
 
 func TestMutableConfig_Set_YAMLRoundTrip(t *testing.T) {

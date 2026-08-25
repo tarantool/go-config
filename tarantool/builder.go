@@ -9,10 +9,10 @@ import (
 	"path"
 	"strings"
 
-	config "github.com/tarantool/go-config"
-	"github.com/tarantool/go-config/collectors"
-	"github.com/tarantool/go-config/tarantool/internal/envpath"
-	"github.com/tarantool/go-config/validators/jsonschema"
+	config "github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
+	"github.com/tarantool/go-config/v2/tarantool/internal/envpath"
+	"github.com/tarantool/go-config/v2/validators/jsonschema"
 	"github.com/tarantool/go-storage/v2/integrity"
 )
 

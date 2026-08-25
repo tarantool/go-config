@@ -52,7 +52,7 @@ merging and resolves effective configuration for any entity in the hierarchy.
 ### Installation
 
 ```bash
-go get github.com/tarantool/go-config
+go get github.com/tarantool/go-config/v2
 ```
 
 ### Quick Start
@@ -66,8 +66,8 @@ import (
     "fmt"
     "log"
 
-    "github.com/tarantool/go-config"
-    "github.com/tarantool/go-config/collectors"
+    "github.com/tarantool/go-config/v2"
+    "github.com/tarantool/go-config/v2/collectors"
 )
 
 func main() {
@@ -108,8 +108,8 @@ import (
     "fmt"
     "log"
 
-    "github.com/tarantool/go-config"
-    "github.com/tarantool/go-config/collectors"
+    "github.com/tarantool/go-config/v2"
+    "github.com/tarantool/go-config/v2/collectors"
 )
 
 func main() {
@@ -177,7 +177,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/tarantool/go-config/tarantool"
+    "github.com/tarantool/go-config/v2/tarantool"
 )
 
 func main() {
@@ -407,10 +407,10 @@ a pull request.
 This project is licensed under the BSD 2-Clause License – see the
 [LICENSE](LICENSE) file for details.
 
-[godoc-badge]: https://pkg.go.dev/badge/github.com/tarantool/go-config.svg
-[godoc-url]: https://pkg.go.dev/github.com/tarantool/go-config
-[actions-badge]: https://github.com/tarantool/go-config/actions/workflows/testing.yml/badge.svg
-[actions-url]: https://github.com/tarantool/go-config/actions/workflows/testing.yml
+[godoc-badge]: https://pkg.go.dev/badge/github.com/tarantool/go-config/v2.svg
+[godoc-url]: https://pkg.go.dev/github.com/tarantool/go-config/v2
+[actions-badge]: https://github.com/tarantool/go-config/v2/actions/workflows/testing.yml/badge.svg
+[actions-url]: https://github.com/tarantool/go-config/v2/actions/workflows/testing.yml
 [coverage-badge]: https://coveralls.io/repos/github/tarantool/go-config/badge.svg?branch=master
 [coverage-url]: https://coveralls.io/github/tarantool/go-config?branch=master
 [telegram-badge]: https://img.shields.io/badge/Telegram-join%20chat-blue.svg

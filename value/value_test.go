@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tarantool/go-config/keypath"
-	"github.com/tarantool/go-config/meta"
-	"github.com/tarantool/go-config/tree"
+	"github.com/tarantool/go-config/v2/keypath"
+	"github.com/tarantool/go-config/v2/meta"
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 type mockValue struct {

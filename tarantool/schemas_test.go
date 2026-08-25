@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tarantool/go-config/tarantool"
+	"github.com/tarantool/go-config/v2/tarantool"
 )
 
 var minimalValidSchema = []byte(`{"type":"object"}`) //nolint:gochecknoglobals // test fixtures
