@@ -155,7 +155,11 @@ func Example_storageSource() {
 		[]byte("server:\n  port: 8080\n  host: localhost"))
 
 	// Create a StorageSource for a single key.
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	if err != nil {
+		fmt.Printf("NewStorageSource error: %v\n", err)
+		return
+	}
 
 	// Use it with a format to build a collector.
 	collector, err := collectors.NewSource(context.Background(), source, collectors.NewYamlFormat())
@@ -194,7 +198,11 @@ func Example_storageSourceFetchStream() {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "app", []byte("key: value"))
 
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	if err != nil {
+		fmt.Printf("NewStorageSource error: %v\n", err)
+		return
+	}
 
 	ctx := context.Background()
 

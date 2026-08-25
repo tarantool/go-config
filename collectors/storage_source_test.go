@@ -20,7 +20,8 @@ func TestNewStorageSource(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	require.NoError(t, err)
 	require.NotNil(t, source)
 	assert.Equal(t, "storage", source.Name())
 	assert.Equal(t, config.StorageSource, source.SourceType())
@@ -31,7 +32,8 @@ func TestStorageSource_Name(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
-	source := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	require.NoError(t, err)
 	assert.Equal(t, "storage", source.Name())
 }
 
@@ -39,7 +41,8 @@ func TestStorageSource_SourceType(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
-	source := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	require.NoError(t, err)
 	assert.Equal(t, config.StorageSource, source.SourceType())
 }
 
@@ -47,7 +50,8 @@ func TestStorageSource_Revision(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
-	source := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "key", nil, nil)
+	require.NoError(t, err)
 	assert.Equal(t, config.RevisionType(""), source.Revision())
 }
 
@@ -58,7 +62,8 @@ func TestStorageSource_FetchStream(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "app", yamlBytes)
 
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	require.NoError(t, err)
 
 	ctx := t.Context()
 	reader, err := source.FetchStream(ctx)
@@ -76,10 +81,12 @@ func TestStorageSource_FetchStream_KeyNotFound(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage()
-	source := collectors.NewStorageSource(mock, "/config/", "missing", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "missing", nil, nil)
+	require.NoError(t, err)
 
 	ctx := t.Context()
-	_, err := source.FetchStream(ctx)
+
+	_, err = source.FetchStream(ctx)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, collectors.ErrStorageKeyNotFound)
 }
@@ -88,10 +95,12 @@ func TestStorageSource_FetchStream_TxError(t *testing.T) {
 	t.Parallel()
 
 	mock := testutil.NewMockStorage().WithTxError(errTestTxFailure)
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	require.NoError(t, err)
 
 	ctx := t.Context()
-	_, err := source.FetchStream(ctx)
+
+	_, err = source.FetchStream(ctx)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, collectors.ErrStorageFetch)
 }
@@ -102,7 +111,8 @@ func TestStorageSource_FetchStream_EmptyValue(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "empty", []byte{})
 
-	source := collectors.NewStorageSource(mock, "/config/", "empty", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "empty", nil, nil)
+	require.NoError(t, err)
 
 	ctx := t.Context()
 	reader, err := source.FetchStream(ctx)
@@ -122,7 +132,8 @@ func TestStorageSource_FetchStream_RevisionUpdated(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "app", yamlBytes)
 
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	require.NoError(t, err)
 
 	ctx := t.Context()
 	reader, err := source.FetchStream(ctx)
@@ -152,7 +163,8 @@ func TestStorageSource_WithSource_YamlFormat(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "app", yamlBytes)
 
-	source := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "app", nil, nil)
+	require.NoError(t, err)
 
 	collector, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.NoError(t, err)
@@ -187,7 +199,8 @@ func TestStorageSource_WithSource_NestedYaml(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "nested", yamlBytes)
 
-	source := collectors.NewStorageSource(mock, "/config/", "nested", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "nested", nil, nil)
+	require.NoError(t, err)
 
 	collector, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.NoError(t, err)
@@ -216,9 +229,10 @@ func TestStorageSource_WithSource_InvalidYaml(t *testing.T) {
 	mock := testutil.NewMockStorage()
 	testutil.PutIntegrity(mock, "/config/", "invalid", invalidYaml)
 
-	source := collectors.NewStorageSource(mock, "/config/", "invalid", nil, nil)
+	source, err := collectors.NewStorageSource(mock, "/config/", "invalid", nil, nil)
+	require.NoError(t, err)
 
-	_, err := collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
+	_, err = collectors.NewSource(t.Context(), source, collectors.NewYamlFormat())
 	require.Error(t, err)
 
 	var fpErr *collectors.FormatParseError

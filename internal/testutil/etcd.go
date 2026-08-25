@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tarantool/go-storage"
-	etcddriver "github.com/tarantool/go-storage/driver/etcd"
-	etcdtest "github.com/tarantool/go-storage/test_helpers/etcd"
+	storage "github.com/tarantool/go-storage/v2"
+	etcddriver "github.com/tarantool/go-storage/v2/driver/etcd"
+	etcdtest "github.com/tarantool/go-storage/v2/test_helpers/etcd"
 	etcdclient "go.etcd.io/etcd/client/v3"
 )
 

@@ -7,13 +7,13 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/tarantool/go-storage"
-	"github.com/tarantool/go-storage/kv"
-	"github.com/tarantool/go-storage/locker"
-	"github.com/tarantool/go-storage/operation"
-	"github.com/tarantool/go-storage/predicate"
-	"github.com/tarantool/go-storage/tx"
-	"github.com/tarantool/go-storage/watch"
+	storage "github.com/tarantool/go-storage/v2"
+	"github.com/tarantool/go-storage/v2/kv"
+	"github.com/tarantool/go-storage/v2/locker"
+	"github.com/tarantool/go-storage/v2/operation"
+	"github.com/tarantool/go-storage/v2/predicate"
+	"github.com/tarantool/go-storage/v2/tx"
+	"github.com/tarantool/go-storage/v2/watch"
 )
 
 // MockStorage is an in-memory implementation of storage.Storage for testing.
@@ -69,7 +69,7 @@ func (m *MockStorage) PutKV(entry kv.KeyValue) *MockStorage {
 }
 
 // Watch implements storage.Storage.
-func (m *MockStorage) Watch(_ context.Context, _ []byte, _ ...watch.Option) <-chan watch.Event {
+func (m *MockStorage) Watch(_ context.Context, _ []byte) <-chan watch.Event {
 	eventCh := make(chan watch.Event, 16) //nolint:mnd
 
 	m.mu.Lock()

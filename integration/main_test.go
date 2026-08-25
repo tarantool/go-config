@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	etcdtest "github.com/tarantool/go-storage/test_helpers/etcd"
+	etcdtest "github.com/tarantool/go-storage/v2/test_helpers/etcd"
 
 	"github.com/tarantool/go-config/internal/testutil"
 )

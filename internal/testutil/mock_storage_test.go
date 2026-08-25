@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config/internal/testutil"
-	"github.com/tarantool/go-storage/kv"
-	"github.com/tarantool/go-storage/operation"
+	"github.com/tarantool/go-storage/v2/kv"
+	"github.com/tarantool/go-storage/v2/operation"
 )
 
 func TestMockStorage_Put_And_Get(t *testing.T) {

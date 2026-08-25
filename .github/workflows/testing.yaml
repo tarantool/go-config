@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        golang: ["1.25", "stable"]
+        golang: ["1.26.5", "stable"]
 
     steps:
       - uses: actions/checkout@v7
@@ -48,9 +48,9 @@ jobs:
       - name: run tests, collect code coverage data and send to Coveralls
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Use exact Go toolchain version to workaround Go 1.25 covdata issue.
+          # Use exact Go toolchain version to workaround a covdata issue.
           # See: https://github.com/golang/go/issues/75031
-          GOTOOLCHAIN: go1.25.0+auto
+          GOTOOLCHAIN: go1.26.5+auto
         run: make coverage deps coveralls
 
   run-benchmarks:

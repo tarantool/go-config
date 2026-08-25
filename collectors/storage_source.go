@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/tarantool/go-config"
-	"github.com/tarantool/go-storage"
-	"github.com/tarantool/go-storage/crypto"
-	"github.com/tarantool/go-storage/hasher"
-	"github.com/tarantool/go-storage/integrity"
-	"github.com/tarantool/go-storage/kv"
-	"github.com/tarantool/go-storage/namer"
-	"github.com/tarantool/go-storage/operation"
+	storage "github.com/tarantool/go-storage/v2"
+	"github.com/tarantool/go-storage/v2/crypto"
+	"github.com/tarantool/go-storage/v2/hasher"
+	"github.com/tarantool/go-storage/v2/integrity"
+	"github.com/tarantool/go-storage/v2/kv"
+	"github.com/tarantool/go-storage/v2/namer"
+	"github.com/tarantool/go-storage/v2/operation"
 )
 
 // StorageSource implements DataSource for reading a single configuration
@@ -35,23 +36,30 @@ type StorageSource struct {
 
 // NewStorageSource creates a new StorageSource that will read from the given
 // storage the value identified by the logical name. The prefix determines the
-// key namespace in the storage backend (e.g., "/config/").
+// key namespace in the storage backend (e.g., "/config/") and is applied via
+// [storage.Prefixed].
 func NewStorageSource(
 	strg storage.Storage,
 	prefix string,
 	name string,
 	hashers []hasher.Hasher,
 	verifiers []crypto.Verifier,
-) *StorageSource {
-	hNames := hasherNames(hashers)
-	vNames := verifierNames(verifiers)
+) (*StorageSource, error) {
+	prefixedStorage, err := storage.Prefixed(strings.TrimSuffix(prefix, "/"), strg)
+	if err != nil {
+		return nil, fmt.Errorf("storage source: %w", err)
+	}
 
-	namerInstance := namer.NewDefaultNamer(prefix, hNames, vNames)
+	namerInstance, err := namer.New(namer.ObjectLocationMissing, hasherNames(hashers), verifierNames(verifiers))
+	if err != nil {
+		return nil, fmt.Errorf("storage source: %w", err)
+	}
+
 	m := rawBytesMarshaller{}
 	validator := integrity.NewValidator[[]byte](namerInstance, m, hashers, verifiers)
 
 	return &StorageSource{
-		storage:   strg,
+		storage:   prefixedStorage,
 		name:      name,
 		label:     "storage",
 		srcType:   config.StorageSource,
@@ -59,7 +67,7 @@ func NewStorageSource(
 		namer:     namerInstance,
 		validator: validator,
 		mu:        sync.RWMutex{},
-	}
+	}, nil
 }
 
 // Name returns the fixed label "storage".
@@ -170,29 +178,29 @@ func (s *StorageSource) Watch(ctx context.Context) (<-chan WatchEvent, error) {
 	return eventCh, nil
 }
 
-// hasherNames extracts names from a slice of hashers.
-func hasherNames(hashers []hasher.Hasher) []string {
+// hasherNames builds namer.HashLocation entries from a slice of hashers.
+func hasherNames(hashers []hasher.Hasher) []namer.HashLocation {
 	if len(hashers) == 0 {
 		return nil
 	}
 
-	names := make([]string, 0, len(hashers))
+	names := make([]namer.HashLocation, 0, len(hashers))
 	for _, h := range hashers {
-		names = append(names, h.Name())
+		names = append(names, namer.HashLocation{HasherName: h.Name(), Location: h.Name()})
 	}
 
 	return names
 }
 
-// verifierNames extracts names from a slice of verifiers.
-func verifierNames(verifiers []crypto.Verifier) []string {
+// verifierNames builds namer.SigLocation entries from a slice of verifiers.
+func verifierNames(verifiers []crypto.Verifier) []namer.SigLocation {
 	if len(verifiers) == 0 {
 		return nil
 	}
 
-	names := make([]string, 0, len(verifiers))
+	names := make([]namer.SigLocation, 0, len(verifiers))
 	for _, v := range verifiers {
-		names = append(names, v.Name())
+		names = append(names, namer.SigLocation{SignerName: v.Name(), Location: v.Name()})
 	}
 
 	return names

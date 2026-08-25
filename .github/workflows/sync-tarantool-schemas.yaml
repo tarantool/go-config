@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: 1.25
+  GO_VERSION: 1.26.5
   BOT_NAME: "github-actions[bot]"
   BOT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
   PR_BRANCH: automation/sync-tarantool-schemas
