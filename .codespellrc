@@ -3,3 +3,6 @@
 skip = ./vendor,./.git
 check-filenames = true
 
+
+# YAML cursor fragments and property-name regex suffixes in syntax fixtures.
+ignore-words-list = ue

@@ -16,6 +16,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `collectors.NewYamlFormat` takes options; `collectors.EmptyAsString` reads
   a scalar with no content (`key:`, a `- ` item) as "" instead of null, while
   `~` and `null` stay null.
+* Added a schema-backed YAML syntax parser for editor operations. It preserves
+  incomplete YAML in a tree-sitter syntax tree (TNTP-10384).
+* Added source coordinates through `syntax.Position` and `syntax.Range`.
+  CST navigation and JSON Schema traversal remain private to `syntax`.
 
 ### Changed
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaptinlin/jsonschema"
 
+	"github.com/tarantool/go-config/v2/internal/schemautil"
 	"github.com/tarantool/go-config/v2/tree"
 )
 
@@ -232,17 +233,6 @@ func schemaAllows(schema *jsonschema.Schema, typ string) bool {
 	return slices.Contains([]string(schema.Type), typ)
 }
 
-// branches returns the combinator subschemas (allOf/anyOf/oneOf) of schema.
-func branches(schema *jsonschema.Schema) []*jsonschema.Schema {
-	out := make([]*jsonschema.Schema, 0, len(schema.AllOf)+len(schema.AnyOf)+len(schema.OneOf))
-
-	out = append(out, schema.AllOf...)
-	out = append(out, schema.AnyOf...)
-	out = append(out, schema.OneOf...)
-
-	return out
-}
-
 // schemaIsObject reports whether the schema describes an object, looking through
 // $ref and combinators.
 func schemaIsObject(schema *jsonschema.Schema) bool {
@@ -260,7 +250,7 @@ func schemaIsObject(schema *jsonschema.Schema) bool {
 		return true
 	}
 
-	return slices.ContainsFunc(branches(schema), schemaIsObject)
+	return slices.ContainsFunc(schemautil.Branches(schema), schemaIsObject)
 }
 
 // schemaIsArray reports whether the schema describes an array, looking through
@@ -279,7 +269,7 @@ func schemaIsArray(schema *jsonschema.Schema) bool {
 		return true
 	}
 
-	return slices.ContainsFunc(branches(schema), schemaIsArray)
+	return slices.ContainsFunc(schemautil.Branches(schema), schemaIsArray)
 }
 
 // subschemaForProperty resolves the schema constraining property key of an
@@ -306,7 +296,7 @@ func subschemaForProperty(schema *jsonschema.Schema, key string) *jsonschema.Sch
 		}
 	}
 
-	for _, branch := range branches(schema) {
+	for _, branch := range schemautil.Branches(schema) {
 		if sub := subschemaForProperty(branch, key); sub != nil {
 			return sub
 		}
@@ -334,7 +324,7 @@ func subschemaForItem(schema *jsonschema.Schema, index int) *jsonschema.Schema {
 		return schema.Items
 	}
 
-	for _, branch := range branches(schema) {
+	for _, branch := range schemautil.Branches(schema) {
 		if sub := subschemaForItem(branch, index); sub != nil {
 			return sub
 		}

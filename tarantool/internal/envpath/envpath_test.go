@@ -1,8 +1,7 @@
 package envpath_test
 
 import (
-	"os"
-	"path/filepath"
+	_ "embed"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,19 +11,13 @@ import (
 	"github.com/tarantool/go-config/v2/tarantool/internal/envpath"
 )
 
-func loadFixtureSchema(t *testing.T) []byte {
-	t.Helper()
-
-	data, err := os.ReadFile(filepath.Join("testdata", "config.schema.json"))
-	require.NoError(t, err)
-
-	return data
-}
+//go:embed testdata/config.schema.json
+var fixtureSchema []byte
 
 func TestTrie_SimpleKey(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	got := root.Resolve("REPLICATION_FAILOVER")
@@ -34,7 +27,7 @@ func TestTrie_SimpleKey(t *testing.T) {
 func TestTrie_CompoundKey_AuditLog(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	got := root.Resolve("AUDIT_LOG_NONBLOCK")
@@ -44,7 +37,7 @@ func TestTrie_CompoundKey_AuditLog(t *testing.T) {
 func TestTrie_CompoundKey_LongestWins(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	gotLong := root.Resolve("WAL_QUEUE_MAX_SIZE")
@@ -57,7 +50,7 @@ func TestTrie_CompoundKey_LongestWins(t *testing.T) {
 func TestTrie_Wildcard(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	got := root.Resolve("GROUPS_FOO_REPLICASETS_BAR_INSTANCES_BAZ_IPROTO_LISTEN")
@@ -69,7 +62,7 @@ func TestTrie_Wildcard(t *testing.T) {
 func TestTrie_Unknown(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	got := root.Resolve("UNKNOWN_THING")
@@ -79,7 +72,7 @@ func TestTrie_Unknown(t *testing.T) {
 func TestTrie_EmptyKey(t *testing.T) {
 	t.Parallel()
 
-	root, err := envpath.Build(loadFixtureSchema(t))
+	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
 	got := root.Resolve("")
