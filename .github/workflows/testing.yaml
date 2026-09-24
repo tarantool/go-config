@@ -53,6 +53,43 @@ jobs:
           GOTOOLCHAIN: go1.26.5+auto
         run: make coverage deps coveralls
 
+  run-fuzzing:
+    if: (github.event_name == 'push') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository) ||
+      (github.event_name == 'workflow_dispatch')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: locate the fuzzing corpus
+        id: fuzz-corpus
+        run: echo "dir=$(go env GOCACHE)/fuzz" >> "$GITHUB_OUTPUT"
+
+      # Every run starts from the corpus the latest run left and saves it,
+      # grown, under a key of its own.
+      - name: restore the fuzzing corpus
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.fuzz-corpus.outputs.dir }}
+          key: fuzz-corpus-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-
+
+      - name: fuzz YAML ranges
+        run: make fuzz
+
+      - name: upload the failing input
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-failure
+          path: collectors/testdata/fuzz/FuzzYamlRanges/
+
   run-benchmarks:
     if: false
 

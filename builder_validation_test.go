@@ -208,7 +208,7 @@ func TestBuilder_BuildMutable_Validation(t *testing.T) {
 	// Try to set invalid value via mutable config - should return error.
 	err := mcfg.Set(config.NewKeyPath("port"), 80)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "properties")
+	assert.Contains(t, err.Error(), "minimum")
 }
 
 func TestBuilder_WithoutValidation_SkipsBuildTimeValidation(t *testing.T) {
@@ -353,5 +353,5 @@ func TestBuilder_WithoutValidation_MutableConfigStillValidates(t *testing.T) {
 	// The validator survives — runtime mutations are still validated.
 	err := mcfg.Set(config.NewKeyPath("port"), 100)
 	require.Error(t, err, "MutableConfig must keep validating runtime mutations")
-	assert.Contains(t, err.Error(), "properties")
+	assert.Contains(t, err.Error(), "minimum")
 }

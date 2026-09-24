@@ -1,0 +1,2 @@
+# The cases are compared byte for byte; keep git from converting line breaks.
+* -text

@@ -1,6 +1,7 @@
 GOTEST := go test
 TAGS :=
 COVERAGE_FILE := coverage.out
+FUZZTIME := 5m
 
 .PHONY: codespell
 codespell:
@@ -16,6 +17,11 @@ test:
 testrace:
 	@echo "Running tests with race flag"
 	@go test ./... -count=100 -race
+
+.PHONY: fuzz
+fuzz:
+	@echo "Fuzzing YAML ranges for $(FUZZTIME)"
+	@go test ./collectors/ -run '^$$' -fuzz '^FuzzYamlRanges$$' -fuzztime $(FUZZTIME)
 
 .PHONY: coverage
 coverage:
