@@ -1,0 +1,81 @@
+# Every scalar and collection style the range scanner distinguishes.
+plain: plain value  # trailing comment
+url: http://example.com:8080/path
+hashes: a#b c#d
+multi: plain value that
+  continues on the next line
+
+  and after a blank one
+double: "escaped \" quote and # not a comment"
+double_multi: "first
+  second"
+single: 'it''s # not a comment'
+empty_double: ""
+literal: |
+  line one
+    indented line
+
+  line after blank
+folded_keep: >+
+  folded
+  text
+
+
+strip: |-
+  stripped
+trailing_spaces: |
+  kept   
+  lines  
+explicit: |2
+    two extra spaces
+  base
+header_comment: | # comment on the header
+  content
+implicit_null:
+tilde: ~
+tagged_empty: !!str
+tagged_next_line: !!str
+  value on the next line
+anchored: &scalar anchored value
+alias: *scalar
+unicode: café 日本語 😀 multi-byte runes
+flow_map: {a: 1, "b": [x, y], c: {d: 'e, f'}}
+flow_seq: [a 'b, c, "d]", [nested, {k: v}]]
+flow_multi: [
+  one,  # comment with ] inside
+  two
+  words,
+  three,
+]
+flow_null: {a, b: , c: 1}
+flow_pair: [a: b, ? c : d, e]
+flow_explicit_key: {? "}" : x}
+flow_unindented: [one
+two]
+json_like: {"k":"v","n":[1,2]}
+empty_map: {}
+empty_seq: []
+anchored_map: &map
+  x: 1
+  y: [1, 2]
+map_alias: *map
+block_seq:
+  - one
+  - two words
+  -
+  - nested: map
+    other: |
+      block in seq
+  - - deep
+    - seq
+seq_explicit:
+  - |1
+     one extra space
+    base
+seq_no_indent:
+- a
+- b: c
+explicit_key:
+  ? complex key
+  : complex value
+last: value

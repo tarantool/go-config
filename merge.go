@@ -65,6 +65,7 @@ func MergeCollectorWithMerger(ctx context.Context, root *tree.Node, col Collecto
 		// the destination tree node so that marshalers can reproduce
 		// scalar style and comments.
 		copyAnnotation(root, meta.Key, val)
+		copyRanges(root, meta.Key, val)
 	}
 
 	err := mergeCtx.ApplyOrdering(root)
@@ -178,6 +179,36 @@ func copyAnnotation(root *tree.Node, path keypath.KeyPath, src Value) {
 	dest.SetAnnotation(anno)
 }
 
+// copyRanges forwards the source ranges a value carries onto the destination
+// nodes along its path. The value's own node always takes its range, so a
+// value without one does not keep the range of the value it replaced; a map
+// or array above it takes a range only when the collector knows one.
+func copyRanges(root *tree.Node, path keypath.KeyPath, src Value) {
+	var ranges []tree.Range
+
+	if carrier, ok := src.(interface{ PathRanges() []tree.Range }); ok {
+		ranges = carrier.PathRanges()
+	}
+
+	if len(ranges) == 0 || len(ranges) > len(path)+1 {
+		ranges = []tree.Range{tree.NewZeroRange()}
+	}
+
+	// The ranges end with the value's own node; align them with path's end.
+	first := len(path) + 1 - len(ranges)
+
+	for i, rng := range ranges {
+		own := i == len(ranges)-1
+		if !own && rng == tree.NewZeroRange() {
+			continue
+		}
+
+		if dest := root.Get(path[:first+i]); dest != nil {
+			dest.Range = rng
+		}
+	}
+}
+
 // mergeTreeInto folds src into dst at the tree level.
 // Map-into-map is recursive; any other src child (leaf or array) replaces
 // the dst child wholesale (carrying Source, Revision, Range, annotation,
@@ -186,6 +217,10 @@ func copyAnnotation(root *tree.Node, path keypath.KeyPath, src Value) {
 // When src.OrderSet() and !dst.OrderSet() the dst children are reordered
 // to match src's key order and dst.OrderSet() is set true.
 func mergeTreeInto(dst, src *tree.Node) {
+	if src.Range != tree.NewZeroRange() {
+		dst.Range = src.Range
+	}
+
 	for _, key := range src.ChildrenKeys() {
 		srcChild := src.Child(key)
 		dstChild := dst.Child(key)
