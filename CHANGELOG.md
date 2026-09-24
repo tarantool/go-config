@@ -10,6 +10,9 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* Added a schema-backed YAML syntax parser for editor operations. It preserves
+  incomplete YAML in a tree-sitter syntax tree (TNTP-10384).
+
 ### Changed
 
 ### Fixed
