@@ -12,7 +12,22 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* The YAML collector sets `Range` on every node, mappings and sequences
+  included, and `Range.End` now points just past the node's last character
+  instead of repeating `Range.Start`. An alias gets the range of the alias
+  itself rather than of its anchor.
+* Source ranges reach the tree the `Builder` validates, so validation errors
+  from `config.Builder` and `tarantool.New()` point at the offending YAML
+  instead of 0:0.
+* The JSON Schema validator no longer reports the summary errors of
+  `properties`, `items`, `$ref` and similar keywords on top of the error they
+  summarize: one bad value is reported once, where it is.
+
 ### Fixed
+
+* The YAML collector rejects an anchor that contains an alias to itself and a
+  document that expands aliases far beyond its size, as yaml.v3's decoder
+  does, instead of recursing forever or building an exponential tree.
 
 ## [v2.0.1] - 2026-08-25
 

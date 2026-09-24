@@ -3,9 +3,11 @@ package jsonschema
 import (
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/kaptinlin/jsonschema"
 
+	"github.com/tarantool/go-config/v2/keypath"
 	"github.com/tarantool/go-config/v2/tree"
 	"github.com/tarantool/go-config/v2/validator"
 )
@@ -70,7 +72,51 @@ func (v *Validator) Validate(root *tree.Node) []validator.ValidationError {
 	ve := validationErrors{root: root, errors: nil}
 	ve.collectErrorsFromPath(result, "")
 
-	return ve.All()
+	return dropSummaries(ve.All())
+}
+
+// isSummary reports whether keyword applies a subschema to part of the
+// instance and only reports that it failed; the failure itself is reported
+// where it happened.
+func isSummary(keyword string) bool {
+	switch keyword {
+	case "$ref", "$dynamicRef", "allOf", "properties", "patternProperties", "additionalProperties",
+		"dependentSchemas", "items", "prefixItems", "contains", "unevaluatedProperties", "unevaluatedItems",
+		"then", "else":
+		return true
+	default:
+		return false
+	}
+}
+
+// dropSummaries removes the errors of summary keywords that another error
+// explains: any error below their path, or one of another keyword at it. One
+// bad value is then reported once and not again at every map above it, and a
+// summary nothing explains is kept.
+func dropSummaries(errs []validator.ValidationError) []validator.ValidationError {
+	kept := make([]validator.ValidationError, 0, len(errs))
+
+	for _, err := range errs {
+		if !isSummary(err.Code) || !explained(err.Path, errs) {
+			kept = append(kept, err)
+		}
+	}
+
+	return kept
+}
+
+func explained(path keypath.KeyPath, errs []validator.ValidationError) bool {
+	for _, other := range errs {
+		if len(other.Path) < len(path) || !slices.Equal(other.Path[:len(path)], path) {
+			continue
+		}
+
+		if len(other.Path) > len(path) || !isSummary(other.Code) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // SchemaType returns JSONSchema string.

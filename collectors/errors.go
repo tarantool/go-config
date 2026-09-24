@@ -29,6 +29,12 @@ var (
 	// ErrNotStruct indicates that a value expected to be a struct (or a
 	// pointer to one) was something else.
 	ErrNotStruct = errors.New("value is not a struct")
+	// ErrYamlAliasCycle indicates a YAML anchor whose value contains an alias
+	// to itself.
+	ErrYamlAliasCycle = errors.New("anchor value contains itself")
+	// ErrYamlExcessiveAliasing indicates a YAML document that expands aliases
+	// far beyond its own size.
+	ErrYamlExcessiveAliasing = errors.New("document contains excessive aliasing")
 )
 
 // FormatParseError indicates that parsing a configuration value with the

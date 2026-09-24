@@ -176,3 +176,40 @@ func TestSchemaType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "json-schema", validator.SchemaType())
 }
+
+func TestValidate_ReportsFailuresWhereTheyHappen(t *testing.T) {
+	t.Parallel()
+
+	validator, err := jsonschema.New([]byte(`{
+		"$defs": {"port": {"type": "integer", "minimum": 1024}},
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"server": {"type": "object", "properties": {"port": {"$ref": "#/$defs/port"}}, "required": ["host"]},
+			"list": {"type": "array", "prefixItems": [{"type": "string"}]},
+			"choice": {"anyOf": [{"type": "string"}, {"type": "integer"}]}
+		}
+	}`))
+	require.NoError(t, err)
+
+	root := tree.New()
+	root.Set(keypath.NewKeyPath("server/port"), int64(80))
+	root.Set(keypath.NewKeyPath("list/0"), int64(1))
+	root.Get(keypath.NewKeyPath("list")).MarkArray()
+	root.Set(keypath.NewKeyPath("choice"), true)
+	root.Set(keypath.NewKeyPath("extra"), "x")
+
+	errs := validator.Validate(root)
+
+	got := make([]string, 0, len(errs))
+	for _, e := range errs {
+		got = append(got, e.Path.String()+" "+e.Code)
+	}
+
+	// No "properties", "$ref", "prefixItems" or "additionalProperties" on
+	// top of the errors they only summarize; anyOf says something of its own.
+	assert.ElementsMatch(t, []string{
+		"server required", "server/port minimum", "list/0 type", "extra schema",
+		"choice anyOf", "choice type", "choice type",
+	}, got)
+}

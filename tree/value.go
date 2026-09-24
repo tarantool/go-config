@@ -15,10 +15,41 @@ import (
 
 // valueImpl is the internal implementation of the value.Value interface.
 type valueImpl struct {
-	node    *Node
-	keyPath keypath.KeyPath
-	source  meta.SourceInfo
-	rev     meta.RevisionType
+	node      *Node
+	ancestors []*Node
+	keyPath   keypath.KeyPath
+	source    meta.SourceInfo
+	rev       meta.RevisionType
+}
+
+// NewValueOnPath creates a new value.Value for the last node of path, which
+// holds the nodes from the root down to it along keyPath. The ranges of those
+// nodes travel with the value, see PathRanges.
+func NewValueOnPath(path []*Node, keyPath keypath.KeyPath) value.Value {
+	last := len(path) - 1
+
+	impl, _ := NewValue(path[last], keyPath).(*valueImpl)
+
+	impl.ancestors = path[:last:last]
+
+	return impl
+}
+
+// PathRanges returns the source ranges of the nodes along the value's key
+// path, ending with the value's own node. A value created with NewValue knows
+// only its own range.
+func (v *valueImpl) PathRanges() []Range {
+	ranges := make([]Range, 0, len(v.ancestors)+1)
+
+	for _, node := range v.ancestors {
+		ranges = append(ranges, node.Range)
+	}
+
+	if v.node != nil {
+		ranges = append(ranges, v.node.Range)
+	}
+
+	return ranges
 }
 
 // NewValue creates a new value.Value from a tree node and its key path.
@@ -35,10 +66,11 @@ func NewValue(node *Node, keyPath keypath.KeyPath) value.Value {
 	rev := meta.RevisionType(node.Revision)
 
 	return &valueImpl{
-		node:    node,
-		keyPath: keyPath,
-		source:  source,
-		rev:     rev,
+		node:      node,
+		ancestors: nil,
+		keyPath:   keyPath,
+		source:    source,
+		rev:       rev,
 	}
 }
 

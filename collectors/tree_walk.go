@@ -48,11 +48,19 @@ func setSource(node *tree.Node, source string) {
 }
 
 func walkTree(ctx context.Context, node *tree.Node, prefix config.KeyPath, valueCh chan<- config.Value) {
+	walkTreePath(ctx, []*tree.Node{node}, prefix, valueCh)
+}
+
+// walkTreePath sends every leaf under the last node of path, which holds the
+// nodes from the walk's root down to it.
+func walkTreePath(ctx context.Context, path []*tree.Node, prefix config.KeyPath, valueCh chan<- config.Value) {
+	node := path[len(path)-1]
+
 	if node.IsLeaf() {
 		select {
 		case <-ctx.Done():
 			return
-		case valueCh <- tree.NewValue(node, prefix):
+		case valueCh <- tree.NewValueOnPath(path, prefix):
 		}
 
 		return
@@ -64,6 +72,6 @@ func walkTree(ctx context.Context, node *tree.Node, prefix config.KeyPath, value
 			continue
 		}
 
-		walkTree(ctx, child, prefix.Append(key), valueCh)
+		walkTreePath(ctx, append(slices.Clip(path), child), prefix.Append(key), valueCh)
 	}
 }

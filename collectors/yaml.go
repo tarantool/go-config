@@ -72,29 +72,89 @@ func (y YamlFormat) Parse() (*tree.Node, error) {
 
 	root := tree.New()
 
-	flattenYamlIntoTree(root, nil, node, config.NewKeyPath(""))
+	flattener := yamlFlattener{
+		ranges:      newYamlRanges(y.data, &node),
+		expanding:   make(map[*yaml.Node]bool),
+		visits:      0,
+		aliasVisits: 0,
+	}
+
+	err = flattener.flatten(root, nil, &node, config.NewKeyPath(""))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnmarshall, err)
+	}
 
 	return root, nil
 }
 
-func flattenYamlIntoTree(node *tree.Node, key *yaml.Node, yamlNode yaml.Node,
-	prefix config.KeyPath,
-) {
+// yamlFlattener copies a YAML document into a tree, expanding aliases under
+// the limits yaml.v3 applies when it decodes one.
+type yamlFlattener struct {
+	ranges *yamlRanges
+	// expanding holds the aliases being expanded, to catch an anchor that
+	// contains itself.
+	expanding   map[*yaml.Node]bool
+	visits      int
+	aliasVisits int
+}
+
+// yaml.v3's limits on alias expansion: once a document has more than
+// aliasMinVisits nodes, of which more than aliasMinAliasVisits come from
+// aliases, their share may not exceed aliasRatioMax up to aliasRatioLow nodes,
+// falling to aliasRatioMin at aliasRatioHigh.
+const (
+	aliasMinVisits      = 1000
+	aliasMinAliasVisits = 100
+	aliasRatioLow       = 400_000
+	aliasRatioHigh      = 4_000_000
+	aliasRatioMax       = 0.99
+	aliasRatioMin       = 0.10
+)
+
+func allowedAliasRatio(visits int) float64 {
+	switch {
+	case visits <= aliasRatioLow:
+		return aliasRatioMax
+	case visits >= aliasRatioHigh:
+		return aliasRatioMin
+	default:
+		share := float64(visits-aliasRatioLow) / float64(aliasRatioHigh-aliasRatioLow)
+
+		return aliasRatioMax - (aliasRatioMax-aliasRatioMin)*share
+	}
+}
+
+func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.Node, prefix config.KeyPath) error {
+	f.visits++
+	if len(f.expanding) > 0 {
+		f.aliasVisits++
+	}
+
+	if f.aliasVisits > aliasMinAliasVisits && f.visits > aliasMinVisits &&
+		float64(f.aliasVisits)/float64(f.visits) > allowedAliasRatio(f.visits) {
+		return ErrYamlExcessiveAliasing
+	}
+
 	switch yamlNode.Kind {
 	case yaml.DocumentNode:
 		for _, child := range yamlNode.Content {
-			flattenYamlIntoTree(node, nil, *child, prefix)
+			err := f.flatten(node, nil, child, prefix)
+			if err != nil {
+				return err
+			}
 		}
 	case yaml.MappingNode:
 		if len(yamlNode.Content) == 0 {
 			node.Set(prefix, map[string]any{})
 
 			if target := node.Get(prefix); target != nil {
-				yamlNodeCopy := yamlNode
+				target.Range = f.ranges.get(yamlNode)
+
+				yamlNodeCopy := *yamlNode
 				target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 			}
 
-			return
+			return nil
 		}
 
 		// Ensure the mapping node exists so we can attach the annotation.
@@ -105,7 +165,9 @@ func flattenYamlIntoTree(node *tree.Node, key *yaml.Node, yamlNode yaml.Node,
 		}
 
 		if target := node.Get(prefix); target != nil {
-			yamlNodeCopy := yamlNode
+			target.Range = f.ranges.get(yamlNode)
+
+			yamlNodeCopy := *yamlNode
 			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 		}
 
@@ -113,9 +175,10 @@ func flattenYamlIntoTree(node *tree.Node, key *yaml.Node, yamlNode yaml.Node,
 			k := yamlNode.Content[i]
 			value := yamlNode.Content[i+1]
 
-			newPrefix := prefix.Append(k.Value)
-
-			flattenYamlIntoTree(node, k, *value, newPrefix)
+			err := f.flatten(node, k, value, prefix.Append(k.Value))
+			if err != nil {
+				return err
+			}
 		}
 	case yaml.SequenceNode:
 		// Ensure the array node exists even for empty sequences.
@@ -126,33 +189,51 @@ func flattenYamlIntoTree(node *tree.Node, key *yaml.Node, yamlNode yaml.Node,
 		arrNode := node.Get(prefix)
 		arrNode.MarkArray()
 
-		yamlNodeCopy := yamlNode
+		arrNode.Range = f.ranges.get(yamlNode)
+
+		yamlNodeCopy := *yamlNode
 		arrNode.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 
 		for i, item := range yamlNode.Content {
-			newPrefix := prefix.Append(strconv.Itoa(i))
-
-			flattenYamlIntoTree(node, nil, *item, newPrefix)
+			err := f.flatten(node, nil, item, prefix.Append(strconv.Itoa(i)))
+			if err != nil {
+				return err
+			}
 		}
 	case yaml.AliasNode:
 		// Field `Value` contains name of the anchor.
 		// Field `Alias` contains pointer to the anchor.
-		flattenYamlIntoTree(node, key, *yamlNode.Alias, prefix)
+		if f.expanding[yamlNode] {
+			return fmt.Errorf("%w: %q", ErrYamlAliasCycle, yamlNode.Value)
+		}
+
+		f.expanding[yamlNode] = true
+
+		err := f.flatten(node, key, yamlNode.Alias, prefix)
+
+		delete(f.expanding, yamlNode)
+
+		if err != nil {
+			return err
+		}
+
+		if target := node.Get(prefix); target != nil {
+			target.Range = f.ranges.get(yamlNode)
+		}
 	case yaml.ScalarNode:
-		node.Set(prefix, resolveYamlScalar(yamlNode))
+		node.Set(prefix, resolveYamlScalar(*yamlNode))
 
 		target := node.Get(prefix)
 		if target != nil {
-			target.Range = tree.Range{
-				Start: tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
-				End:   tree.Position{Line: yamlNode.Line, Column: yamlNode.Column},
-			}
+			target.Range = f.ranges.get(yamlNode)
 
-			yamlNodeCopy := yamlNode
+			yamlNodeCopy := *yamlNode
 			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 		}
 	default:
 	}
+
+	return nil
 }
 
 // resolveYamlScalar converts a YAML scalar node's string value into a typed Go value
