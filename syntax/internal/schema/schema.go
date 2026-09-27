@@ -18,6 +18,7 @@ import (
 const (
 	TypeArray  = "array"
 	TypeObject = "object"
+	TypeString = "string"
 )
 
 // Schema owns a compiled schema and its validation caches.
