@@ -23,6 +23,10 @@ var (
 	ErrConvertToUint = errors.New("cannot convert to uint")
 	// ErrConvertToFloat is returned when a value cannot be converted to float.
 	ErrConvertToFloat = errors.New("cannot convert to float")
+	// ErrFixedTypeString is returned, wrapped together with one of the
+	// ErrConvertTo* errors, when a string whose type the source fixed (see
+	// [Node.TypeFixed]) is decoded into a bool or a number.
+	ErrFixedTypeString = errors.New("the source fixed the value as a string")
 	// ErrSourceNotSliceOrArray is returned when source is not a slice or array.
 	ErrSourceNotSliceOrArray = errors.New("source is not a slice or array")
 	// ErrSourceNotMap is returned when source is not a map.

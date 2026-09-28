@@ -37,6 +37,10 @@ type Node struct {
 	// orderSet indicates whether the order of children has been set by a higher-priority ordered collector.
 	orderSet bool
 
+	// typeFixed indicates that the source fixed the type of this node's
+	// value, so a string must not be parsed into another scalar type.
+	typeFixed bool
+
 	// children is an ordered map from child keys to their nodes.
 	children *omap.OrderedMap[string, *Node]
 }
@@ -53,6 +57,7 @@ func New() *Node {
 		isArray:    false,
 		children:   nil,
 		orderSet:   false,
+		typeFixed:  false,
 	}
 }
 
@@ -93,6 +98,25 @@ func (n *Node) MarkArray() {
 // an array is being converted into a map by an overriding contribution.
 func (n *Node) UnmarkArray() {
 	n.isArray = false
+}
+
+// TypeFixed reports whether the source fixed the type of this node's value.
+//
+// A string in a node with a fixed type is a string and nothing else: it is
+// not parsed into a bool or a number, neither when the value is decoded into
+// a Go type nor when it is validated against a schema. A YAML scalar written
+// in quotes, as a block scalar or with an explicit tag has a fixed type.
+// Sources without types of their own, such as environment variables, leave
+// the flag unset, and their strings are converted to whatever type the
+// destination asks for.
+func (n *Node) TypeFixed() bool {
+	return n.typeFixed
+}
+
+// SetTypeFixed sets whether the source fixed the type of this node's value.
+// See [Node.TypeFixed].
+func (n *Node) SetTypeFixed(fixed bool) {
+	n.typeFixed = fixed
 }
 
 // Children returns the child nodes in insertion order.
@@ -149,9 +173,13 @@ func (n *Node) DeleteChild(key string) bool {
 }
 
 // Set sets the value at the given path, creating intermediate nodes as needed.
+// The node at path loses a fixed type it had (see [Node.TypeFixed]): the new
+// value says nothing about where it came from.
 func (n *Node) Set(path keypath.KeyPath, value Value) {
 	if len(path) == 0 {
 		n.Value = value
+		n.typeFixed = false
+
 		return
 	}
 

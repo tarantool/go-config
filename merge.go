@@ -66,6 +66,7 @@ func MergeCollectorWithMerger(ctx context.Context, root *tree.Node, col Collecto
 		// scalar style and comments.
 		copyAnnotation(root, meta.Key, val)
 		copyRanges(root, meta.Key, val)
+		copyTypeFixed(root, meta.Key, val)
 	}
 
 	err := mergeCtx.ApplyOrdering(root)
@@ -151,6 +152,7 @@ func mergeNodeValue(node *tree.Node, value any, col Collector) {
 		node.UnmarkArray()
 
 		node.Value = value
+		node.SetTypeFixed(false)
 	}
 
 	// Update node metadata.
@@ -207,6 +209,20 @@ func copyRanges(root *tree.Node, path keypath.KeyPath, src Value) {
 			dest.Range = rng
 		}
 	}
+}
+
+// copyTypeFixed forwards whether the source fixed the type of a value onto
+// the destination node at path. The node always takes the flag of the value
+// merged into it, so an untyped value does not keep the fixed type of the
+// value it replaced.
+func copyTypeFixed(root *tree.Node, path keypath.KeyPath, src Value) {
+	dest := root.Get(path)
+	if dest == nil {
+		return
+	}
+
+	carrier, ok := src.(interface{ TypeFixed() bool })
+	dest.SetTypeFixed(ok && carrier.TypeFixed())
 }
 
 // mergeTreeInto folds src into dst at the tree level.

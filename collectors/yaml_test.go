@@ -229,3 +229,54 @@ func TestYaml_Parse_Invalid(t *testing.T) {
 	require.Nil(t, root)
 	require.Error(t, err)
 }
+
+func TestYaml_Parse_TypeFixed(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`plain_bool: false
+plain_str: 5s
+plain_yes: yes
+double: "false"
+single: 'false'
+literal: |
+  false
+folded: >
+  false
+str_tag: !!str false
+bool_tag: !!bool "true"
+anchor: &q "3301"
+alias: *q
+list: [1, "2"]
+`)
+
+	root, err := collectors.NewYamlFormat().From(bytes.NewReader(data)).Parse()
+	require.NoError(t, err)
+
+	tests := []struct {
+		path  string
+		fixed bool
+	}{
+		{"plain_bool", false},
+		{"plain_str", false},
+		{"plain_yes", false},
+		{"double", true},
+		{"single", true},
+		{"literal", true},
+		{"folded", true},
+		{"str_tag", true},
+		{"bool_tag", true},
+		{"anchor", true},
+		{"alias", true},
+		{"list/0", false},
+		{"list/1", true},
+	}
+
+	for _, tt := range tests {
+		node := root.Get(config.NewKeyPath(tt.path))
+		require.NotNil(t, node, tt.path)
+		assert.Equal(t, tt.fixed, node.TypeFixed(), tt.path)
+	}
+
+	assert.Equal(t, "false", root.Get(config.NewKeyPath("double")).Value)
+	assert.Equal(t, true, root.Get(config.NewKeyPath("bool_tag")).Value)
+}

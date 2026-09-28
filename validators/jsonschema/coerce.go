@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/kaptinlin/jsonschema"
+
+	"github.com/tarantool/go-config/v2/tree"
 )
 
 // NullCoercion controls how a JSON null (produced by an empty YAML value such
@@ -93,33 +95,62 @@ func coerceNulls(data any, schema *jsonschema.Schema, policy NullCoercion) any {
 // A string is coerced only when the schema does not also permit "string" (a
 // union like `["boolean", "string"]` keeps the string as-is) and only when it
 // parses; an unparsable string is left unchanged so the validator reports a
-// proper type error rather than the coercion masking it. The (possibly
-// mutated) data is returned.
+// proper type error rather than the coercion masking it. A string whose type
+// the source fixed (tree.Node.TypeFixed, e.g. a quoted YAML scalar) is never
+// coerced: `debug: "true"` is a string, and a boolean schema rejects it. node
+// is the tree node data was built from, walked alongside it; nil means the
+// value has no node of its own and is coerced. The (possibly mutated) data is
+// returned.
 //
 // Like coerceNulls, this rewrites the copy used for validation only; it does
 // not alter the configuration tree, whose typed decode handles string scalars
 // on its own.
-func coerceScalars(data any, schema *jsonschema.Schema) any {
+func coerceScalars(data any, schema *jsonschema.Schema, node *tree.Node) any {
 	schema = effectiveSchema(schema)
 
 	switch typed := data.(type) {
 	case map[string]any:
 		for key, child := range typed {
-			typed[key] = coerceScalars(child, subschemaForProperty(schema, key))
+			typed[key] = coerceScalars(child, subschemaForProperty(schema, key), childNode(node, key))
 		}
 
 		return typed
 	case []any:
+		// A populated array node yields its children in order (see
+		// tree.ToAny); a slice stored as a leaf value has no nodes.
+		var children []*tree.Node
+		if node != nil {
+			children = node.Children()
+		}
+
 		for i, item := range typed {
-			typed[i] = coerceScalars(item, subschemaForItem(schema, i))
+			var itemNode *tree.Node
+			if i < len(children) {
+				itemNode = children[i]
+			}
+
+			typed[i] = coerceScalars(item, subschemaForItem(schema, i), itemNode)
 		}
 
 		return typed
 	case string:
+		if node != nil && node.TypeFixed() {
+			return typed
+		}
+
 		return coerceScalarString(typed, schema)
 	default:
 		return data
 	}
+}
+
+// childNode returns the child of node under key, or nil when node is nil.
+func childNode(node *tree.Node, key string) *tree.Node {
+	if node == nil {
+		return nil
+	}
+
+	return node.Child(key)
 }
 
 // coerceScalarString parses str into the scalar type the schema demands, unless

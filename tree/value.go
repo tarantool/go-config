@@ -85,7 +85,14 @@ func (v *valueImpl) Get(dest any) error {
 	// Convert the node to a generic value.
 	raw := nodeToValue(v.node)
 	// Decode raw into dest using reflection.
-	return decode(raw, destVal.Elem())
+	return decode(raw, destVal.Elem(), v.node)
+}
+
+// TypeFixed reports whether the source fixed the type of the underlying
+// node's value. The merge pipeline reads it to carry the flag onto the
+// merged tree; see [Node.TypeFixed].
+func (v *valueImpl) TypeFixed() bool {
+	return v.node != nil && v.node.TypeFixed()
 }
 
 // Meta implements value.Value.Meta.
@@ -158,8 +165,11 @@ func nodeToValue(node *Node) any {
 	return m
 }
 
-// decode decodes a generic value into a reflect.Value destination.
-func decode(src any, dst reflect.Value) error {
+// decode decodes a generic value into a reflect.Value destination. node is
+// the tree node src was built from, or nil when src has no node of its own
+// (an element of a slice stored as a leaf value, for instance); it tells
+// whether a string may be parsed into another scalar type.
+func decode(src any, dst reflect.Value, node *Node) error {
 	// Handle nil source.
 	if src == nil {
 		// Set zero value.
@@ -180,6 +190,13 @@ func decode(src any, dst reflect.Value) error {
 		return decodeDuration(src, dst)
 	}
 
+	if str, ok := src.(string); ok && node != nil && node.typeFixed {
+		err := fixedStringError(str, dst)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Perform type conversion based on destination kind.
 	switch dst.Kind() {
 	case reflect.Bool:
@@ -193,13 +210,13 @@ func decode(src any, dst reflect.Value) error {
 	case reflect.String:
 		return decodeString(src, dst)
 	case reflect.Slice:
-		return decodeSlice(src, dst)
+		return decodeSlice(src, dst, node)
 	case reflect.Map:
-		return decodeMap(src, dst)
+		return decodeMap(src, dst, node)
 	case reflect.Struct:
-		return decodeStruct(src, dst)
+		return decodeStruct(src, dst, node)
 	case reflect.Pointer:
-		return decodePtr(src, dst)
+		return decodePtr(src, dst, node)
 	case reflect.Interface:
 		// Assign directly if src type implements the interface.
 		if srcVal.Type().Implements(dst.Type()) {
@@ -290,6 +307,31 @@ func decodeDuration(src any, dst reflect.Value) error {
 	default:
 		return fmt.Errorf("%w: %T", ErrConvertToDuration, src)
 	}
+}
+
+// fixedStringError returns the error for decoding str, a string whose type
+// the source fixed, into dst, or nil when dst is not a bool or a number.
+func fixedStringError(str string, dst reflect.Value) error {
+	var convert error
+
+	switch dst.Kind() {
+	case reflect.Bool:
+		convert = ErrConvertToBool
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		convert = ErrConvertToInt
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		convert = ErrConvertToUint
+	case reflect.Float32, reflect.Float64:
+		convert = ErrConvertToFloat
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Pointer, reflect.Slice, reflect.String, reflect.Struct, reflect.UnsafePointer:
+		return nil
+	default:
+		return nil
+	}
+
+	return fmt.Errorf("%w %q: %w", convert, str, ErrFixedTypeString)
 }
 
 // decodeBool converts src to bool.
@@ -562,7 +604,7 @@ func decodeString(src any, dst reflect.Value) error {
 }
 
 // decodeSlice converts src to slice.
-func decodeSlice(src any, dst reflect.Value) error {
+func decodeSlice(src any, dst reflect.Value, node *Node) error {
 	srcVal := reflect.ValueOf(src)
 	if srcVal.Kind() != reflect.Slice && srcVal.Kind() != reflect.Array {
 		return fmt.Errorf("%w: %T", ErrSourceNotSliceOrArray, src)
@@ -570,11 +612,23 @@ func decodeSlice(src any, dst reflect.Value) error {
 
 	length := srcVal.Len()
 
+	// A populated array node yields its children in order (see
+	// nodeToValue); a slice stored as a leaf value has no nodes.
+	var children []*Node
+	if node != nil {
+		children = node.Children()
+	}
+
 	slice := reflect.MakeSlice(dst.Type(), length, length)
 	for i := range length {
 		elem := srcVal.Index(i).Interface()
 
-		err := decode(elem, slice.Index(i))
+		var elemNode *Node
+		if i < len(children) {
+			elemNode = children[i]
+		}
+
+		err := decode(elem, slice.Index(i), elemNode)
 		if err != nil {
 			return fmt.Errorf("slice element [%d]: %w", i, err)
 		}
@@ -585,8 +639,17 @@ func decodeSlice(src any, dst reflect.Value) error {
 	return nil
 }
 
+// childNode returns the child of node under key, or nil when node is nil.
+func childNode(node *Node, key string) *Node {
+	if node == nil {
+		return nil
+	}
+
+	return node.Child(key)
+}
+
 // decodeMap converts src to map.
-func decodeMap(src any, dst reflect.Value) error {
+func decodeMap(src any, dst reflect.Value, node *Node) error {
 	srcVal := reflect.ValueOf(src)
 	if srcVal.Kind() != reflect.Map {
 		return fmt.Errorf("%w: %T", ErrSourceNotMap, src)
@@ -611,7 +674,7 @@ func decodeMap(src any, dst reflect.Value) error {
 		// Create a new value of the map's element type.
 		elem := reflect.New(mapType.Elem()).Elem()
 
-		err := decode(iter.Value().Interface(), elem)
+		err := decode(iter.Value().Interface(), elem, childNode(node, key.String()))
 		if err != nil {
 			return fmt.Errorf("map key %q: %w", key.String(), err)
 		}
@@ -625,7 +688,7 @@ func decodeMap(src any, dst reflect.Value) error {
 }
 
 // decodeStruct converts src to struct.
-func decodeStruct(src any, dst reflect.Value) error {
+func decodeStruct(src any, dst reflect.Value, node *Node) error {
 	srcVal := reflect.ValueOf(src)
 	// Source must be a map[string]any.
 	if srcVal.Kind() != reflect.Map {
@@ -651,7 +714,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 		// `,inline` is flattened, i.e. its own fields are looked up in the
 		// parent map at the current level rather than under a key.
 		if opts.Has("inline") && (field.Anonymous || name == "") {
-			handled, err := decodeInlineField(src, dst.Field(i), field.Name)
+			handled, err := decodeInlineField(src, dst.Field(i), field.Name, node)
 			if err != nil {
 				return err
 			}
@@ -676,7 +739,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 		}
 
 		// Decode into field.
-		err := decode(val.Interface(), dst.Field(i))
+		err := decode(val.Interface(), dst.Field(i), childNode(node, name))
 		if err != nil {
 			return fmt.Errorf("field %q: %w", field.Name, err)
 		}
@@ -693,7 +756,7 @@ func decodeStruct(src any, dst reflect.Value) error {
 // map into it would let it swallow keys that sibling fields already own, and
 // implementing it correctly requires assigning only the leftover keys. Such a
 // field is left unhandled so the caller falls back to a normal by-name lookup.
-func decodeInlineField(src any, fieldVal reflect.Value, fieldName string) (bool, error) {
+func decodeInlineField(src any, fieldVal reflect.Value, fieldName string, node *Node) (bool, error) {
 	elemType := fieldVal.Type()
 	if elemType.Kind() == reflect.Pointer {
 		elemType = elemType.Elem()
@@ -703,7 +766,7 @@ func decodeInlineField(src any, fieldVal reflect.Value, fieldName string) (bool,
 		return false, nil
 	}
 
-	err := decode(src, fieldVal)
+	err := decode(src, fieldVal, node)
 	if err != nil {
 		return true, fmt.Errorf("inline field %q: %w", fieldName, err)
 	}
@@ -712,12 +775,12 @@ func decodeInlineField(src any, fieldVal reflect.Value, fieldName string) (bool,
 }
 
 // decodePtr converts src to pointer.
-func decodePtr(src any, dst reflect.Value) error {
+func decodePtr(src any, dst reflect.Value, node *Node) error {
 	// If dst is nil, allocate a new value.
 	if dst.IsNil() {
 		dst.Set(reflect.New(dst.Type().Elem()))
 	}
 
 	// Dereference and decode.
-	return decode(src, dst.Elem())
+	return decode(src, dst.Elem(), node)
 }

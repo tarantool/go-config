@@ -729,6 +729,7 @@ type mergeOp struct {
 	path       keypath.KeyPath
 	value      any
 	arrayPaths []keypath.KeyPath
+	typeFixed  bool
 }
 
 // materializeOps walks the other config and collects all leaf values as operations.
@@ -761,10 +762,19 @@ func materializeOps(other *Config) ([]mergeOp, error) {
 			path:       path,
 			value:      dest,
 			arrayPaths: arrayPaths(other.root, path),
+			typeFixed:  node != nil && node.TypeFixed(),
 		})
 	}
 
 	return ops, nil
+}
+
+// setTypeFixed carries a replayed value's fixed type (see tree.Node.TypeFixed)
+// onto the node at path, which Set has just cleared.
+func setTypeFixed(root *tree.Node, path keypath.KeyPath, fixed bool) {
+	if node := root.Get(path); node != nil {
+		node.SetTypeFixed(fixed)
+	}
 }
 
 // arrayPaths returns array nodes encountered from root through path. Merge
@@ -827,6 +837,7 @@ func (mc *MutableConfig) Merge(other *Config) error {
 	for _, mergeEntry := range ops {
 		mc.root = setMutableValue(mc.root, mergeEntry.path, mergeEntry.value)
 		markArrayPaths(mc.root, mergeEntry.arrayPaths)
+		setTypeFixed(mc.root, mergeEntry.path, mergeEntry.typeFixed)
 	}
 
 	restoreErr := mc.validateOrRestore(oldRoot)
@@ -844,6 +855,7 @@ func (mc *MutableConfig) Merge(other *Config) error {
 
 		mc.modified = setMutableValue(mc.modified, mergeEntry.path, mergeEntry.value)
 		markArrayPaths(mc.modified, mergeEntry.arrayPaths)
+		setTypeFixed(mc.modified, mergeEntry.path, mergeEntry.typeFixed)
 		markModified(mc.modified.Get(mergeEntry.path))
 	}
 
@@ -872,6 +884,7 @@ func (mc *MutableConfig) Update(other *Config) error {
 		}
 
 		mc.root.Set(updateEntry.path, updateEntry.value)
+		setTypeFixed(mc.root, updateEntry.path, updateEntry.typeFixed)
 
 		applied = append(applied, updateEntry)
 	}
@@ -889,6 +902,7 @@ func (mc *MutableConfig) Update(other *Config) error {
 	for _, op := range applied {
 		markModified(mc.root.Get(op.path))
 		mc.modified.Set(op.path, op.value)
+		setTypeFixed(mc.modified, op.path, op.typeFixed)
 		markModified(mc.modified.Get(op.path))
 	}
 

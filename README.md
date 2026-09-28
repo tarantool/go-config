@@ -229,6 +229,28 @@ Reads multiple configuration documents from a centralized key-value storage
 (etcd, TCS) under a common prefix with integrity verification via
 [go-storage](https://github.com/tarantool/go-storage).
 
+### Strings and Types
+
+A string is converted to a bool or a number when the destination asks for one:
+`Get` into a `bool` parses `"true"`, and a JSON Schema that expects a boolean
+accepts it. This is what makes environment variables usable at all, since they
+carry nothing but strings.
+
+A string whose type the source fixed is not converted. In YAML that is a
+scalar written in quotes, as a block scalar, or with an explicit tag — YAML
+resolves `"false"` to a string whatever it says:
+
+```yaml
+debug: false     # bool
+label: "false"   # string: Get into a bool fails, a boolean schema rejects it
+timeout: "5s"    # string, and still a valid time.Duration
+```
+
+`Get` then fails with `tree.ErrFixedTypeString`. A value that overrides such a
+string brings its own type, so `DEBUG=true` in the environment still sets a
+field that the YAML file quoted. Collectors mark these values with
+`tree.Node.SetTypeFixed`; a custom collector with typed input can do the same.
+
 ### Inheritance
 
 Inheritance resolves effective configuration for leaf entities by merging
