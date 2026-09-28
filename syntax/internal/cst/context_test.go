@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 	"github.com/tarantool/go-config/v2/syntax/internal/path"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 	"github.com/tarantool/go-config/v2/testdata"
@@ -219,7 +220,7 @@ func TestErrorContext(t *testing.T) {
 
 			tokenType := ""
 			if token != nil {
-				tokenType = token.Type()
+				tokenType = token.Type(yamlgrammar.Language())
 			}
 
 			if tokenType != test.token {
@@ -403,7 +404,7 @@ func TestContentNodes(t *testing.T) {
 
 			pair := ancestor(t, location.Node, "block_mapping_pair")
 
-			value := pair.ChildByFieldName("value")
+			value := pair.ChildByFieldName("value", yamlgrammar.Language())
 			if got := nodeType(ContentNode(value)); got != test.content {
 				t.Errorf("ContentNode = %q, want %q", got, test.content)
 			}
@@ -413,7 +414,7 @@ func TestContentNodes(t *testing.T) {
 			var text string
 
 			if scalar != nil {
-				text = scalar.Content(content)
+				text = scalar.Text(content)
 			}
 
 			if text != test.scalar {
@@ -472,7 +473,7 @@ func TestPairAndContainerPaths(t *testing.T) {
 	}
 
 	pair = ancestor(t, location.Node, "block_mapping_pair")
-	if got := KeyText(complexContent, pair.ChildByFieldName("key")); got != "[a, b]" {
+	if got := KeyText(complexContent, pair.ChildByFieldName("key", yamlgrammar.Language())); got != "[a, b]" {
 		t.Errorf("non-string key should preserve its source, got %q", got)
 	}
 }
@@ -480,13 +481,15 @@ func TestPairAndContainerPaths(t *testing.T) {
 func ancestor(t *testing.T, node *sitter.Node, kind string) *sitter.Node {
 	t.Helper()
 
+	language := yamlgrammar.Language()
+
 	for current := node; current != nil; current = current.Parent() {
-		if current.Type() == kind {
+		if current.Type(language) == kind {
 			return current
 		}
 	}
 
-	t.Fatalf("%s has no %s ancestor", node.String(), kind)
+	t.Fatalf("%s has no %s ancestor", node.SExpr(language), kind)
 
 	return nil
 }
@@ -496,7 +499,7 @@ func nodeType(node *sitter.Node) string {
 		return ""
 	}
 
-	return node.Type()
+	return node.Type(yamlgrammar.Language())
 }
 
 // schemaForTest compiles a schema for CST context resolution.

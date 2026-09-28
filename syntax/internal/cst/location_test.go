@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	yamlgrammar "github.com/smacker/go-tree-sitter/yaml"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 )
 
 // expectedNode describes the CST anchor independently of completion policy.
@@ -19,6 +19,8 @@ type expectedNode struct {
 // or the future path through JSON Schema.
 func TestLocateNode(t *testing.T) {
 	t.Parallel()
+
+	language := yamlgrammar.Language()
 
 	tests := []struct {
 		name     string
@@ -108,7 +110,7 @@ func TestLocateNode(t *testing.T) {
 		{
 			name:   "blank before first node has no previous content",
 			source: "\nmode: dev", position: sitter.Point{Row: 0, Column: 0},
-			want: expectedNode{nodeType: "stream", text: "mode: dev"},
+			want: expectedNode{nodeType: "stream", text: "\nmode: dev"},
 		},
 		{
 			name:   "UTF-8 cursor column is measured in bytes",
@@ -137,11 +139,11 @@ func TestLocateNode(t *testing.T) {
 
 			parentType := ""
 			if parent := got.Parent(); parent != nil {
-				parentType = parent.Type()
+				parentType = parent.Type(language)
 			}
 
 			actual := expectedNode{
-				nodeType: got.Type(), text: got.Content(content),
+				nodeType: got.Type(language), text: got.Text(content),
 				parentType: parentType,
 			}
 			if actual != tt.want {
@@ -292,7 +294,7 @@ func TestLocateBeforeComment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if location.Node.Content(content) != "prod" || location.Contains(location.Node) {
+	if location.Node.Text(content) != "prod" || location.Contains(location.Node) {
 		t.Fatalf("comment start should anchor preceding content without containing the cursor: %+v", location)
 	}
 }
@@ -301,16 +303,14 @@ func TestLocateBeforeComment(t *testing.T) {
 func parseTree(t *testing.T, source []byte) *sitter.Tree {
 	t.Helper()
 
-	parser := sitter.NewParser()
-	parser.SetLanguage(yamlgrammar.GetLanguage())
-	t.Cleanup(parser.Close)
+	parser := sitter.NewParser(yamlgrammar.Language())
 
-	tree, err := parser.ParseCtx(t.Context(), nil, source)
+	tree, err := parser.ParseStrict(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(tree.Close)
+	t.Cleanup(tree.Release)
 
 	return tree
 }

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
 	"github.com/tarantool/go-config/v2/syntax/internal/cst"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 )
@@ -71,7 +71,7 @@ func (t *Tree) Close() {
 		return
 	}
 
-	t.cst.Close()
+	t.cst.Release()
 
 	t.cst = nil
 }

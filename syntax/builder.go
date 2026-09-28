@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"sync"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	yamlgrammar "github.com/smacker/go-tree-sitter/yaml"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 )
 
@@ -59,8 +59,7 @@ func (b *Builder) Build(ctx context.Context) (*Parser, error) {
 		return nil, fmt.Errorf("syntax: build parser: %w", err)
 	}
 
-	yamlParser := sitter.NewParser()
-	yamlParser.SetLanguage(yamlgrammar.GetLanguage())
+	yamlParser := sitter.NewParser(yamlgrammar.Language())
 
 	return &Parser{mu: sync.Mutex{}, schema: compiled, yaml: yamlParser, closed: false}, nil
 }
