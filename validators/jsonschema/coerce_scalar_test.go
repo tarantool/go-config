@@ -128,3 +128,74 @@ func TestCoerceScalars_NestedAndArrayItems(t *testing.T) {
 
 	assert.Empty(t, validator.Validate(root), "array item scalar strings should coerce")
 }
+
+// fixedLeaf builds a scalar leaf holding value whose type the source fixed,
+// the shape a quoted YAML scalar produces.
+func fixedLeaf(value string) *tree.Node {
+	node := leaf(value)
+	node.SetTypeFixed(true)
+
+	return node
+}
+
+func TestCoerceScalars_FixedStringNotCoerced(t *testing.T) {
+	t.Parallel()
+
+	validator, err := jsonschema.New([]byte(scalarSchema))
+	require.NoError(t, err)
+
+	tests := []struct {
+		key   string
+		value string
+	}{
+		{"flag", "true"},
+		{"count", "3301"},
+		{"ratio", "0.5"},
+	}
+
+	for _, tt := range tests {
+		root := tree.New()
+		root.SetChild(tt.key, fixedLeaf(tt.value))
+
+		errs := validator.Validate(root)
+		require.Len(t, errs, 1, "%s: a string whose type the source fixed stays a string", tt.key)
+		assert.Equal(t, keypath.NewKeyPath(tt.key), errs[0].Path)
+		assert.Equal(t, "type", errs[0].Code)
+	}
+}
+
+func TestCoerceScalars_FixedStringInStringField(t *testing.T) {
+	t.Parallel()
+
+	validator, err := jsonschema.New([]byte(scalarSchema))
+	require.NoError(t, err)
+
+	root := tree.New()
+	root.SetChild("name", fixedLeaf("true"))
+	root.SetChild("either", fixedLeaf("true"))
+
+	assert.Empty(t, validator.Validate(root))
+}
+
+func TestCoerceScalars_FixedStringNestedAndArrayItems(t *testing.T) {
+	t.Parallel()
+
+	validator, err := jsonschema.New([]byte(scalarSchema))
+	require.NoError(t, err)
+
+	nested := tree.New()
+	nested.SetChild("on", fixedLeaf("true"))
+
+	root := tree.New()
+	root.SetChild("nested", nested)
+	root.SetChild("flags", arrayNode(leaf("true"), fixedLeaf("false")))
+
+	errs := validator.Validate(root)
+	require.Len(t, errs, 2)
+
+	paths := []keypath.KeyPath{errs[0].Path, errs[1].Path}
+	assert.ElementsMatch(t, []keypath.KeyPath{
+		keypath.NewKeyPath("nested/on"),
+		keypath.NewKeyPath("flags/1"),
+	}, paths, "only the fixed strings fail; the untyped array item is still coerced")
+}

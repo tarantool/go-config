@@ -226,6 +226,7 @@ func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.
 		target := node.Get(prefix)
 		if target != nil {
 			target.Range = f.ranges.get(yamlNode)
+			target.SetTypeFixed(yamlScalarTypeFixed(yamlNode))
 
 			yamlNodeCopy := *yamlNode
 			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
@@ -234,6 +235,18 @@ func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.
 	}
 
 	return nil
+}
+
+// yamlScalarTypeFixed reports whether the author of the document fixed the
+// type of a scalar. YAML 1.2 resolves a quoted or block scalar to a string
+// whatever its content, and an explicit tag names the type outright; only a
+// plain scalar without a tag has its type inferred, and only such a scalar
+// may be read as another type later on.
+func yamlScalarTypeFixed(yamlNode *yaml.Node) bool {
+	const fixed = yaml.TaggedStyle | yaml.DoubleQuotedStyle | yaml.SingleQuotedStyle |
+		yaml.LiteralStyle | yaml.FoldedStyle
+
+	return yamlNode.Style&fixed != 0
 }
 
 // resolveYamlScalar converts a YAML scalar node's string value into a typed Go value

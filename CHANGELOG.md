@@ -10,7 +10,18 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* `tree.Node.TypeFixed` and `SetTypeFixed` record whether the source fixed the
+  type of a node's value; `tree.ErrFixedTypeString` reports a string with a
+  fixed type decoded into a bool or a number.
+
 ### Changed
+
+* A quoted YAML scalar is a string: `key: "false"` no longer decodes into a
+  bool or a number with `Get`, and a JSON Schema expecting a boolean, integer
+  or number rejects it instead of coercing it. The same holds for block
+  scalars and explicitly tagged ones. Plain scalars and values from sources
+  without types, such as environment variables, convert as before, and a
+  value that overrides a quoted one converts according to its own source.
 
 * The YAML collector sets `Range` on every node, mappings and sequences
   included, and `Range.End` now points just past the node's last character

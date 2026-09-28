@@ -186,6 +186,7 @@ func cloneNode(node *tree.Node) *tree.Node {
 	clone.Revision = node.Revision
 	clone.Range = node.Range
 	clone.SetAnnotation(node.Annotation())
+	clone.SetTypeFixed(node.TypeFixed())
 
 	if node.IsArray() {
 		clone.MarkArray()
