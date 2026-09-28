@@ -171,6 +171,100 @@ func Type(schemas []*jsonschema.Schema) string {
 	return itemType
 }
 
+// MetadataAt returns annotations at path, following references and composition,
+// including branches above path. It does not select alternatives by the current
+// configuration value. An undocumented or forbidden path returns nil.
+func (s *Schema) MetadataAt(steps []path.Step) *Metadata {
+	if s == nil || s.root == nil {
+		return nil
+	}
+
+	// A recursive reference may consume path steps; only a cycle at the same
+	// depth must stop. Shared references in separate alternatives remain visible.
+	type visit struct {
+		schema *jsonschema.Schema
+		depth  int
+	}
+
+	active := make(map[visit]bool)
+
+	var describe func(*jsonschema.Schema, int) *Metadata
+
+	describe = func(current *jsonschema.Schema, depth int) *Metadata {
+		if current == nil {
+			return nil
+		}
+
+		key := visit{current, depth}
+		if active[key] {
+			// Stop expanding a cycle without excluding the alternative.
+			return new(Metadata)
+		}
+
+		if !s.accepts(current, steps[depth:], nil, false) {
+			return nil
+		}
+
+		active[key] = true
+
+		defer delete(active, key)
+
+		if schemautil.RefOverridesSiblings(current) {
+			return describe(current.ResolvedRef, depth)
+		}
+
+		var metadata Metadata
+
+		if depth == len(steps) {
+			metadata = annotations(current)
+		} else {
+			for _, child := range children(current, steps[depth]) {
+				if part := describe(child, depth+1); part != nil && !part.empty() {
+					metadata.AllOf = append(metadata.AllOf, *part)
+				}
+			}
+		}
+
+		for _, reference := range []*jsonschema.Schema{current.ResolvedRef, current.ResolvedDynamicRef} {
+			if part := describe(reference, depth); part != nil && !part.empty() {
+				metadata.AllOf = append(metadata.AllOf, *part)
+			}
+		}
+
+		for _, group := range []struct {
+			branches  []*jsonschema.Schema
+			target    *[]Metadata
+			keepEmpty bool
+		}{
+			{current.AllOf, &metadata.AllOf, false},
+			{current.AnyOf, &metadata.AnyOf, true},
+			{current.OneOf, &metadata.OneOf, true},
+		} {
+			for _, branch := range group.branches {
+				if part := describe(branch, depth); part != nil && (group.keepEmpty || !part.empty()) {
+					*group.target = append(*group.target, *part)
+				}
+			}
+		}
+
+		// A lone reference or path step adds no information of its own.
+		// Keep explicit composition groups, including groups with one branch.
+		if !metadata.hasAnnotations() && len(metadata.AllOf) == 1 &&
+			len(metadata.AnyOf) == 0 && len(metadata.OneOf) == 0 && len(current.AllOf) == 0 {
+			return &metadata.AllOf[0]
+		}
+
+		return &metadata
+	}
+
+	metadata := describe(s.root, 0)
+	if metadata == nil || metadata.empty() {
+		return nil
+	}
+
+	return metadata
+}
+
 // accepts checks a path relative to any compiled branch using the same rules
 // as AcceptsAt. The root must belong to this compiled schema so validation
 // uses the mutex protecting its lazy caches.
