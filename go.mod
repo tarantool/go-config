@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/kaptinlin/jsonschema v0.9.8
-	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
+	github.com/odvcencio/gotreesitter v0.55.2-0.20260928105218-3a945e16b41f
 	github.com/stretchr/testify v1.11.1
 	github.com/tarantool/go-storage/v2 v2.0.0
 	go.etcd.io/etcd/client/v3 v3.6.11

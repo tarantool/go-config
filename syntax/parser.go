@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
 	"github.com/tarantool/go-config/v2/syntax/internal/cst"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 )
-
-const inputChunkSize = 4096
 
 // Parser holds a compiled schema and a configured YAML syntax parser.
 // Parse and Close may be called concurrently; operations are serialized internally.
@@ -29,8 +28,8 @@ type Parser struct {
 var ErrClosedParser = errors.New("syntax: parser is closed")
 
 // Parse copies the UTF-8 source into a Tree, tolerating incomplete YAML.
-// Cancellation is checked between input chunks and discards the partial tree;
-// a later call can reuse the parser. The caller owns and must close the tree.
+// Cancellation stops parsing and discards the partial tree; a later call can
+// reuse the parser. The caller owns and must close the tree.
 func (p *Parser) Parse(ctx context.Context, source []byte) (*Tree, error) {
 	if p == nil {
 		return nil, ErrClosedParser
@@ -50,38 +49,41 @@ func (p *Parser) Parse(ctx context.Context, source []byte) (*Tree, error) {
 
 	content := bytes.Clone(source)
 
-	p.yaml.Reset()
+	// Each call owns its flag: a late callback cannot cancel a later parse.
+	var canceledFlag uint32
 
-	// ParseCtx leaves a cancellation goroutine racing with parser reuse.
-	// Check cancellation synchronously between bounded input chunks instead.
-	tree, err := p.yaml.ParseInputCtx(ctx, nil, sitter.Input{
-		Encoding: sitter.InputEncodingUTF8,
-		Read: func(offset uint32, _ sitter.Point) []byte {
-			if ctx.Err() != nil || int(offset) >= len(content) {
-				return nil
-			}
+	p.yaml.SetCancellationFlag(&canceledFlag)
 
-			return content[offset:min(int(offset)+inputChunkSize, len(content))]
-		},
-	})
+	stop := context.AfterFunc(ctx, func() { atomic.StoreUint32(&canceledFlag, 1) })
+
+	defer func() {
+		stop()
+		p.yaml.SetCancellationFlag(nil)
+	}()
+
+	tree, err := p.yaml.ParseStrict(content)
 
 	canceled := ctx.Err()
 	if canceled != nil {
 		if tree != nil {
-			tree.Close()
+			tree.Release()
 		}
 
 		return nil, fmt.Errorf("syntax: parse YAML: %w", canceled)
 	}
 
 	if err != nil {
+		if tree != nil {
+			tree.Release()
+		}
+
 		return nil, fmt.Errorf("syntax: parse YAML: %w", err)
 	}
 
 	return &Tree{source: content, cst: tree, lineStarts: cst.LineStarts(content), schema: p.schema}, nil
 }
 
-// Close waits for an ongoing parse and releases the native parser.
+// Close waits for an ongoing parse and releases the parser resources.
 // It is safe to call more than once or on a nil parser.
 func (p *Parser) Close() {
 	if p == nil {
@@ -95,7 +97,7 @@ func (p *Parser) Close() {
 		return
 	}
 
-	p.yaml.Close()
+	p.yaml = nil
 
 	p.closed = true
 }

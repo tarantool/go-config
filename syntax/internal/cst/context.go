@@ -5,7 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 	"github.com/tarantool/go-config/v2/syntax/internal/path"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 	"go.yaml.in/yaml/v3"
@@ -39,7 +40,9 @@ type Context struct {
 // IsScalar recognizes concrete tree-sitter scalar nodes.
 // The plain_scalar wrapper is excluded; its typed child carries the content.
 func IsScalar(node *sitter.Node) bool {
-	return node != nil && strings.HasSuffix(node.Type(), "_scalar") && node.Type() != nodePlainScalar
+	language := yamlgrammar.Language()
+
+	return node != nil && strings.HasSuffix(node.Type(language), "_scalar") && node.Type(language) != nodePlainScalar
 }
 
 // ScalarNode unwraps YAML decorations and returns a scalar, or nil for
@@ -55,14 +58,16 @@ func ScalarNode(node *sitter.Node) *sitter.Node {
 // ContentNode unwraps YAML nodes, ignoring anchors and comments.
 // A wrapper containing only these decorations has no value.
 func ContentNode(node *sitter.Node) *sitter.Node {
+	language := yamlgrammar.Language()
+
 	for node != nil {
-		switch node.Type() {
+		switch node.Type(language) {
 		case "document", "block_node", nodeFlowNode, nodePlainScalar, nodeBlockSequenceItem:
 			var content *sitter.Node
 
-			for index := range int(node.NamedChildCount()) {
+			for index := range node.NamedChildCount() {
 				child := node.NamedChild(index)
-				switch child.Type() {
+				switch child.Type(language) {
 				case nodeComment, "anchor":
 					continue
 				}
@@ -86,8 +91,10 @@ func ContentNode(node *sitter.Node) *sitter.Node {
 // ChildOfType finds an immediate CST child, including punctuation such as
 // colons and dashes that tree-sitter does not expose through named fields.
 func ChildOfType(node *sitter.Node, nodeType string) *sitter.Node {
-	for index := range int(node.ChildCount()) {
-		if child := node.Child(index); child.Type() == nodeType {
+	language := yamlgrammar.Language()
+
+	for index := range node.ChildCount() {
+		if child := node.Child(index); child.Type(language) == nodeType {
 			return child
 		}
 	}
@@ -97,15 +104,17 @@ func ChildOfType(node *sitter.Node, nodeType string) *sitter.Node {
 
 // sequenceIndex counts preceding sequence items, skipping comment nodes.
 func sequenceIndex(parent, child *sitter.Node) int {
+	language := yamlgrammar.Language()
+
 	index := 0
 
-	for sibling := range int(parent.NamedChildCount()) {
+	for sibling := range parent.NamedChildCount() {
 		candidate := parent.NamedChild(sibling)
-		if candidate.Equal(child) {
+		if candidate == child {
 			break
 		}
 
-		if candidate.Type() != nodeComment {
+		if candidate.Type(language) != nodeComment {
 			index++
 		}
 	}
@@ -135,7 +144,7 @@ func FieldPath(source []byte, context Context) []path.Step {
 		return context.Path
 	}
 
-	key := context.Current.ChildByFieldName("key")
+	key := context.Current.ChildByFieldName("key", yamlgrammar.Language())
 	if key == nil {
 		key = ScalarNode(context.Current)
 	}
@@ -154,7 +163,7 @@ func KeyText(source []byte, node *sitter.Node) string {
 		return ""
 	}
 
-	raw := node.Content(source)
+	raw := node.Text(source)
 
 	var decoded string
 
@@ -179,6 +188,8 @@ type recoveryScope struct {
 // NodeContext walks CST ancestors to determine the schema path, key/value role,
 // and containing mapping. For incomplete parents it delegates to ErrorContext.
 func NodeContext(source []byte, compiled *schema.Schema, node *sitter.Node) Context {
+	language := yamlgrammar.Language()
+
 	var ancestors []*sitter.Node
 
 	for current := node; current != nil; current = current.Parent() {
@@ -190,16 +201,16 @@ func NodeContext(source []byte, compiled *schema.Schema, node *sitter.Node) Cont
 	for index := len(ancestors) - 1; index > 0; index-- {
 		parent, child := ancestors[index], ancestors[index-1]
 
-		switch parent.Type() {
+		switch parent.Type(language) {
 		case nodeBlockMapping, nodeFlowMapping:
 			context.IsKey = true
 			context.Mapping = parent
 			context.Current = child
-			context.Flow = context.Flow || parent.Type() == nodeFlowMapping
+			context.Flow = context.Flow || parent.Type(language) == nodeFlowMapping
 		case nodeBlockMappingPair, nodeFlowPair:
-			key := parent.ChildByFieldName("key")
+			key := parent.ChildByFieldName("key", language)
 
-			if key != nil && child.Equal(key) {
+			if key != nil && child == key {
 				context.IsKey = true
 				context.Current = parent
 			} else {
@@ -218,7 +229,7 @@ func NodeContext(source []byte, compiled *schema.Schema, node *sitter.Node) Cont
 			context.IsKey = false
 			context.Mapping = nil
 			context.Current = nil
-			context.Flow = context.Flow || parent.Type() == nodeFlowSequence
+			context.Flow = context.Flow || parent.Type(language) == nodeFlowSequence
 
 			if compiled.HasObjectSchema(context.Path) {
 				context.IsKey = true
@@ -233,7 +244,7 @@ func NodeContext(source []byte, compiled *schema.Schema, node *sitter.Node) Cont
 	}
 
 	// A pair names a field even if recovery returned only its enclosing scope.
-	if node != nil && node.ChildByFieldName("key") != nil {
+	if node != nil && node.ChildByFieldName("key", language) != nil {
 		context.IsKey = true
 		context.Current = node
 	}
@@ -252,6 +263,8 @@ func NodeContext(source []byte, compiled *schema.Schema, node *sitter.Node) Cont
 func ErrorContext(
 	source []byte, compiled *schema.Schema, node *sitter.Node, context Context, pos sitter.Point, offset int,
 ) (Context, *sitter.Node) {
+	language := yamlgrammar.Language()
+
 	base := context.Path
 
 	context.Mapping = node
@@ -262,13 +275,13 @@ func ErrorContext(
 		previousRow   uint32
 	)
 
-	for index := range int(node.ChildCount()) {
+	for index := range node.ChildCount() {
 		child := node.Child(index)
 		if int(child.StartByte()) > offset {
 			break
 		}
 
-		if child.Type() == nodeComment {
+		if child.Type(language) == nodeComment {
 			if offset == int(child.StartByte()) {
 				return context, nil
 			}
@@ -286,7 +299,7 @@ func ErrorContext(
 				last := blocks[len(blocks)-1]
 				// A sequence may start at the same indentation as its mapping key.
 				if point.Column == last.column &&
-					(child.Type() == "-" || child.Type() == nodeBlockSequenceItem) {
+					(child.Type(language) == "-" || child.Type(language) == nodeBlockSequenceItem) {
 					break
 				}
 
@@ -311,14 +324,14 @@ func ErrorContext(
 
 		previousRow = point.Row
 
-		switch child.Type() {
+		switch child.Type(language) {
 		case nodeFlowPair, nodeBlockMappingPair:
 			if offset <= int(child.EndByte()) {
 				return context, nil
 			}
 
 			if len(flows) > 0 {
-				key := path.Property(KeyText(source, child.ChildByFieldName("key")))
+				key := path.Property(KeyText(source, child.ChildByFieldName("key", language)))
 
 				context.Path = append(slices.Clone(flows[len(flows)-1].path), key)
 				context.IsKey = false
@@ -356,14 +369,14 @@ func ErrorContext(
 		case "[", "{":
 			flows = append(flows, recoveryScope{
 				path:      slices.Clone(context.Path),
-				delimiter: child.Type(),
+				delimiter: child.Type(language),
 				column:    0,
 				index:     0,
 			})
 			context.Flow = true
 			context.Separator = nil
 
-			if child.Type() == "[" {
+			if child.Type(language) == "[" {
 				context.IsKey = false
 				context.Path = append(context.Path, path.Index(0))
 			} else {
@@ -386,7 +399,7 @@ func ErrorContext(
 
 			context = ContextAtPath(compiled, append(slices.Clone(last.path), path.Index(last.index)))
 
-			if child.Type() == nodeBlockSequenceItem && offset <= int(child.EndByte()) {
+			if child.Type(language) == nodeBlockSequenceItem && offset <= int(child.EndByte()) {
 				return context, nil
 			}
 		case ",":
@@ -421,11 +434,13 @@ func ErrorContext(
 // IsScalarValue reports whether the scalar is an explicit pair value or sequence
 // item. ERROR scopes and bare keys retain the role recovered by the CST helpers.
 func IsScalarValue(node *sitter.Node) bool {
+	language := yamlgrammar.Language()
+
 	for child, parent := node, node.Parent(); parent != nil; child, parent = parent, parent.Parent() {
-		switch parent.Type() {
+		switch parent.Type(language) {
 		case nodeBlockMappingPair, nodeFlowPair:
-			value := parent.ChildByFieldName("value")
-			return value != nil && child.Equal(value)
+			value := parent.ChildByFieldName("value", language)
+			return value != nil && child == value
 		case nodeBlockSequence, nodeFlowSequence:
 			return true
 		case nodeBlockMapping, nodeFlowMapping, nodeError:
@@ -440,6 +455,8 @@ func IsScalarValue(node *sitter.Node) bool {
 // ExistingKeys collects sibling property names, excluding the edited key.
 // For ERROR nodes it compares schema paths to avoid mixing flattened scopes.
 func ExistingKeys(source []byte, compiled *schema.Schema, context Context) map[string]bool {
+	language := yamlgrammar.Language()
+
 	used := make(map[string]bool)
 	mapping, current := context.Mapping, context.Current
 
@@ -447,21 +464,21 @@ func ExistingKeys(source []byte, compiled *schema.Schema, context Context) map[s
 		return used
 	}
 
-	for index := range int(mapping.NamedChildCount()) {
+	for index := range mapping.NamedChildCount() {
 		pair := mapping.NamedChild(index)
-		if current != nil && pair.Equal(current) {
+		if current != nil && pair == current {
 			continue
 		}
 
-		if key := pair.ChildByFieldName("key"); key != nil {
-			if mapping.Type() == nodeError &&
+		if key := pair.ChildByFieldName("key", language); key != nil {
+			if mapping.Type(language) == nodeError &&
 				!slices.Equal(NodeContext(source, compiled, pair).Path, context.Path) {
 				continue
 			}
 
 			used[KeyText(source, key)] = true
-		} else if mapping.Type() == nodeFlowMapping &&
-			pair.Type() == nodeFlowNode && ScalarNode(pair) != nil {
+		} else if mapping.Type(language) == nodeFlowMapping &&
+			pair.Type(language) == nodeFlowNode && ScalarNode(pair) != nil {
 			used[KeyText(source, pair)] = true
 		}
 	}
