@@ -42,7 +42,7 @@ func TestTreeLifetime(t *testing.T) {
 		t.Fatalf("closing another tree or the parser affected the live tree: %q", got)
 	}
 
-	_, err = first.Completion(Position{})
+	_, err = first.Hover(Position{})
 	if err == nil {
 		t.Error("closed tree accepted a source position")
 	}
@@ -59,7 +59,7 @@ func TestAbsentTree(t *testing.T) {
 		t.Error("nil tree returned source")
 	}
 
-	_, err := tree.Completion(Position{})
+	_, err := tree.Hover(Position{})
 	if err == nil {
 		t.Error("nil tree accepted a source position")
 	}

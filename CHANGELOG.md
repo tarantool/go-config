@@ -24,6 +24,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   property and scalar suggestions, insertion text, and replacement ranges.
   Completion supports nested mappings, sequences, and incomplete YAML
   (TNTP-10385, TNTP-10386).
+* Added YAML hover through `Tree.Hover`, returning field metadata and source
+  ranges. Hover supports nested mappings, sequences, and incomplete YAML,
+  and preserves JSON Schema alternatives, enum values, constants, defaults,
+  and deprecation metadata (TNTP-10385).
 
 ### Changed
 
