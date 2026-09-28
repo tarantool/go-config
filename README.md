@@ -355,6 +355,67 @@ out, err := cfg.MarshalYAML()
 // out == "# original comment is preserved\nserver:\n  port: 9090\n..."
 ```
 
+### YAML Editor Operations
+
+The `syntax` builder prepares a JSON Schema and a reusable YAML parser.
+Completion and Hover operate on the same tolerant syntax tree:
+
+```go
+parser, err := syntax.NewBuilder().WithJSONSchema(schemaJSON).Build(ctx)
+if err != nil {
+    return err
+}
+defer parser.Close()
+
+tree, err := parser.Parse(ctx, source)
+if err != nil {
+    return err
+}
+defer tree.Close()
+
+items, err := tree.Completion(position)
+if err != nil {
+    return err
+}
+
+info, err := tree.Hover(position)
+if err != nil {
+    return err
+}
+```
+
+Import `github.com/tarantool/go-config/v2/syntax`.
+`Tree.Completion` returns `[]syntax.CompletionItem`.
+Schema compilation, CST navigation, and context resolution are private to the package;
+editor operations accept `syntax.Position` and return package-owned result types.
+`syntax/internal/cst` handles YAML navigation, recovery, and completion assembly;
+`syntax/internal/schema` handles schema compilation, traversal, and metadata assembly.
+`syntax.Position`, `syntax.Range`, `syntax.CompletionItem`, and `syntax.Metadata`
+are aliases for the corresponding internal types.
+
+`Tree.Hover` returns a `syntax.HoverItem` with `Metadata` and `Range`. A zero item with
+`Metadata == nil` means there is no tooltip. It describes the selected key or scalar value, including
+`oneOf` and `anyOf` alternatives regardless of the current value. Parent
+fields show their own documentation without expanding child properties.
+Comments, separators, and whitespace between nodes have no tooltip.
+
+`syntax.Metadata` contains title, description, types, enum, const, default, and
+deprecation. `AllOf`, `AnyOf`, and `OneOf` retain nested branch metadata;
+`AllOf` also includes references and overlapping property patterns.
+Empty `AnyOf` and `OneOf` entries represent permitted alternatives without
+exposed metadata; they may still constrain values. A schema with no displayable
+metadata anywhere in the result produces no tooltip.
+`Default` is nil for both absent and null defaults; false, zero, and empty
+strings are preserved. `HasConst` distinguishes an explicit null constant
+from a missing constant. Values retain their JSON types and can be modified without
+changing the compiled schema. Descriptions are returned verbatim.
+
+Positions and ranges use zero-based lines and UTF-8 byte columns. An LSP
+adapter formats `Metadata` as Markdown or plain text and converts `Range`
+to the client's position encoding. Results remain valid
+when the tree is closed. Calls to `Parser.Parse` and `Parser.Close` are
+synchronized internally; operations on an individual tree must be serialized.
+
 ### Examples
 
 Runnable examples are available in the root package as `Example_*` test
