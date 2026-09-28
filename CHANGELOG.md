@@ -13,8 +13,18 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `tree.Node.TypeFixed` and `SetTypeFixed` record whether the source fixed the
   type of a node's value; `tree.ErrFixedTypeString` reports a string with a
   fixed type decoded into a bool or a number.
+* `collectors.NewYamlFormat` takes options; `collectors.EmptyAsString` reads
+  a scalar with no content (`key:`, a `- ` item) as "" instead of null, while
+  `~` and `null` stay null.
 
 ### Changed
+
+* The Tarantool builder reads an empty YAML value as "", the way Tarantool's
+  own YAML decoder does, so it validates the config as Tarantool does:
+  `console:` is rejected as a string where an object is expected instead of
+  being coerced to `{}` and accepted, and an empty string field such as
+  `console.socket:` is accepted instead of rejected as null. `console: ~`
+  keeps being accepted.
 
 * A quoted YAML scalar is a string: `key: "false"` no longer decodes into a
   bool or a number with `Get`, and a JSON Schema expecting a boolean, integer

@@ -145,9 +145,9 @@ func TestBuild_NullCoercion_EmptyStringField(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	// wal_queue_max_size is a string field in the fixture schema, left empty
-	// (a null scalar) in the config.
-	writeFile(t, cfgPath, "wal_queue_max_size:\n")
+	// wal_queue_max_size is a string field in the fixture schema, set to an
+	// explicit null in the config.
+	writeFile(t, cfgPath, "wal_queue_max_size: ~\n")
 
 	ctx := context.Background()
 
@@ -159,7 +159,7 @@ func TestBuild_NullCoercion_EmptyStringField(t *testing.T) {
 		Build(ctx)
 	require.Error(t, err)
 
-	// WithNullCoercion(NullZero) coerces the empty value to "", so it validates.
+	// WithNullCoercion(NullZero) coerces the null to "", so it validates.
 	cfg, err := tarantool.New().
 		WithConfigFile(cfgPath).
 		WithSchemaFile(fixtureSchemaPath).
@@ -173,6 +173,73 @@ func TestBuild_NullCoercion_EmptyStringField(t *testing.T) {
 	_, err = cfg.Get(config.NewKeyPath("wal_queue_max_size"), &size)
 	require.NoError(t, err)
 	assert.Empty(t, size)
+}
+
+// Tarantool's YAML decoder reads an empty value (`key:`) as "", not as null,
+// so the builder must accept and reject what Tarantool accepts and rejects.
+func TestBuild_EmptyValueReadAsString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+		// emptySocket asks to check that console.socket holds "", not null.
+		emptySocket bool
+	}{
+		{
+			name:    "empty record",
+			yaml:    "console:\n",
+			wantErr: "console [type] invalid type: Value is string but should be object",
+		},
+		{
+			name: "null record",
+			yaml: "console: ~\n",
+		},
+		{
+			name:        "empty string field",
+			yaml:        "console:\n  socket:\n",
+			emptySocket: true,
+		},
+		{
+			name:    "empty boolean field",
+			yaml:    "console:\n  enabled:\n",
+			wantErr: "console/enabled [type] invalid type: Value is string but should be boolean",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.yaml")
+			writeFile(t, cfgPath, tt.yaml)
+
+			cfg, err := tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaVersion("3.8.0").
+				WithEnvPrefix("TT_TESTONLY_").
+				Build(context.Background())
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.emptySocket {
+				var socket any
+
+				_, err = cfg.Get(config.NewKeyPath("console/socket"), &socket)
+				require.NoError(t, err)
+				assert.IsType(t, "", socket, "the empty value is a string, not null")
+				assert.Empty(t, socket)
+			}
+		})
+	}
 }
 
 func TestBuild_WithoutValidation_KeepsSchemaAwareEnvRouting(t *testing.T) {

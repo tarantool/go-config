@@ -208,11 +208,12 @@ func (b *Builder) WithoutValidation() *Builder {
 	return b
 }
 
-// WithNullCoercion sets how empty (null) YAML values are treated during schema
-// validation. Object- and array-typed empty values are always coerced to {} /
+// WithNullCoercion sets how null YAML values (`~`, `null`) are treated during
+// schema validation. Object- and array-typed nulls are always coerced to {} /
 // []; this knob governs the ambiguous scalar case (see
 // [jsonschema.NullCoercion]). Without it, the global
-// [jsonschema.DefaultNullCoercion] applies.
+// [jsonschema.DefaultNullCoercion] applies. An empty value (`key:`) is not a
+// null here: the builder reads it as "", as Tarantool does.
 func (b *Builder) WithNullCoercion(policy jsonschema.NullCoercion) *Builder {
 	b.schemaOpts = append(b.schemaOpts, jsonschema.WithNullCoercion(policy))
 
@@ -309,6 +310,12 @@ func (b *Builder) validate() error {
 // Use this when constructing the prefix for [storage.Prefixed].
 func ConfigPrefix(base string) string {
 	return strings.TrimRight(base, "/") + "/" + DefaultStorageKey + "/"
+}
+
+// yamlFormat returns the YAML format for Tarantool configs, which reads an
+// empty value (`key:`) as "" the way Tarantool itself does.
+func yamlFormat() collectors.Format {
+	return collectors.NewYamlFormat(collectors.EmptyAsString())
 }
 
 // tarantoolInheritanceOpts returns the default Tarantool inheritance options.
@@ -459,7 +466,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 		source, sourceErr := collectors.NewSource(
 			ctx,
 			collectors.NewFile(b.configFile),
-			collectors.NewYamlFormat(),
+			yamlFormat(),
 		)
 		if sourceErr != nil {
 			return config.Builder{}, fmt.Errorf("config file: %w", sourceErr)
@@ -468,14 +475,14 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 		sources = append(sources, source)
 	} else if b.configDir != "" {
 		sources = append(sources,
-			collectors.NewDirectory(b.configDir, ".yaml", collectors.NewYamlFormat()),
+			collectors.NewDirectory(b.configDir, ".yaml", yamlFormat()),
 		)
 	}
 
 	// 3. Centralized storage.
 	if b.storage != nil {
 		sources = append(sources,
-			collectors.NewStorage(b.storage, b.storageKey, collectors.NewYamlFormat()),
+			collectors.NewStorage(b.storage, b.storageKey, yamlFormat()),
 		)
 	}
 
