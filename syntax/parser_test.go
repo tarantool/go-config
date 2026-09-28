@@ -11,11 +11,15 @@ import (
 	"testing"
 	"time"
 
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 	"github.com/tarantool/go-config/v2/syntax/internal/cst"
 )
 
 func TestParserParse(t *testing.T) {
 	t.Parallel()
+
+	language := yamlgrammar.Language()
 
 	parser, err := NewBuilder().WithJSONSchema([]byte(`{"type":"object"}`)).Build(context.Background())
 	if err != nil {
@@ -37,7 +41,7 @@ func TestParserParse(t *testing.T) {
 		t.Fatal("valid YAML has syntax errors")
 	}
 
-	if got := doc.cst.RootNode().String(); !strings.Contains(got, "block_mapping_pair") {
+	if got := doc.cst.RootNode().SExpr(language); !strings.Contains(got, "block_mapping_pair") {
 		t.Fatalf("valid YAML was not parsed as a mapping: %s", got)
 	}
 
@@ -66,7 +70,7 @@ func TestParserParse(t *testing.T) {
 	defer incomplete.Close()
 
 	if !incomplete.cst.RootNode().HasError() {
-		t.Fatalf("incomplete YAML has no recovery error: %s", incomplete.cst.RootNode().String())
+		t.Fatalf("incomplete YAML has no recovery error: %s", incomplete.cst.RootNode().SExpr(language))
 	}
 }
 
@@ -126,6 +130,41 @@ func TestParserParseCanceledDuringParsing(t *testing.T) {
 	}
 }
 
+func TestParserParseStoppedEarly(t *testing.T) {
+	t.Parallel()
+
+	parser, err := NewBuilder().WithJSONSchema([]byte(`{}`)).Build(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(parser.Close)
+
+	parser.yaml.SetParseWorkLimits(sitter.ParseWorkLimits{IterationLimit: 1})
+
+	partial, err := parser.Parse(t.Context(), []byte("mode: prod"))
+	if partial != nil {
+		partial.Close()
+		t.Fatal("Parse() returned a partial tree after reaching a parser limit")
+	}
+
+	if !errors.Is(err, sitter.ErrParseStoppedEarly) {
+		t.Fatalf("Parse() error = %v, want ErrParseStoppedEarly", err)
+	}
+
+	parser.yaml.SetParseWorkLimits(sitter.ParseWorkLimits{})
+
+	tree, err := parser.Parse(t.Context(), []byte("mode: dev"))
+	if err != nil {
+		t.Fatalf("Parse() after reaching a parser limit: %v", err)
+	}
+	defer tree.Close()
+
+	if tree.cst.RootNode().HasError() {
+		t.Fatal("parser retained state from the incomplete parse")
+	}
+}
+
 func TestParserParseAfterClose(t *testing.T) {
 	t.Parallel()
 
@@ -155,12 +194,10 @@ func TestParserParseAfterCompletedContextCancellation(t *testing.T) {
 
 	t.Cleanup(parser.Close)
 
-	// The next document must be long enough for tree-sitter to check its
-	// cancellation flag while parsing.
-	source := []byte(strings.Repeat("- item\n", 1000))
+	// gotreesitter checks cancellation at parse entry, including short inputs.
+	source := []byte("mode: dev")
 
-	// The binding can select either cancellation or parse completion when
-	// both channels are ready. Repeat to exercise the cancellation branch.
+	// Repeat to exercise callbacks scheduled near parse completion.
 	for attempt := range 64 {
 		ctx, cancel := context.WithCancel(context.Background())
 		tree, err := parser.Parse(ctx, []byte("mode: prod"))
@@ -173,7 +210,7 @@ func TestParserParseAfterCompletedContextCancellation(t *testing.T) {
 
 		tree.Close()
 
-		// Allow the binding's cancellation goroutine to finish before reuse.
+		// Allow a pending cancellation callback to run before parser reuse.
 		runtime.Gosched()
 
 		next, err := parser.Parse(context.Background(), source)
@@ -187,6 +224,8 @@ func TestParserParseAfterCompletedContextCancellation(t *testing.T) {
 
 func TestParserConcurrentParse(t *testing.T) {
 	t.Parallel()
+
+	language := yamlgrammar.Language()
 
 	parser, err := NewBuilder().WithJSONSchema([]byte(`{}`)).Build(t.Context())
 	if err != nil {
@@ -212,9 +251,9 @@ func TestParserConcurrentParse(t *testing.T) {
 			}
 
 			sequence := cst.ContentNode(tree.cst.RootNode().NamedChild(0))
-			if sequence == nil || sequence.Type() != "block_sequence" ||
-				int(sequence.NamedChildCount()) != index+1 {
-				t.Fatalf("Parse returned an unexpected sequence: %s", tree.cst.RootNode().String())
+			if sequence == nil || sequence.Type(language) != "block_sequence" ||
+				sequence.NamedChildCount() != index+1 {
+				t.Fatalf("Parse returned an unexpected sequence: %s", tree.cst.RootNode().SExpr(language))
 			}
 		})
 	}
@@ -258,7 +297,7 @@ func TestParserConcurrentClose(t *testing.T) {
 
 			defer tree.Close()
 
-			if tree.cst.RootNode().HasError() || tree.cst.RootNode().Content(source) != string(source) {
+			if tree.cst.RootNode().HasError() || tree.cst.RootNode().Text(source) != string(source) {
 				t.Error("Close invalidated a concurrently returned tree")
 			}
 		})
@@ -279,7 +318,7 @@ func TestParserConcurrentClose(t *testing.T) {
 		t.Fatalf("Parse after concurrent Close = %v, want ErrClosedParser", err)
 	}
 
-	if original.cst.RootNode().HasError() || original.cst.RootNode().Content(source) != string(source) {
+	if original.cst.RootNode().HasError() || original.cst.RootNode().Text(source) != string(source) {
 		t.Fatal("Close invalidated a previously returned tree")
 	}
 }

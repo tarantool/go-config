@@ -3,7 +3,7 @@ package syntax //nolint:testpackage // Tests share fixtures that inspect parser,
 import (
 	"testing"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
 	"github.com/tarantool/go-config/v2/syntax/internal/cst"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
 )
@@ -38,7 +38,7 @@ func TestTreeLifetime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := location.Node.Content(second.Source()); got != "dev" {
+	if got := location.Node.Text(second.Source()); got != "dev" {
 		t.Fatalf("closing another tree or the parser affected the live tree: %q", got)
 	}
 

@@ -10,7 +10,8 @@ import (
 	"strings"
 
 	"github.com/kaptinlin/jsonschema"
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 	"github.com/tarantool/go-config/v2/internal/schemautil"
 	"github.com/tarantool/go-config/v2/syntax/internal/path"
 	"github.com/tarantool/go-config/v2/syntax/internal/schema"
@@ -48,11 +49,13 @@ type CompletionContext struct {
 // lastPairBefore finds the last mapping pair starting at or before the cursor.
 // Its value may span the cursor line; comments do not count as pairs.
 func lastPairBefore(mapping *sitter.Node, offset int) *sitter.Node {
+	language := yamlgrammar.Language()
+
 	var last *sitter.Node
 
-	for index := range int(mapping.NamedChildCount()) {
+	for index := range mapping.NamedChildCount() {
 		child := mapping.NamedChild(index)
-		if child.ChildByFieldName("key") != nil && int(child.StartByte()) <= offset {
+		if child.ChildByFieldName("key", language) != nil && int(child.StartByte()) <= offset {
 			last = child
 		}
 	}
@@ -121,15 +124,17 @@ func CompletionAt(
 func completionEdit(
 	source []byte, starts []int, compiled *schema.Schema, location Location, pos sitter.Point,
 ) (CompletionContext, bool) {
+	language := yamlgrammar.Language()
+
 	var empty CompletionContext
 
 	node, offset := location.Node, location.Offset
 
 	// Leading whitespace can precede the first document's CST range.
-	if node.Type() == "stream" {
-		for index := range int(node.NamedChildCount()) {
+	if node.Type(language) == "stream" {
+		for index := range node.NamedChildCount() {
 			child := node.NamedChild(index)
-			if child.Type() == "document" {
+			if child.Type(language) == "document" {
 				if offset < int(child.StartByte()) {
 					node = ContentNode(child)
 				}
@@ -140,12 +145,12 @@ func completionEdit(
 	}
 
 	for current := node; current != nil; current = current.Parent() {
-		if current.Type() == nodeComment && offset == int(current.StartByte()) {
+		if current.Type(language) == nodeComment && offset == int(current.StartByte()) {
 			continue
 		}
 
-		if (current.Type() == nodeComment || current.Type() == "alias" ||
-			current.Type() == "block_scalar" || current.Type() == "anchor") &&
+		if (current.Type(language) == nodeComment || current.Type(language) == "alias" ||
+			current.Type(language) == "block_scalar" || current.Type(language) == "anchor") &&
 			(location.Contains(current) || offset == int(current.EndByte())) {
 			return empty, false
 		}
@@ -173,11 +178,11 @@ func completionEdit(
 	}
 
 	for current := node; current != nil; current = current.Parent() {
-		switch current.Type() {
+		switch current.Type(language) {
 		case nodeBlockMappingPair, nodeFlowPair:
 			colon := ChildOfType(current, ":")
-			value := ContentNode(current.ChildByFieldName("value"))
-			key := current.ChildByFieldName("key")
+			value := ContentNode(current.ChildByFieldName("value", language))
+			key := current.ChildByFieldName("key", language)
 
 			if key != nil && IsScalar(value) && pos.Row > value.EndPoint().Row &&
 				pos.Column > current.StartPoint().Column &&
@@ -189,7 +194,7 @@ func completionEdit(
 			if colon != nil && pos.Row == colon.EndPoint().Row && offset >= int(colon.EndByte()) {
 				context := valueContext(source, compiled, current, pos, offset)
 				if value == nil {
-					if decorated := current.ChildByFieldName("value"); decorated != nil &&
+					if decorated := current.ChildByFieldName("value", language); decorated != nil &&
 						offset < int(decorated.EndByte()) {
 						return empty, false
 					}
@@ -252,15 +257,15 @@ func completionEdit(
 			if pos.Column >= current.StartPoint().Column {
 				mapping := current
 				if pair := lastPairBefore(mapping, offset); pair != nil {
-					key := pair.ChildByFieldName("key")
+					key := pair.ChildByFieldName("key", language)
 
-					value := ContentNode(pair.ChildByFieldName("value"))
+					value := ContentNode(pair.ChildByFieldName("value", language))
 					if key != nil && pos.Column > pair.StartPoint().Column {
 						if value == nil {
 							return valueContext(source, compiled, pair, pos, offset), true
 						}
 
-						if value.Type() == nodeBlockMapping && offset < int(value.StartByte()) &&
+						if value.Type(language) == nodeBlockMapping && offset < int(value.StartByte()) &&
 							pos.Column >= value.StartPoint().Column {
 							mapping = value
 						}
@@ -307,15 +312,15 @@ func completionEdit(
 
 			var previous string
 
-			for index := range int(current.ChildCount()) {
+			for index := range current.ChildCount() {
 				child := current.Child(index)
 				if int(child.EndByte()) > offset {
 					break
 				}
 
 				end = int(child.EndByte())
-				if child.Type() != nodeComment {
-					previous = child.Type()
+				if child.Type(language) != nodeComment {
+					previous = child.Type(language)
 				}
 			}
 
@@ -393,19 +398,21 @@ func valueContext(
 func tokenContext(
 	source []byte, starts []int, context CompletionContext, node *sitter.Node, pos sitter.Point, offset int,
 ) (CompletionContext, bool) {
+	language := yamlgrammar.Language()
+
 	var empty CompletionContext
 
 	if node.StartPoint().Row != pos.Row ||
-		node.Type() == "block_scalar" || node.Type() == nodeComment {
+		node.Type(language) == "block_scalar" || node.Type(language) == nodeComment {
 		return empty, false
 	}
 
-	if node.EndPoint().Row != pos.Row && (!context.IsKey || node.Type() != "string_scalar") {
+	if node.EndPoint().Row != pos.Row && (!context.IsKey || node.Type(language) != "string_scalar") {
 		return empty, false
 	}
 
 	end := int(node.EndByte())
-	if node.Type() == "\"" || node.Type() == "'" {
+	if node.Type(language) == "\"" || node.Type(language) == "'" {
 		end = LineEnd(source, starts, pos.Row)
 	}
 
@@ -473,6 +480,8 @@ func editToken(
 func flowContext(
 	source []byte, starts []int, compiled *schema.Schema, node *sitter.Node, pos sitter.Point, offset int,
 ) (CompletionContext, bool) {
+	language := yamlgrammar.Language()
+
 	var empty CompletionContext
 
 	context := emptyCompletionContext(compiled, NodeContext(source, compiled, node).Path, pos)
@@ -485,9 +494,9 @@ func flowContext(
 
 	index := 0
 
-	for childIndex := range int(node.ChildCount()) {
+	for childIndex := range node.ChildCount() {
 		child := node.Child(childIndex)
-		if child.Type() == "," {
+		if child.Type(language) == "," {
 			if int(child.EndByte()) > offset {
 				break
 			}
@@ -495,23 +504,23 @@ func flowContext(
 			index++
 
 			occupied = nil
-		} else if child.IsNamed() && child.Type() != nodeComment {
+		} else if child.IsNamed() && child.Type(language) != nodeComment {
 			occupied = child
 		}
 	}
 
 	//nolint:nestif // Flow pairs and bare keys share the same occupied slot.
-	if node.Type() == nodeFlowMapping {
+	if node.Type(language) == nodeFlowMapping {
 		context.IsKey = true
 
 		if occupied != nil {
-			if occupied.Type() == nodeFlowPair {
+			if occupied.Type(language) == nodeFlowPair {
 				if offset < int(occupied.StartByte()) {
 					return empty, false
 				}
 
 				context = valueContext(source, compiled, occupied, pos, offset)
-				occupied = occupied.ChildByFieldName("value")
+				occupied = occupied.ChildByFieldName("value", language)
 			} else {
 				context.Current = occupied
 			}

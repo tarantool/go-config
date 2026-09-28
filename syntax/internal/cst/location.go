@@ -7,7 +7,8 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/odvcencio/gotreesitter"
+	yamlgrammar "github.com/odvcencio/gotreesitter/grammars/yaml"
 )
 
 // Position is a zero-based location in the original UTF-8 YAML source.
@@ -63,6 +64,8 @@ func isSpace(character byte) bool {
 // In whitespace it may select preceding content; callers must still check
 // the cursor line and indentation before treating that anchor as an edit target.
 func Locate(root *sitter.Node, source []byte, starts []int, pos sitter.Point) (Location, error) {
+	language := yamlgrammar.Language()
+
 	offset, err := SourceOffset(source, starts, pos)
 	if err != nil {
 		return Location{}, err
@@ -76,19 +79,19 @@ func Locate(root *sitter.Node, source []byte, starts []int, pos sitter.Point) (L
 
 	for current := node; current != nil; current = current.Parent() {
 		// The position before '#' is still an insertion point in YAML.
-		if current.Type() == nodeComment && offset == int(current.StartByte()) {
+		if current.Type(language) == nodeComment && offset == int(current.StartByte()) {
 			break
 		}
 
-		if IsScalar(current) || current.Type() == nodeComment || current.Type() == "alias" {
+		if IsScalar(current) || current.Type(language) == nodeComment || current.Type(language) == "alias" {
 			return Location{Node: current, Offset: offset}, nil
 		}
 	}
 
 	if previous, ok := previousContentPoint(source, starts, offset); ok {
 		nearby := root.NamedDescendantForPointRange(previous, previous)
-		if nearby != nil && (node.Equal(root) || node.IsError() ||
-			node.Type() == nodeComment && offset == int(node.StartByte()) ||
+		if nearby != nil && (node == root || node.IsError() ||
+			node.Type(language) == nodeComment && offset == int(node.StartByte()) ||
 			offset == len(source) || isSpace(source[offset]) || IsScalar(nearby) &&
 			int(nearby.EndByte()) == offset) {
 			return Location{Node: nearby, Offset: offset}, nil
