@@ -280,3 +280,62 @@ list: [1, "2"]
 	assert.Equal(t, "false", root.Get(config.NewKeyPath("double")).Value)
 	assert.Equal(t, true, root.Get(config.NewKeyPath("bool_tag")).Value)
 }
+
+func TestYaml_Parse_EmptyAsString(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`empty:
+tilde: ~
+null_word: null
+null_tag: !!null
+quoted: ""
+list:
+- 
+- x
+flow: {b: }
+set:
+  ? b
+`)
+
+	tests := []struct {
+		path          string
+		yamlSpec      any
+		emptyAsString any
+	}{
+		{"empty", nil, ""},
+		{"tilde", nil, nil},
+		{"null_word", nil, nil},
+		{"null_tag", nil, ""},
+		{"quoted", "", ""},
+		{"list/0", nil, ""},
+		{"list/1", "x", "x"},
+		{"flow/b", nil, ""},
+		{"set/b", nil, ""},
+	}
+
+	spec, err := collectors.NewYamlFormat().From(bytes.NewReader(data)).Parse()
+	require.NoError(t, err)
+
+	tarantool, err := collectors.NewYamlFormat(collectors.EmptyAsString()).From(bytes.NewReader(data)).Parse()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		node := spec.Get(config.NewKeyPath(tt.path))
+		require.NotNil(t, node, tt.path)
+		assert.Equal(t, tt.yamlSpec, node.Value, "default: %s", tt.path)
+
+		node = tarantool.Get(config.NewKeyPath(tt.path))
+		require.NotNil(t, node, tt.path)
+		assert.Equal(t, tt.emptyAsString, node.Value, "EmptyAsString: %s", tt.path)
+	}
+}
+
+func TestYaml_Parse_EmptyAsString_EmptyDocument(t *testing.T) {
+	t.Parallel()
+
+	root, err := collectors.NewYamlFormat(collectors.EmptyAsString()).
+		From(strings.NewReader("---\n")).Parse()
+	require.NoError(t, err)
+	assert.IsType(t, "", root.Value, "the empty document is a string, not null")
+	assert.Empty(t, root.Value)
+}

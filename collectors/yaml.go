@@ -14,20 +14,44 @@ import (
 
 // YamlFormat implements Format interface.
 type YamlFormat struct {
-	name      string
-	keepOrder bool
-	data      []byte
-	reader    io.Reader
+	name          string
+	keepOrder     bool
+	emptyAsString bool
+	data          []byte
+	reader        io.Reader
+}
+
+// YamlOption configures a YamlFormat created by NewYamlFormat.
+type YamlOption func(*YamlFormat)
+
+// EmptyAsString makes the YAML format read a scalar with no content, such as
+// the value of `key:`, as the empty string instead of null. YAML resolves such
+// a scalar to null, but Tarantool's YAML decoder reads it as "", so a config
+// meant for Tarantool has to be read the same way to be validated the way
+// Tarantool validates it. An explicit null (`~`, `null`) stays null.
+func EmptyAsString() YamlOption {
+	return func(y *YamlFormat) {
+		y.emptyAsString = true
+	}
 }
 
 // NewYamlFormat return new YamlFormat object.
-func NewYamlFormat() Format {
-	return YamlFormat{
-		name:      "yaml",
-		keepOrder: true,
-		data:      nil,
-		reader:    nil,
+func NewYamlFormat(opts ...YamlOption) Format {
+	format := YamlFormat{
+		name:          "yaml",
+		keepOrder:     true,
+		emptyAsString: false,
+		data:          nil,
+		reader:        nil,
 	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&format)
+		}
+	}
+
+	return format
 }
 
 // Name implements the Format interface.
@@ -73,10 +97,11 @@ func (y YamlFormat) Parse() (*tree.Node, error) {
 	root := tree.New()
 
 	flattener := yamlFlattener{
-		ranges:      newYamlRanges(y.data, &node),
-		expanding:   make(map[*yaml.Node]bool),
-		visits:      0,
-		aliasVisits: 0,
+		ranges:        newYamlRanges(y.data, &node),
+		expanding:     make(map[*yaml.Node]bool),
+		emptyAsString: y.emptyAsString,
+		visits:        0,
+		aliasVisits:   0,
 	}
 
 	err = flattener.flatten(root, nil, &node, config.NewKeyPath(""))
@@ -93,9 +118,11 @@ type yamlFlattener struct {
 	ranges *yamlRanges
 	// expanding holds the aliases being expanded, to catch an anchor that
 	// contains itself.
-	expanding   map[*yaml.Node]bool
-	visits      int
-	aliasVisits int
+	expanding map[*yaml.Node]bool
+	// emptyAsString reads a scalar with no content as "" (see EmptyAsString).
+	emptyAsString bool
+	visits        int
+	aliasVisits   int
 }
 
 // yaml.v3's limits on alias expansion: once a document has more than
@@ -221,7 +248,12 @@ func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.
 			target.Range = f.ranges.get(yamlNode)
 		}
 	case yaml.ScalarNode:
-		node.Set(prefix, resolveYamlScalar(*yamlNode))
+		value := resolveYamlScalar(*yamlNode)
+		if value == nil && yamlNode.Value == "" && f.emptyAsString {
+			value = ""
+		}
+
+		node.Set(prefix, value)
 
 		target := node.Get(prefix)
 		if target != nil {
