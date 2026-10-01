@@ -418,6 +418,25 @@ func ErrorContext(
 	return context, nil
 }
 
+// IsScalarValue reports whether the scalar is an explicit pair value or sequence
+// item. ERROR scopes and bare keys retain the role recovered by the CST helpers.
+func IsScalarValue(node *sitter.Node) bool {
+	for child, parent := node, node.Parent(); parent != nil; child, parent = parent, parent.Parent() {
+		switch parent.Type() {
+		case nodeBlockMappingPair, nodeFlowPair:
+			value := parent.ChildByFieldName("value")
+			return value != nil && child.Equal(value)
+		case nodeBlockSequence, nodeFlowSequence:
+			return true
+		case nodeBlockMapping, nodeFlowMapping, nodeError:
+			// A bare mapping key is not a value of an outer pair or sequence.
+			return false
+		}
+	}
+
+	return false
+}
+
 // ExistingKeys collects sibling property names, excluding the edited key.
 // For ERROR nodes it compares schema paths to avoid mixing flattened scopes.
 func ExistingKeys(source []byte, compiled *schema.Schema, context Context) map[string]bool {
