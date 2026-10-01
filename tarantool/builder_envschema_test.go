@@ -2,7 +2,10 @@ package tarantool_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +17,171 @@ import (
 )
 
 const fixtureSchemaPath = "testdata/config.schema.json"
+
+// tarantoolScalarSchema retains the tested sections of the embedded schema.
+// Compiling the unrelated cluster sections for every table entry is too costly
+// under make testrace, which runs each test 100 times with race instrumentation.
+func tarantoolScalarSchema(t *testing.T) []byte {
+	t.Helper()
+
+	data, err := tarantool.Schema("3.8.0")
+	require.NoError(t, err)
+
+	var schema map[string]json.RawMessage
+
+	require.NoError(t, json.Unmarshal(data, &schema))
+
+	var properties map[string]json.RawMessage
+
+	require.NoError(t, json.Unmarshal(schema["properties"], &properties))
+
+	selected := make(map[string]json.RawMessage)
+
+	for _, section := range []string{"console", "iproto", "memtx"} {
+		require.Contains(t, properties, section)
+
+		selected[section] = properties[section]
+	}
+
+	schema["properties"], err = json.Marshal(selected)
+	require.NoError(t, err)
+
+	data, err = json.Marshal(schema)
+	require.NoError(t, err)
+
+	return data
+}
+
+func TestBuild_TarantoolParserFormatting_WithSchema(t *testing.T) {
+	t.Parallel()
+
+	schema := tarantoolScalarSchema(t)
+
+	const (
+		booleanPath = "console/enabled"
+		integerPath = "iproto/threads"
+		numberPath  = "memtx/slab_alloc_factor"
+		stringPath  = "console/socket"
+		titleTrue   = "True"
+		titleFalse  = "False"
+		upperFalse  = "FALSE"
+		upperYes    = "YES"
+		separated   = "1_0.5"
+		trueValue   = "true"
+		falseValue  = "false"
+	)
+
+	tests := []struct {
+		path  string
+		input string
+		want  any
+		valid bool
+	}{
+		{booleanPath, "no", false, true},
+		{booleanPath, "yes", true, true},
+		{booleanPath, trueValue, true, true},
+		{booleanPath, falseValue, false, true},
+		{booleanPath, titleTrue, titleTrue, false},
+		{booleanPath, titleFalse, titleFalse, false},
+		{booleanPath, "TRUE", "TRUE", false},
+		{booleanPath, upperFalse, upperFalse, false},
+		{booleanPath, upperYes, upperYes, false},
+		{booleanPath, "NO", "NO", false},
+		{booleanPath, "\"no\"", "no", false},
+		{booleanPath, "\"true\"", trueValue, false},
+		{booleanPath, "'true'", trueValue, false},
+		{booleanPath, "\"false\"", falseValue, false},
+		{booleanPath, "'false'", falseValue, false},
+		{integerPath, "020", int64(20), true},
+		{integerPath, "09", int64(9), true},
+		{integerPath, "1_000", "1_000", false},
+		{integerPath, "\"020\"", "020", false},
+		{numberPath, "01.5", float64(1.5), true},
+		{numberPath, separated, separated, false},
+		{numberPath, "1_000", "1_000", false},
+		{stringPath, titleTrue, titleTrue, true},
+		{stringPath, titleFalse, titleFalse, true},
+		{stringPath, "1_000", "1_000", true},
+		{stringPath, "\"true\"", trueValue, true},
+		{stringPath, "'true'", trueValue, true},
+		{stringPath, "\"false\"", falseValue, true},
+		{stringPath, "'false'", falseValue, true},
+		{stringPath, "no", false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path+"="+tt.input, func(t *testing.T) {
+			t.Parallel()
+
+			parts := strings.Split(tt.path, "/")
+			cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+			writeFile(t, cfgPath, fmt.Sprintf("%s:\n  %s: %s\n", parts[0], parts[1], tt.input))
+
+			cfg, err := tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchema(schema).
+				WithEnvPrefix("GO_CONFIG_SCHEMA_TEST_").
+				Build(t.Context())
+			if !tt.valid {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.path+" [type]")
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			var value any
+
+			_, err = cfg.Get(config.NewKeyPath(tt.path), &value)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, value)
+		})
+	}
+}
+
+func TestBuild_TarantoolParserFormatting_WithEmbeddedSchema(t *testing.T) {
+	t.Parallel()
+
+	const titleTrue = "True"
+
+	for _, enabled := range []string{"no", titleTrue} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Parallel()
+
+			cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+			writeFile(t, cfgPath, "console:\n  enabled: "+enabled+"\n  socket: \"true\"\n"+
+				"iproto:\n  threads: 020\nmemtx:\n  slab_alloc_factor: 01.5\n")
+
+			cfg, err := tarantool.New().
+				WithConfigFile(cfgPath).
+				WithSchemaVersion("3.8.0").
+				WithEnvPrefix("GO_CONFIG_SCHEMA_TEST_").
+				Build(t.Context())
+			if enabled == titleTrue {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "console/enabled [type]")
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			for path, want := range map[string]any{
+				"console/enabled":         false,
+				"console/socket":          "true",
+				"iproto/threads":          int64(20),
+				"memtx/slab_alloc_factor": float64(1.5),
+			} {
+				var value any
+
+				_, err = cfg.Get(config.NewKeyPath(path), &value)
+				require.NoError(t, err)
+				assert.Equal(t, want, value, path)
+			}
+		})
+	}
+}
 
 func TestBuild_Env_SchemaAware_AuditLog(t *testing.T) {
 	t.Setenv("TT_AUDIT_LOG_NONBLOCK", "true")
@@ -180,6 +348,8 @@ func TestBuild_NullCoercion_EmptyStringField(t *testing.T) {
 func TestBuild_EmptyValueReadAsString(t *testing.T) {
 	t.Parallel()
 
+	schema := tarantoolScalarSchema(t)
+
 	tests := []struct {
 		name    string
 		yaml    string
@@ -195,6 +365,18 @@ func TestBuild_EmptyValueReadAsString(t *testing.T) {
 		{
 			name: "null record",
 			yaml: "console: ~\n",
+		},
+		{
+			name:        "null word record",
+			yaml:        "console: null\n",
+			wantErr:     "",
+			emptySocket: false,
+		},
+		{
+			name:        "empty mapping",
+			yaml:        "console: {}\n",
+			wantErr:     "",
+			emptySocket: false,
 		},
 		{
 			name:        "empty string field",
@@ -218,7 +400,7 @@ func TestBuild_EmptyValueReadAsString(t *testing.T) {
 
 			cfg, err := tarantool.New().
 				WithConfigFile(cfgPath).
-				WithSchemaVersion("3.8.0").
+				WithSchema(schema).
 				WithEnvPrefix("TT_TESTONLY_").
 				Build(context.Background())
 			if tt.wantErr != "" {
