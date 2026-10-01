@@ -73,6 +73,7 @@ linters:
             - "github.com/tarantool/go-config/v2"
             - "github.com/tarantool/go-storage"
             - "github.com/kaptinlin/jsonschema"
+            - "github.com/smacker/go-tree-sitter"
             - "go.etcd.io/etcd"
         test:
           files:
@@ -84,4 +85,6 @@ linters:
             - "github.com/tarantool/go-config/v2"
             - "github.com/tarantool/go-storage"
             - "github.com/kaptinlin/jsonschema"
+            - "github.com/smacker/go-tree-sitter"
+            - "go.yaml.in/yaml/v3"
             - "go.etcd.io/etcd"

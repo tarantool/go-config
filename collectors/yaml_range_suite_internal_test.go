@@ -50,6 +50,42 @@ func TestYamlRanges_Suite(t *testing.T) {
 	assert.Greater(t, checked, 5000)
 }
 
+// Flow nodes may have tabs between properties and content, even where the
+// same text cannot be parsed as a standalone block document.
+func TestYamlRanges_FlowValues(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		src  string
+		end  int
+	}{
+		{"tagged sequence", "{!\n\t[0]}", 5},
+		{"tagged mapping", "{!\n\t{a: 0}}", 8},
+		{"single quoted scalar", "{!\n\t'0'}", 5},
+		{"double quoted scalar", "{!\n\t\"0\"}", 5},
+		{"anchored sequence", "{&a\n\t[0]}", 5},
+		{"explicit tag", "{!!seq\n\t[0]}", 5},
+		{"anchor and tag", "{&a !\n\t[0]}", 5},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			for variant, src := range yamlVariants([]byte(test.src)) {
+				var doc yaml.Node
+
+				require.NoError(t, yaml.Unmarshal(src, &doc), variant)
+
+				node := doc.Content[0].Content[0]
+				ranges := newYamlRanges(src, &doc)
+
+				assert.Equal(t, tree.NewRange(1, 2, 2, test.end), ranges.get(node), variant)
+				assert.True(t, checkYamlRangeValue(t, test.name+variant, ranges, node))
+			}
+		})
+	}
+}
+
 // Every range must match the node tree-sitter-yaml finds at the same position.
 func TestYamlRanges_TreeSitter(t *testing.T) {
 	t.Parallel()
@@ -317,11 +353,11 @@ func checkYamlRangeValue(t *testing.T, name string, ranges *yamlRanges, node *ya
 		text += "\n"
 	}
 
-	// A mapping without braces reads as one only inside a flow sequence, and
-	// a blank after it decides how yaml.v3 reads a trailing ":" ("[a: ]" and
-	// "[a:]" differ).
-	_, content := ranges.skipProperties(ranges.offset(node.Line, node.Column), node, nil)
-	if node.Kind == yaml.MappingNode && node.Style&yaml.FlowStyle != 0 && !ranges.at(content, '{') {
+	// Wrap flow collections and quoted scalars in a flow sequence so tabs on
+	// continuation lines remain valid after tags and anchors. A mapping without
+	// braces also needs a flow sequence, and a blank after it decides how
+	// yaml.v3 reads a trailing ":" ("[a: ]" and "[a:]" differ).
+	if node.Style&(yaml.FlowStyle|yaml.SingleQuotedStyle|yaml.DoubleQuotedStyle) != 0 {
 		closing := "]\n"
 		if ranges.at(end, ' ') || ranges.at(end, '\t') || ranges.at(end, '\n') {
 			closing = " ]\n"
