@@ -1,6 +1,7 @@
 package tarantool_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tarantool/go-config/v2"
+	"github.com/tarantool/go-config/v2/collectors"
 	"github.com/tarantool/go-config/v2/internal/testutil"
 	"github.com/tarantool/go-config/v2/tarantool"
 )
@@ -72,6 +74,92 @@ func TestBuild_ConfigDirOnly(t *testing.T) {
 	_, err = cfg.Get(config.NewKeyPath("database/driver"), &driver)
 	require.NoError(t, err)
 	assert.Equal(t, "postgres", driver)
+}
+
+func TestBuild_TarantoolParserFormatting(t *testing.T) {
+	t.Parallel()
+
+	const (
+		data = "leading: 020\ninteger: 1_0\nfloat: 1_0.5\nprefixed: 0x1_0\nempty:\n" +
+			"affirmative: yes\nnegative: no\nquoted: \"yes\"\n" +
+			"quoted_true: \"true\"\nquoted_false: 'false'\n" +
+			"uppercase_yes: YES\ntitle_no: No\ntitle_true: True\nuppercase_false: FALSE\n"
+		fileSource     = "file"
+		quotedTrueKey  = "quoted_true"
+		quotedFalseKey = "quoted_false"
+	)
+
+	for _, source := range []string{fileSource, "directory", "storage"} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+
+			builder := tarantool.New().WithEnvPrefix("GO_CONFIG_FORMATTING_").WithoutSchema()
+
+			switch source {
+			case fileSource, "directory":
+				dir := t.TempDir()
+				filename := filepath.Join(dir, "config.yaml")
+				writeFile(t, filename, data)
+
+				if source == fileSource {
+					builder.WithConfigFile(filename)
+				} else {
+					builder.WithConfigDir(dir)
+				}
+			case "storage":
+				mock := testutil.NewMockStorage()
+				testutil.PutIntegrity(mock, "/config/", "app", []byte(data))
+				builder.WithStorage(testutil.NewRawTyped(mock, "/config/"))
+			}
+
+			cfg, err := builder.Build(t.Context())
+			require.NoError(t, err)
+
+			var values map[string]any
+
+			_, err = cfg.Get(config.NewKeyPath(""), &values)
+			require.NoError(t, err)
+			assert.Equal(t, map[string]any{
+				"leading":         int64(20),
+				"integer":         "1_0",
+				"float":           "1_0.5",
+				"prefixed":        "0x1_0",
+				"empty":           "",
+				"affirmative":     true,
+				"negative":        false,
+				"quoted":          "yes",
+				quotedTrueKey:     "true",
+				quotedFalseKey:    "false",
+				"uppercase_yes":   "YES",
+				"title_no":        "No",
+				"title_true":      "True",
+				"uppercase_false": "FALSE",
+			}, values)
+
+			for _, key := range []string{quotedTrueKey, quotedFalseKey} {
+				var boolean bool
+
+				_, err = cfg.Get(config.NewKeyPath(key), &boolean)
+				require.Error(t, err, "%s stays a string when decoded into bool", key)
+			}
+
+			encoded, err := cfg.MarshalYAML()
+			require.NoError(t, err)
+
+			root, err := collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
+				From(bytes.NewReader(encoded)).Parse()
+			require.NoError(t, err)
+
+			for _, key := range []string{
+				"affirmative", "negative", "quoted", "uppercase_yes", "title_no", "title_true", "uppercase_false",
+				quotedTrueKey, quotedFalseKey,
+			} {
+				node := root.Get(config.NewKeyPath(key))
+				require.NotNil(t, node)
+				assert.Equal(t, values[key], node.Value, "after YAML round-trip: %s", key)
+			}
+		})
+	}
 }
 
 func TestBuild_MutuallyExclusive(t *testing.T) {

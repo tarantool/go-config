@@ -65,6 +65,126 @@ func TestYaml_Parse(t *testing.T) {
 	assert.Equal(t, "default-cluster", val)
 }
 
+func TestYaml_Parse_TarantoolParserFormatting(t *testing.T) {
+	t.Parallel()
+
+	const (
+		yesValue   = "yes"
+		trueValue  = "true"
+		falseValue = "false"
+		titleYes   = "Yes"
+		upperYes   = "YES"
+		mixedYes   = "yEs"
+		yesterday  = "yesterday"
+		nobody     = "nobody"
+	)
+
+	tests := []struct {
+		input          string
+		yamlValue      any
+		tarantoolValue any
+	}{
+		{"0", int64(0), int64(0)},
+		{"00", int64(0), int64(0)},
+		{"020", int64(16), int64(20)},
+		{"00020", int64(16), int64(20)},
+		{"+020", int64(16), int64(20)},
+		{"-020", int64(-16), int64(-20)},
+		{"08", float64(8), int64(8)},
+		{"09", float64(9), int64(9)},
+		{"+09", float64(9), int64(9)},
+		{"-09", float64(-9), int64(-9)},
+		{"09223372036854775807", float64(9223372036854775807), int64(9223372036854775807)},
+		{"-09223372036854775808", float64(-9223372036854775808), int64(-9223372036854775808)},
+		{"018446744073709551615", float64(18446744073709551615), uint64(18446744073709551615)},
+		{"020.5", float64(20.5), float64(20.5)},
+		{"020e2", float64(2000), float64(2000)},
+		{"0x20", int64(32), int64(32)},
+		{"-0x20", int64(-32), int64(-32)},
+		{"0o20", int64(16), int64(16)},
+		{"+0o20", int64(16), int64(16)},
+		{"-0o20", int64(-16), int64(-16)},
+		{"0b10", int64(2), int64(2)},
+		{"-0b10", int64(-2), int64(-2)},
+		{"\"020\"", "020", "020"},
+		{"'020'", "020", "020"},
+		{"!!str 020", "020", "020"},
+		{"!!int 020", int64(16), int64(20)},
+		{"!!float 020", float64(20), float64(20)},
+		{"0_20", int64(16), "0_20"},
+		{"0_9", float64(9), "0_9"},
+		{"1_000", int64(1000), "1_000"},
+		{"-1_000", int64(-1000), "-1_000"},
+		{"1__0", int64(10), "1__0"},
+		{"1_000.5", float64(1000.5), "1_000.5"},
+		{"1__0.5", float64(10.5), "1__0.5"},
+		{"1.5e1_0", float64(1.5e10), "1.5e1_0"},
+		{"0x2_0", int64(32), "0x2_0"},
+		{"0o2_0", int64(16), "0o2_0"},
+		{"0b1_0", int64(2), "0b1_0"},
+		{"!!int 1_0", int64(10), "1_0"},
+		{"!!float 1_0", float64(10), "1_0"},
+		{yesValue, yesValue, true},
+		{titleYes, titleYes, titleYes},
+		{upperYes, upperYes, upperYes},
+		{"no", "no", false},
+		{"No", "No", "No"},
+		{"NO", "NO", "NO"},
+		{mixedYes, mixedYes, mixedYes},
+		{"nO", "nO", "nO"},
+		{trueValue, true, true},
+		{falseValue, false, false},
+		{"\"true\"", trueValue, trueValue},
+		{"'true'", trueValue, trueValue},
+		{"\"false\"", falseValue, falseValue},
+		{"'false'", falseValue, falseValue},
+		{"!!str true", trueValue, trueValue},
+		{"!!str false", falseValue, falseValue},
+		{"True", true, "True"},
+		{"TRUE", true, "TRUE"},
+		{"False", false, "False"},
+		{"FALSE", false, "FALSE"},
+		{"\"yes\"", yesValue, yesValue},
+		{"\"no\"", "no", "no"},
+		{"'yes'", yesValue, yesValue},
+		{"'no'", "no", "no"},
+		{"!!str yes", yesValue, yesValue},
+		{"!!str no", "no", "no"},
+		{"!!bool yes", yesValue, true},
+		{"!!bool no", "no", false},
+		{"!!bool \"yes\"", yesValue, true},
+		{"!!bool 'no'", "no", false},
+		{"!custom yes", yesValue, yesValue},
+		{"!custom no", "no", "no"},
+		{"|-\n  yes", yesValue, yesValue},
+		{">-\n  no", "no", "no"},
+		{yesterday, yesterday, yesterday},
+		{nobody, nobody, nobody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
+			data := "number: " + tt.input + "\n"
+			root, err := collectors.NewYamlFormat().From(strings.NewReader(data)).Parse()
+			require.NoError(t, err)
+
+			node := root.Get(config.NewKeyPath("number"))
+			require.NotNil(t, node)
+			assert.Equal(t, tt.yamlValue, node.Value, "default YAML format")
+
+			root, err = collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
+				From(strings.NewReader(data)).Parse()
+			require.NoError(t, err)
+
+			node = root.Get(config.NewKeyPath("number"))
+			require.NotNil(t, node)
+			assert.Equal(t, tt.tarantoolValue, node.Value, "Tarantool format")
+		})
+	}
+}
+
 func TestYaml_Parse_EmptyMapping(t *testing.T) {
 	t.Parallel()
 
@@ -316,7 +436,11 @@ set:
 	spec, err := collectors.NewYamlFormat().From(bytes.NewReader(data)).Parse()
 	require.NoError(t, err)
 
-	tarantool, err := collectors.NewYamlFormat(collectors.EmptyAsString()).From(bytes.NewReader(data)).Parse()
+	standalone, err := collectors.NewYamlFormat(collectors.EmptyAsString()).From(bytes.NewReader(data)).Parse()
+	require.NoError(t, err)
+
+	tarantool, err := collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
+		From(bytes.NewReader(data)).Parse()
 	require.NoError(t, err)
 
 	for _, tt := range tests {
@@ -324,9 +448,13 @@ set:
 		require.NotNil(t, node, tt.path)
 		assert.Equal(t, tt.yamlSpec, node.Value, "default: %s", tt.path)
 
-		node = tarantool.Get(config.NewKeyPath(tt.path))
+		node = standalone.Get(config.NewKeyPath(tt.path))
 		require.NotNil(t, node, tt.path)
 		assert.Equal(t, tt.emptyAsString, node.Value, "EmptyAsString: %s", tt.path)
+
+		node = tarantool.Get(config.NewKeyPath(tt.path))
+		require.NotNil(t, node, tt.path)
+		assert.Equal(t, tt.emptyAsString, node.Value, "Tarantool format: %s", tt.path)
 	}
 }
 
@@ -334,6 +462,16 @@ func TestYaml_Parse_EmptyAsString_EmptyDocument(t *testing.T) {
 	t.Parallel()
 
 	root, err := collectors.NewYamlFormat(collectors.EmptyAsString()).
+		From(strings.NewReader("---\n")).Parse()
+	require.NoError(t, err)
+	assert.IsType(t, "", root.Value, "the empty document is a string, not null")
+	assert.Empty(t, root.Value)
+}
+
+func TestYaml_Parse_TarantoolParserFormatting_EmptyDocument(t *testing.T) {
+	t.Parallel()
+
+	root, err := collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
 		From(strings.NewReader("---\n")).Parse()
 	require.NoError(t, err)
 	assert.IsType(t, "", root.Value, "the empty document is a string, not null")

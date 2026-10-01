@@ -312,10 +312,10 @@ func ConfigPrefix(base string) string {
 	return strings.TrimRight(base, "/") + "/" + DefaultStorageKey + "/"
 }
 
-// yamlFormat returns the YAML format for Tarantool configs, which reads an
-// empty value (`key:`) as "" the way Tarantool itself does.
+// yamlFormat returns the YAML format for Tarantool configs, with Tarantool's
+// scalar rules and empty values (`key:`) read as "".
 func yamlFormat() collectors.Format {
-	return collectors.NewYamlFormat(collectors.EmptyAsString())
+	return collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting())
 }
 
 // tarantoolInheritanceOpts returns the default Tarantool inheritance options.
