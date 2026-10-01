@@ -417,3 +417,35 @@ func ErrorContext(
 
 	return context, nil
 }
+
+// ExistingKeys collects sibling property names, excluding the edited key.
+// For ERROR nodes it compares schema paths to avoid mixing flattened scopes.
+func ExistingKeys(source []byte, compiled *schema.Schema, context Context) map[string]bool {
+	used := make(map[string]bool)
+	mapping, current := context.Mapping, context.Current
+
+	if mapping == nil {
+		return used
+	}
+
+	for index := range int(mapping.NamedChildCount()) {
+		pair := mapping.NamedChild(index)
+		if current != nil && pair.Equal(current) {
+			continue
+		}
+
+		if key := pair.ChildByFieldName("key"); key != nil {
+			if mapping.Type() == nodeError &&
+				!slices.Equal(NodeContext(source, compiled, pair).Path, context.Path) {
+				continue
+			}
+
+			used[KeyText(source, key)] = true
+		} else if mapping.Type() == nodeFlowMapping &&
+			pair.Type() == nodeFlowNode && ScalarNode(pair) != nil {
+			used[KeyText(source, pair)] = true
+		}
+	}
+
+	return used
+}

@@ -20,6 +20,10 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   incomplete YAML in a tree-sitter syntax tree (TNTP-10384).
 * Added source coordinates through `syntax.Position` and `syntax.Range`.
   CST navigation and JSON Schema traversal remain private to `syntax`.
+* Added JSON Schema completion through `Tree.Completion`, with
+  property and scalar suggestions, insertion text, and replacement ranges.
+  Completion supports nested mappings, sequences, and incomplete YAML
+  (TNTP-10385, TNTP-10386).
 
 ### Changed
 
