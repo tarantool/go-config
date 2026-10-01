@@ -16,6 +16,14 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * `collectors.NewYamlFormat` takes options; `collectors.EmptyAsString` reads
   a scalar with no content (`key:`, a `- ` item) as "" instead of null, while
   `~` and `null` stay null.
+* `collectors.WithTarantoolParserFormatting` enables Tarantool scalar rules:
+  `020` is decimal `20`, and numbers containing underscores stay strings.
+  Plain `yes` and `no` become booleans, other cases, quoted and explicitly
+  string-tagged values stay strings. Boolean parsing is case-sensitive,
+  matching Tarantool. Parsed strings retain their type during schema validation
+  and typed decoding. Empty scalars (`key:`) are read as "", while
+  explicit `~` and `null` stay null. The default YAML format keeps its existing
+  scalar rules.
 * Added a schema-backed YAML syntax parser for editor operations. It preserves
   incomplete YAML in a tree-sitter syntax tree (TNTP-10384).
 * Added source coordinates through `syntax.Position` and `syntax.Range`.
@@ -31,6 +39,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* The Tarantool builder enables `collectors.WithTarantoolParserFormatting`
+  for YAML from files, directories and storage.
 * The Tarantool builder reads an empty YAML value as "", the way Tarantool's
   own YAML decoder does, so it validates the config as Tarantool does:
   `console:` is rejected as a string where an object is expected instead of

@@ -1,11 +1,13 @@
 package jsonschema_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tarantool/go-config/v2/collectors"
 	"github.com/tarantool/go-config/v2/keypath"
 	"github.com/tarantool/go-config/v2/tree"
 	"github.com/tarantool/go-config/v2/validators/jsonschema"
@@ -198,4 +200,141 @@ func TestCoerceScalars_FixedStringNestedAndArrayItems(t *testing.T) {
 		keypath.NewKeyPath("nested/on"),
 		keypath.NewKeyPath("flags/1"),
 	}, paths, "only the fixed strings fail; the untyped array item is still coerced")
+}
+
+func TestValidate_TarantoolParserFormatting(t *testing.T) {
+	t.Parallel()
+
+	const (
+		titleTrue  = "True"
+		nameKey    = "name"
+		trueValue  = "true"
+		falseValue = "false"
+	)
+
+	tests := []struct {
+		key   string
+		input string
+		want  any
+		valid bool
+	}{
+		{"flag", "no", false, true},
+		{"flag", "yes", true, true},
+		{"flag", trueValue, true, true},
+		{"flag", falseValue, false, true},
+		{"flag", titleTrue, titleTrue, false},
+		{"flag", "False", "False", false},
+		{"flag", "TRUE", "TRUE", false},
+		{"flag", "FALSE", "FALSE", false},
+		{"flag", "YES", "YES", false},
+		{"flag", "NO", "NO", false},
+		{"flag", "t", "t", false},
+		{"flag", "f", "f", false},
+		{"flag", "\"no\"", "no", false},
+		{"flag", "\"true\"", trueValue, false},
+		{"flag", "'true'", trueValue, false},
+		{"flag", "\"false\"", falseValue, false},
+		{"flag", "'false'", falseValue, false},
+		{"flag", "!!str true", trueValue, false},
+		{"count", "020", int64(20), true},
+		{"count", "-020", int64(-20), true},
+		{"count", "09", int64(9), true},
+		{"count", "1_000", "1_000", false},
+		{"count", "\"020\"", "020", false},
+		{"ratio", "020.5", float64(20.5), true},
+		{"ratio", "020e2", float64(2000), true},
+		{"ratio", "09", int64(9), true},
+		{"ratio", "1_000", "1_000", false},
+		{"ratio", "1_0.5", "1_0.5", false},
+		{"ratio", "1.5e1_0", "1.5e1_0", false},
+		{"ratio", "'1.5'", "1.5", false},
+		{nameKey, titleTrue, titleTrue, true},
+		{nameKey, "False", "False", true},
+		{nameKey, "1_000", "1_000", true},
+		{nameKey, "\"true\"", trueValue, true},
+		{nameKey, "'true'", trueValue, true},
+		{nameKey, "\"false\"", falseValue, true},
+		{nameKey, "'false'", falseValue, true},
+		{nameKey, "no", false, false},
+		{"either", titleTrue, titleTrue, true},
+		{"either", "no", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key+"="+tt.input, func(t *testing.T) {
+			t.Parallel()
+
+			validator, err := jsonschema.New([]byte(scalarSchema))
+			require.NoError(t, err)
+
+			root, err := collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
+				From(strings.NewReader(tt.key + ": " + tt.input + "\n")).Parse()
+			require.NoError(t, err)
+
+			node := root.Get(keypath.NewKeyPath(tt.key))
+			require.NotNil(t, node)
+			assert.Equal(t, tt.want, node.Value)
+
+			errs := validator.Validate(root)
+			if tt.valid {
+				assert.Empty(t, errs)
+			} else {
+				require.Len(t, errs, 1)
+				assert.Equal(t, keypath.NewKeyPath(tt.key), errs[0].Path)
+				assert.Equal(t, "type", errs[0].Code)
+			}
+
+			assert.Equal(t, tt.want, node.Value, "validation preserves the parsed value")
+		})
+	}
+}
+
+func TestValidate_TarantoolParserFormatting_NestedAndArrayItems(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		data  string
+		paths []keypath.KeyPath
+	}{
+		{
+			name:  "booleans",
+			data:  "nested:\n  on: no\nflags: [yes, no, true, false]\n",
+			paths: nil,
+		},
+		{
+			name: "strings",
+			data: "nested:\n  on: False\nflags: [yes, True]\n",
+			paths: []keypath.KeyPath{
+				keypath.NewKeyPath("nested/on"),
+				keypath.NewKeyPath("flags/1"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator, err := jsonschema.New([]byte(scalarSchema))
+			require.NoError(t, err)
+
+			root, err := collectors.NewYamlFormat(collectors.WithTarantoolParserFormatting()).
+				From(strings.NewReader(tt.data)).Parse()
+			require.NoError(t, err)
+
+			errs := validator.Validate(root)
+			require.Len(t, errs, len(tt.paths))
+
+			var paths []keypath.KeyPath
+
+			for _, err := range errs {
+				assert.Equal(t, "type", err.Code)
+
+				paths = append(paths, err.Path)
+			}
+
+			assert.ElementsMatch(t, tt.paths, paths)
+		})
+	}
 }
