@@ -12,13 +12,16 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+const yamlBoolTag = "!!bool"
+
 // YamlFormat implements Format interface.
 type YamlFormat struct {
-	name          string
-	keepOrder     bool
-	emptyAsString bool
-	data          []byte
-	reader        io.Reader
+	name                string
+	keepOrder           bool
+	emptyAsString       bool
+	tarantoolFormatting bool
+	data                []byte
+	reader              io.Reader
 }
 
 // YamlOption configures a YamlFormat created by NewYamlFormat.
@@ -29,8 +32,23 @@ type YamlOption func(*YamlFormat)
 // a scalar to null, but Tarantool's YAML decoder reads it as "", so a config
 // meant for Tarantool has to be read the same way to be validated the way
 // Tarantool validates it. An explicit null (`~`, `null`) stays null.
+// This behavior is also enabled by [WithTarantoolParserFormatting].
 func EmptyAsString() YamlOption {
 	return func(y *YamlFormat) {
+		y.emptyAsString = true
+	}
+}
+
+// WithTarantoolParserFormatting makes the YAML format parse scalars using
+// Tarantool's rules: leading zeros do not imply octal, and underscores are not
+// digit separators. Numbers containing underscores stay strings. Explicit
+// 0x, 0o and 0b prefixes retain their bases. Only lowercase plain yes and no
+// resolve to booleans; quoted and explicitly string-tagged values stay strings.
+// Empty scalars (`key:`) are read as ""; explicit null (`~`, `null`) stays null.
+// Parsed strings keep their type during schema validation and typed decoding.
+func WithTarantoolParserFormatting() YamlOption {
+	return func(y *YamlFormat) {
+		y.tarantoolFormatting = true
 		y.emptyAsString = true
 	}
 }
@@ -38,11 +56,12 @@ func EmptyAsString() YamlOption {
 // NewYamlFormat return new YamlFormat object.
 func NewYamlFormat(opts ...YamlOption) Format {
 	format := YamlFormat{
-		name:          "yaml",
-		keepOrder:     true,
-		emptyAsString: false,
-		data:          nil,
-		reader:        nil,
+		name:                "yaml",
+		keepOrder:           true,
+		emptyAsString:       false,
+		tarantoolFormatting: false,
+		data:                nil,
+		reader:              nil,
 	}
 
 	for _, opt := range opts {
@@ -97,11 +116,12 @@ func (y YamlFormat) Parse() (*tree.Node, error) {
 	root := tree.New()
 
 	flattener := yamlFlattener{
-		ranges:        newYamlRanges(y.data, &node),
-		expanding:     make(map[*yaml.Node]bool),
-		emptyAsString: y.emptyAsString,
-		visits:        0,
-		aliasVisits:   0,
+		ranges:              newYamlRanges(y.data, &node),
+		expanding:           make(map[*yaml.Node]bool),
+		emptyAsString:       y.emptyAsString,
+		tarantoolFormatting: y.tarantoolFormatting,
+		visits:              0,
+		aliasVisits:         0,
 	}
 
 	err = flattener.flatten(root, nil, &node, config.NewKeyPath(""))
@@ -120,9 +140,10 @@ type yamlFlattener struct {
 	// contains itself.
 	expanding map[*yaml.Node]bool
 	// emptyAsString reads a scalar with no content as "" (see EmptyAsString).
-	emptyAsString bool
-	visits        int
-	aliasVisits   int
+	emptyAsString       bool
+	tarantoolFormatting bool
+	visits              int
+	aliasVisits         int
 }
 
 // yaml.v3's limits on alias expansion: once a document has more than
@@ -248,7 +269,7 @@ func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.
 			target.Range = f.ranges.get(yamlNode)
 		}
 	case yaml.ScalarNode:
-		value := resolveYamlScalar(*yamlNode)
+		value := resolveYamlScalar(*yamlNode, f.tarantoolFormatting)
 		if value == nil && yamlNode.Value == "" && f.emptyAsString {
 			value = ""
 		}
@@ -258,9 +279,19 @@ func (f *yamlFlattener) flatten(node *tree.Node, key *yaml.Node, yamlNode *yaml.
 		target := node.Get(prefix)
 		if target != nil {
 			target.Range = f.ranges.get(yamlNode)
-			target.SetTypeFixed(yamlScalarTypeFixed(yamlNode))
+
+			// Tarantool-resolved strings must not be coerced back into numbers or booleans.
+			_, isString := value.(string)
+			target.SetTypeFixed(yamlScalarTypeFixed(yamlNode) || f.tarantoolFormatting && isString)
 
 			yamlNodeCopy := *yamlNode
+			if boolean, ok := value.(bool); ok && yamlNodeCopy.ShortTag() == "!!str" {
+				// Plain yes/no were resolved to bool, but yaml.v3 tagged them as strings.
+				// Use a boolean annotation so marshaling preserves their resolved type.
+				yamlNodeCopy.Tag = yamlBoolTag
+				yamlNodeCopy.Value = strconv.FormatBool(boolean)
+			}
+
 			target.SetAnnotation(config.YAMLAnnotation{Key: key, Val: &yamlNodeCopy})
 		}
 	default:
@@ -284,25 +315,59 @@ func yamlScalarTypeFixed(yamlNode *yaml.Node) bool {
 // resolveYamlScalar converts a YAML scalar node's string value into a typed Go value
 // based on the YAML tag. Only core YAML tags (!!null, !!bool, !!int, !!float, !!str)
 // are converted; unknown tags default to string.
-func resolveYamlScalar(yamlNode yaml.Node) any {
+func resolveYamlScalar(yamlNode yaml.Node, tarantoolFormatting bool) any {
 	tag := yamlNode.ShortTag()
+
+	if tarantoolFormatting && tag == "!!str" && !yamlScalarTypeFixed(&yamlNode) {
+		// yaml.v3 tags Tarantool's lowercase yes/no booleans as strings.
+		switch yamlNode.Value {
+		case "yes", "no":
+			tag = yamlBoolTag
+		}
+	}
+
+	// strconv also accepts underscores in prefixed integers and floats, so
+	// reject separators before parsing either numeric type in Tarantool mode.
+	if tarantoolFormatting && (tag == "!!int" || tag == "!!float") && strings.ContainsRune(yamlNode.Value, '_') {
+		return yamlNode.Value
+	}
 
 	switch tag {
 	case "!!null":
 		return nil
-	case "!!bool":
-		return resolveYamlBool(yamlNode.Value)
+	case yamlBoolTag:
+		return resolveYamlBool(yamlNode.Value, tarantoolFormatting)
 	case "!!int":
-		return resolveYamlInt(yamlNode.Value)
+		return resolveYamlInt(yamlNode.Value, tarantoolFormatting)
 	case "!!float":
-		return resolveYamlFloat(yamlNode.Value)
+		// yaml.v3 infers a float for integers such as 08 or 09. Retry them
+		// with decimal rules, preserving an explicit !!float tag.
+		if tarantoolFormatting && yamlNode.Style&yaml.TaggedStyle == 0 {
+			switch value := resolveYamlInt(yamlNode.Value, tarantoolFormatting); value.(type) {
+			case int64, uint64:
+				return value
+			}
+		}
+
+		return resolveYamlFloat(yamlNode.Value, tarantoolFormatting)
 	default:
 		return yamlNode.Value
 	}
 }
 
 // resolveYamlBool parses YAML boolean values.
-func resolveYamlBool(value string) any {
+func resolveYamlBool(value string, tarantoolFormatting bool) any {
+	if tarantoolFormatting {
+		switch value {
+		case "true", "yes":
+			return true
+		case "false", "no":
+			return false
+		default:
+			return value
+		}
+	}
+
 	lower := strings.ToLower(value)
 
 	switch lower {
@@ -311,54 +376,45 @@ func resolveYamlBool(value string) any {
 	case "false":
 		return false
 	default:
-		return value
 	}
+
+	return value
 }
 
-// resolveYamlInt parses YAML integer values (decimal, hex, octal, binary).
-func resolveYamlInt(value string) any {
-	plain := strings.ReplaceAll(value, "_", "")
+// resolveYamlInt parses YAML integers, using decimal for leading zeros in
+// Tarantool mode and preserving explicit hex, octal and binary prefixes.
+func resolveYamlInt(value string, tarantoolFormatting bool) any {
+	plain := value
+	base := 0
 
-	i, err := strconv.ParseInt(plain, 0, 64)
+	if tarantoolFormatting {
+		base = 10
+
+		digits := strings.ToLower(strings.TrimLeft(plain, "+-"))
+
+		if strings.HasPrefix(digits, "0x") || strings.HasPrefix(digits, "0o") || strings.HasPrefix(digits, "0b") {
+			base = 0
+		}
+	} else {
+		plain = strings.ReplaceAll(value, "_", "")
+	}
+
+	i, err := strconv.ParseInt(plain, base, 64)
 	if err == nil {
 		return i
 	}
 
 	// Try as unsigned for very large values.
-	u, err := strconv.ParseUint(plain, 0, 64)
+	u, err := strconv.ParseUint(plain, base, 64)
 	if err == nil {
 		return u
-	}
-
-	// Handle 0o and 0b prefixes with signs.
-	switch {
-	case strings.HasPrefix(plain, "0o"):
-		i, err = strconv.ParseInt(plain[2:], 8, 64)
-		if err == nil {
-			return i
-		}
-	case strings.HasPrefix(plain, "-0o"):
-		i, err = strconv.ParseInt("-"+plain[3:], 8, 64)
-		if err == nil {
-			return i
-		}
-	case strings.HasPrefix(plain, "0b"):
-		i, err = strconv.ParseInt(plain[2:], 2, 64)
-		if err == nil {
-			return i
-		}
-	case strings.HasPrefix(plain, "-0b"):
-		i, err = strconv.ParseInt("-"+plain[3:], 2, 64)
-		if err == nil {
-			return i
-		}
 	}
 
 	return value
 }
 
 // resolveYamlFloat parses YAML float values including special values (.inf, .nan).
-func resolveYamlFloat(value string) any {
+func resolveYamlFloat(value string, tarantoolFormatting bool) any {
 	lower := strings.ToLower(value)
 
 	switch lower {
@@ -370,7 +426,10 @@ func resolveYamlFloat(value string) any {
 		return math.NaN()
 	}
 
-	plain := strings.ReplaceAll(value, "_", "")
+	plain := value
+	if !tarantoolFormatting {
+		plain = strings.ReplaceAll(value, "_", "")
+	}
 
 	f, err := strconv.ParseFloat(plain, 64)
 	if err == nil {
