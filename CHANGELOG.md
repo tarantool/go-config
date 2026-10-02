@@ -10,6 +10,13 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* `config.WithTemplateVariables` enables template substitution after inheritance
+  in `Effective` and `EffectiveAll`; unknown variables return
+  `config.ErrUnknownTemplateVariable` with the entity and field paths.
+* The Tarantool builder substitutes `{{ instance_name }}`, `{{ replicaset_name }}`
+  and `{{ group_name }}` in effective string values and map keys. Raw configs
+  retain their templates; effective YAML output preserves comments and styles.
+
 * `tree.Node.TypeFixed` and `SetTypeFixed` record whether the source fixed the
   type of a node's value; `tree.ErrFixedTypeString` reports a string with a
   fixed type decoded into a bool or a number.

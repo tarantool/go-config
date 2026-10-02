@@ -88,6 +88,24 @@ type inheritanceConfig struct {
 	// mergeStrategies maps config key prefixes to their merge strategy
 	// during inheritance resolution.
 	mergeStrategies map[string]InheritMergeStrategy
+
+	// templateVars supplies variables for the resolved leaf entity.
+	templateVars []func(KeyPath) map[string]string
+}
+
+// WithTemplateVariables enables {{ name }} substitution in effective configs.
+// resolve receives the full entity path after inheritance has been applied.
+// Multiple resolvers are combined in registration order; later values win.
+// Strings and map keys are expanded once, and unknown variables return
+// [ErrUnknownTemplateVariable]. Raw Get, Slice and MarshalYAML retain templates.
+// resolve may be called concurrently and must not mutate shared state.
+// A nil resolver is ignored.
+func WithTemplateVariables(resolve func(KeyPath) map[string]string) InheritanceOption {
+	return func(ic *inheritanceConfig) {
+		if resolve != nil {
+			ic.templateVars = append(ic.templateVars, resolve)
+		}
+	}
 }
 
 // WithDefaults sets default values applied to every resolved leaf entity.

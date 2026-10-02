@@ -52,6 +52,23 @@
 // (Global → groups → replicasets → instances) with default merge strategies:
 //   - credentials — MergeDeep
 //
+// # Templates
+//
+// Effective and EffectiveAll substitute {{ instance_name }},
+// {{ replicaset_name }} and {{ group_name }} after inheritance. Substitution
+// applies to strings and map keys, including nested arrays and maps. Unknown
+// variables return config.ErrUnknownTemplateVariable. ASCII spaces around
+// variable names are optional; replacement values are not expanded again.
+//
+// Get, Slice and MarshalYAML on the original config retain the source templates.
+// MarshalYAML on an effective config writes the substituted values while
+// preserving comments and scalar styles.
+//
+// Additional variables can be supplied through WithInheritanceOption and
+// config.WithTemplateVariables. The builder does not read config.context
+// environment variables or files; callers can provide context.* values through
+// their own resolver.
+//
 // # Schema Validation
 //
 // By default the builder validates the assembled configuration against the

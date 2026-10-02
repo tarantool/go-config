@@ -136,6 +136,7 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 		noInherit:       nil,
 		noInheritFrom:   nil,
 		mergeStrategies: nil,
+		templateVars:    nil,
 	}
 
 	for _, opt := range opts {
