@@ -322,7 +322,19 @@ func yamlFormat() collectors.Format {
 func tarantoolInheritanceOpts() []config.InheritanceOption {
 	return []config.InheritanceOption{
 		config.WithInheritMerge("credentials", config.MergeDeep),
+		config.WithTemplateVariables(tarantoolTemplateVariables),
 	}
+}
+
+func tarantoolTemplateVariables(path config.KeyPath) map[string]string {
+	const scopeSegments = 2
+
+	vars := make(map[string]string)
+	for i, name := range []string{"group_name", "replicaset_name", "instance_name"} {
+		vars[name] = path[i*scopeSegments+1]
+	}
+
+	return vars
 }
 
 // keyPathFromLoweredKey splits a lowercased key by "_" and returns a KeyPath

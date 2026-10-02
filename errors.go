@@ -22,6 +22,9 @@ var (
 	ErrNilCollector = errors.New("nil collector")
 	// ErrNilSchemaReader is returned by WithJSONSchema() when the schema io.Reader is nil.
 	ErrNilSchemaReader = errors.New("nil schema reader")
+	// ErrUnknownTemplateVariable is returned by Effective or EffectiveAll when
+	// a template references a variable absent from the configured resolvers.
+	ErrUnknownTemplateVariable = errors.New("unknown template variable")
 )
 
 // CollectorError wraps an error that occurred while processing a collector,

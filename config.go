@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -366,6 +367,8 @@ func (c *Config) Slice(path KeyPath) (Config, error) {
 //
 // The returned Config contains only config keys (no structural keys like
 // "groups", "replicasets", "instances").
+// Variables configured through [WithTemplateVariables] are substituted after
+// inheritance; unknown variables return [ErrUnknownTemplateVariable].
 func (c *Config) Effective(path KeyPath) (Config, error) {
 	if c.root == nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
@@ -375,7 +378,11 @@ func (c *Config) Effective(path KeyPath) (Config, error) {
 	for i := range c.inheritances {
 		inheritanceCfg := &c.inheritances[i]
 
-		resolved, matched, tombstoned := c.resolveEntityConfig(inheritanceCfg, path)
+		resolved, matched, tombstoned, err := c.resolveEntityConfig(inheritanceCfg, path)
+		if err != nil {
+			return Config{}, err
+		}
+
 		if tombstoned {
 			return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 		}
@@ -407,7 +414,11 @@ func (c *Config) EffectiveAll() (map[string]Config, error) {
 
 	for i := range c.inheritances {
 		inheritanceCfg := &c.inheritances[i]
-		c.collectLeafEntities(inheritanceCfg, c.root, nil, 0, result)
+
+		err := c.collectLeafEntities(inheritanceCfg, c.root, nil, 0, result)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil
@@ -443,26 +454,42 @@ func (c *Config) deepClone() Config {
 func (c *Config) resolveEntityConfig(
 	inheritanceCfg *inheritanceConfig,
 	entityPath keypath.KeyPath,
-) (Config, bool, bool) {
+) (Config, bool, bool, error) {
+	var root *tree.Node
+
 	if len(c.layers) == 0 {
 		// Not produced by a Builder: single merged-tree resolution.
 		layers, ok := matchHierarchy(c.root, inheritanceCfg, entityPath)
 		if !ok {
-			return newConfig(nil, nil, nil), false, false
+			return newConfig(nil, nil, nil), false, false, nil
 		}
 
-		return newConfig(resolveEffective(layers, inheritanceCfg), c.inheritances, nil), true, false
+		root = resolveEffective(layers, inheritanceCfg)
+	} else {
+		if _, ok := matchHierarchy(c.root, inheritanceCfg, entityPath); !ok {
+			return newConfig(nil, nil, nil), false, false, nil
+		}
+
+		if entityTombstoned(c.tombstones, entityPath) {
+			return newConfig(nil, nil, nil), false, true, nil
+		}
+
+		root = resolveEffectiveLayered(c, inheritanceCfg, entityPath)
 	}
 
-	if _, ok := matchHierarchy(c.root, inheritanceCfg, entityPath); !ok {
-		return newConfig(nil, nil, nil), false, false
+	if len(inheritanceCfg.templateVars) > 0 {
+		vars := make(map[string]string)
+		for _, resolve := range inheritanceCfg.templateVars {
+			maps.Copy(vars, resolve(entityPath))
+		}
+
+		err := expandTemplates(root, nil, vars)
+		if err != nil {
+			return Config{}, true, false, fmt.Errorf("effective config %s: %w", entityPath, err)
+		}
 	}
 
-	if entityTombstoned(c.tombstones, entityPath) {
-		return newConfig(nil, nil, nil), false, true
-	}
-
-	return newConfig(resolveEffectiveLayered(c, inheritanceCfg, entityPath), c.inheritances, nil), true, false
+	return newConfig(root, c.inheritances, nil), true, false, nil
 }
 
 // collectLeafEntities recursively finds all leaf entities in the hierarchy
@@ -476,19 +503,19 @@ func (c *Config) collectLeafEntities(
 	currentPath keypath.KeyPath,
 	levelIdx int,
 	result map[string]Config,
-) {
+) error {
 	// Determine if the next level is the leaf structural level.
 	nextLevel := levelIdx + 1
 	if nextLevel >= len(inheritanceCfg.levels) {
 		// Should not happen because levelIdx starts at 0 and increments.
-		return
+		return nil
 	}
 
 	structKey := inheritanceCfg.levels[nextLevel]
 
 	structNode := node.Child(structKey)
 	if structNode == nil {
-		return
+		return nil
 	}
 
 	if nextLevel == len(inheritanceCfg.levels)-1 {
@@ -497,7 +524,11 @@ func (c *Config) collectLeafEntities(
 		for _, name := range structNode.ChildrenKeys() {
 			entityPath := currentPath.Append(structKey, name)
 
-			resolved, matched, _ := c.resolveEntityConfig(inheritanceCfg, entityPath)
+			resolved, matched, _, err := c.resolveEntityConfig(inheritanceCfg, entityPath)
+			if err != nil {
+				return err
+			}
+
 			if !matched {
 				continue
 			}
@@ -505,7 +536,7 @@ func (c *Config) collectLeafEntities(
 			result[entityPath.String()] = resolved
 		}
 
-		return
+		return nil
 	}
 
 	// Not leaf level; recurse into named children.
@@ -516,8 +547,14 @@ func (c *Config) collectLeafEntities(
 		}
 
 		childPath := currentPath.Append(structKey, name)
-		c.collectLeafEntities(inheritanceCfg, namedNode, childPath, nextLevel, result)
+
+		err := c.collectLeafEntities(inheritanceCfg, namedNode, childPath, nextLevel, result)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // MutableConfig is an extension of Config that allows safe runtime modifications.
