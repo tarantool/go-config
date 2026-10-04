@@ -233,8 +233,9 @@ func (b *Builder) WithMerger(m config.Merger) *Builder {
 	return b
 }
 
-// Build assembles all configured collectors in priority order, applies
-// inheritance and validation, and returns an immutable [config.Config].
+// Build assembles collectors in priority order, validates the raw configuration,
+// and returns an immutable [config.Config]. Inheritance and template substitution
+// are resolved on demand by Effective and EffectiveAll.
 // The context is forwarded to collector reads.
 func (b *Builder) Build(ctx context.Context) (config.Config, error) {
 	inner, err := b.buildInner(ctx)
@@ -322,6 +323,7 @@ func yamlFormat() collectors.Format {
 func tarantoolInheritanceOpts() []config.InheritanceOption {
 	return []config.InheritanceOption{
 		config.WithInheritMerge("credentials", config.MergeDeep),
+		config.WithTemplateVariables(TemplateVariables),
 	}
 }
 

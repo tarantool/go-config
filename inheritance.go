@@ -88,6 +88,27 @@ type inheritanceConfig struct {
 	// mergeStrategies maps config key prefixes to their merge strategy
 	// during inheritance resolution.
 	mergeStrategies map[string]InheritMergeStrategy
+
+	// templateVars supplies variables for the resolved leaf entity.
+	templateVars []func(KeyPath) map[string]string
+}
+
+// WithTemplateVariables enables {{ name }} substitution in effective configs.
+// Variables are derived from the full entity path after inheritance is applied.
+// Multiple providers are combined in registration order; later values win.
+// String leaves and mapping keys in the config tree are expanded once.
+// Containers stored as whole leaf values are not traversed. Unknown placeholders
+// are preserved exactly, while a known variable with an empty value replaces its
+// placeholder with an empty string. Raw Get, Slice and MarshalYAML retain source
+// templates.
+// resolve may be called concurrently and must not mutate shared state.
+// A nil provider is ignored.
+func WithTemplateVariables(resolve func(KeyPath) map[string]string) InheritanceOption {
+	return func(ic *inheritanceConfig) {
+		if resolve != nil {
+			ic.templateVars = append(ic.templateVars, resolve)
+		}
+	}
 }
 
 // WithDefaults sets default values applied to every resolved leaf entity.
@@ -201,6 +222,56 @@ func cloneNode(node *tree.Node) *tree.Node {
 	}
 
 	return clone
+}
+
+// shallowCloneNode detaches the node and its immediate child table while
+// retaining immutable descendants. Callers own the returned parent.
+func shallowCloneNode(node *tree.Node) *tree.Node {
+	if node == nil {
+		return nil
+	}
+
+	clone := tree.New()
+
+	clone.Value, clone.Source, clone.Revision, clone.Range = node.Value, node.Source, node.Revision, node.Range
+	clone.SetAnnotation(node.Annotation())
+	clone.SetTypeFixed(node.TypeFixed())
+
+	if node.IsArray() {
+		clone.MarkArray()
+	}
+
+	clone.SetOrderSet(node.OrderSet())
+
+	for _, key := range node.ChildrenKeys() {
+		clone.SetChild(key, node.Child(key))
+	}
+
+	return clone
+}
+
+// pruneSharedPath copies only ancestors of a removed node. Missing paths keep
+// their identity, and empty ancestors disappear as in pruneTreePath.
+func pruneSharedPath(root *tree.Node, path keypath.KeyPath) *tree.Node {
+	if root == nil || len(path) == 0 || root.Get(path) == nil {
+		return root
+	}
+
+	result := shallowCloneNode(root)
+	key := path[0]
+
+	if len(path) == 1 {
+		result.DeleteChild(key)
+	} else {
+		child := pruneSharedPath(root.Child(key), path[1:])
+		if child.IsLeaf() && child.Value == nil {
+			result.DeleteChild(key)
+		} else {
+			result.SetChild(key, child)
+		}
+	}
+
+	return result
 }
 
 // keyMatchesPrefix checks if a key path matches a prefix path.
@@ -387,9 +458,8 @@ func foldScopeChainInto(
 		}
 
 		if len(prunes) > 0 {
-			layer = cloneNode(layer)
 			for _, kp := range prunes {
-				pruneTreePath(layer, kp)
+				layer = pruneSharedPath(layer, kp)
 			}
 		}
 
@@ -612,7 +682,7 @@ func isSliceNode(node *tree.Node) bool {
 		return false
 	}
 
-	return reflect.TypeOf(node.Value).Kind() == reflect.Slice
+	return node.Value != nil && reflect.TypeOf(node.Value).Kind() == reflect.Slice
 }
 
 // isMapNode returns true if node is a non-leaf, non-array node (has children representing a map).
@@ -627,20 +697,24 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 
 	switch strategy {
 	case MergeReplace:
-		// Child completely replaces parent. Simple: set/overwrite.
-		result.SetChild(key, cloneNode(source))
+		// Child completely replaces parent; the source subtree stays immutable.
+		result.SetChild(key, source)
 
 	case MergeAppend:
 		// Append slice elements.
 		if existing == nil || !isSliceNode(existing) || !isSliceNode(source) {
 			// Fallback to replace if not both slices.
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
+
 			return
 		}
 
 		// Both are array nodes (from YAML sequences).
 		if existing.IsArray() && source.IsArray() {
+			existing = shallowCloneNode(existing)
+			result.SetChild(key, existing)
 			mergeArrayNodes(existing, source)
+
 			return
 		}
 
@@ -650,7 +724,7 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 		sourceSlice, ok2 := source.Value.([]any)
 		if !ok1 || !ok2 {
 			// Can happen when slice is not []any (e.g., []int).
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
 
 			return
 		}
@@ -659,23 +733,28 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 
 		merged = append(merged, existingSlice...)
 		merged = append(merged, sourceSlice...)
+		existing = shallowCloneNode(existing)
+		result.SetChild(key, existing)
+
 		existing.Value = merged
-		// Note: we modify existing node in place, which is okay because
-		// it's already part of the result tree (not the raw tree).
+		// The detached parent owns the new combined slice.
 
 	case MergeDeep:
 		// Recursive map merge.
 		if existing == nil {
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
+
 			return
 		}
 
 		// Both must be non-leaf (map) nodes.
 		if isMapNode(existing) && isMapNode(source) {
+			existing = shallowCloneNode(existing)
+			result.SetChild(key, existing)
 			deepMergeNodes(existing, source)
 		} else {
 			// Fallback to replace if not both maps.
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
 		}
 	}
 }
@@ -688,7 +767,7 @@ func mergeArrayNodes(existing, source *tree.Node) {
 
 	for i, key := range source.ChildrenKeys() {
 		srcChild := source.Child(key)
-		existing.SetChild(strconv.Itoa(start+i), cloneNode(srcChild))
+		existing.SetChild(strconv.Itoa(start+i), srcChild)
 	}
 }
 
@@ -705,18 +784,22 @@ func deepMergeNodes(dst, source *tree.Node) {
 		dstChild := dst.Child(key)
 
 		if dstChild == nil {
-			dst.SetChild(key, cloneNode(srcChild))
+			dst.SetChild(key, srcChild)
+
 			continue
 		}
 
 		// Both sides must be maps (not leaves, not arrays) to recurse.
 		if isMapNode(dstChild) && isMapNode(srcChild) {
+			dstChild = shallowCloneNode(dstChild)
+			dst.SetChild(key, dstChild)
 			deepMergeNodes(dstChild, srcChild)
+
 			continue
 		}
 
 		// Otherwise source wins.
-		dst.SetChild(key, cloneNode(srcChild))
+		dst.SetChild(key, srcChild)
 	}
 }
 
@@ -731,6 +814,7 @@ func mergeIntoResultWithStrategies(
 	if !inheritanceCfg.hasSubStrategies(key) {
 		// No nested strategies — use direct merge.
 		mergeIntoResult(result, key, source, strategy)
+
 		return
 	}
 
@@ -739,11 +823,14 @@ func mergeIntoResultWithStrategies(
 	if existing == nil || !isMapNode(existing) || !isMapNode(source) {
 		// Cannot walk children — fall back to this level's strategy.
 		mergeIntoResult(result, key, source, strategy)
+
 		return
 	}
 
 	// Recursively merge, applying strategies at the correct depth.
 	// The current level's strategy becomes the default for children.
+	existing = shallowCloneNode(existing)
+	result.SetChild(key, existing)
 	strategyAwareMerge(existing, source, key, strategy, inheritanceCfg)
 }
 
@@ -766,6 +853,7 @@ func strategyAwareMerge(
 		if !inheritanceCfg.hasSubStrategies(childPath) {
 			// Apply the strategy directly at this level.
 			mergeIntoResult(dst, childKey, srcChild, strategy)
+
 			continue
 		}
 
@@ -774,6 +862,8 @@ func strategyAwareMerge(
 		if dstChild == nil || !isMapNode(dstChild) || !isMapNode(srcChild) {
 			mergeIntoResult(dst, childKey, srcChild, strategy)
 		} else {
+			dstChild = shallowCloneNode(dstChild)
+			dst.SetChild(childKey, dstChild)
 			strategyAwareMerge(dstChild, srcChild, childPath, strategy, inheritanceCfg)
 		}
 	}
