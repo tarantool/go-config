@@ -123,9 +123,9 @@ func (b *Builder) WithMerger(merger Merger) Builder {
 // The levels parameter defines the structural keys (use Levels() to create).
 // Options configure exclusions, defaults, and merge strategies.
 //
-// Inheritance is resolved during Build(), after collector merging
-// but before validation. This ensures the validator sees the effective
-// (fully resolved) config for each leaf entity.
+// Inheritance is resolved by Effective and EffectiveAll after collector
+// merging. Build validates the raw configuration; effective views resolve
+// scope inheritance and then expand templates on demand.
 //
 // A nil levels slice is accepted and registers an empty hierarchy.
 // Any nil entries in opts are skipped silently.
@@ -136,6 +136,7 @@ func (b *Builder) WithInheritance(levels []string, opts ...InheritanceOption) Bu
 		noInherit:       nil,
 		noInheritFrom:   nil,
 		mergeStrategies: nil,
+		templateVars:    nil,
 	}
 
 	for _, opt := range opts {

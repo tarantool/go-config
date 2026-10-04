@@ -50,7 +50,7 @@ func TestResolveEffectiveSimple(t *testing.T) {
 	layers, ok := matchHierarchy(root, cfg, NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
 	require.True(t, ok)
 
-	result := resolveEffective(layers, cfg)
+	result, _ := resolveEffective(layers, cfg, nil)
 	require.NotNil(t, result)
 
 	val := result.Child("foo")
@@ -88,7 +88,7 @@ func TestIsStructuralKey(t *testing.T) {
 	assert.False(t, isStructuralKey(cfg, "credentials"))
 }
 
-func TestCloneNode(t *testing.T) {
+func TestNodeClone(t *testing.T) {
 	t.Parallel()
 
 	root := tree.New()
@@ -96,7 +96,7 @@ func TestCloneNode(t *testing.T) {
 	root.Set(NewKeyPath("a/c"), "value2")
 	root.Set(NewKeyPath("d"), "value3")
 
-	clone := cloneNode(root)
+	clone := root.Clone()
 	require.NotNil(t, clone)
 
 	node1 := clone.Get(NewKeyPath("a/b"))
@@ -113,15 +113,90 @@ func TestCloneNode(t *testing.T) {
 
 	originalNode := root.Get(NewKeyPath("a"))
 
-	cloneNode := clone.Get(NewKeyPath("a"))
-	assert.NotSame(t, originalNode, cloneNode, "cloneNode should create a deep copy, same pointer")
+	clonedNode := clone.Get(NewKeyPath("a"))
+	assert.NotSame(t, originalNode, clonedNode, "Clone should create a deep copy")
 }
 
-func TestCloneNode_Nil(t *testing.T) {
+func TestNodeClone_Nil(t *testing.T) {
 	t.Parallel()
 
-	result := cloneNode(nil)
-	assert.Nil(t, result)
+	var node *tree.Node
+	assert.Nil(t, node.Clone())
+}
+
+func TestNodeClone_Allocations(t *testing.T) { //nolint:paralleltest // AllocsPerRun requires serial execution.
+	root := tree.New()
+	for i := range 8 {
+		root.Set(KeyPath{strconv.Itoa(i)}, i)
+	}
+
+	var clone *tree.Node
+
+	shallow := testing.AllocsPerRun(100, func() {
+		clone = root.ShallowClone()
+	})
+
+	require.NotNil(t, clone)
+	assert.LessOrEqual(t, shallow, float64(5))
+
+	deep := testing.AllocsPerRun(100, func() {
+		clone = root.Clone()
+	})
+
+	require.NotNil(t, clone)
+	assert.LessOrEqual(t, deep, float64(14))
+}
+
+func TestNodeShallowClone_Isolation(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+
+	root.Value = "metadata"
+	root.Source = "file"
+	root.Revision = "revision"
+	root.Range = tree.NewRange(2, 3, 5, 7)
+	root.MarkArray()
+	root.SetOrderSet(true)
+	root.SetTypeFixed(true)
+	root.SetAnnotation(&struct{ label string }{label: "annotation"})
+
+	for _, key := range []string{"2", "0", "1"} {
+		root.Set(KeyPath{key}, key)
+	}
+
+	clone := root.ShallowClone()
+	require.Equal(t, root, clone)
+	require.NotSame(t, root, clone)
+	assert.Same(t, root.Annotation(), clone.Annotation())
+	assert.Same(t, root.Child("2"), clone.Child("2"))
+
+	clone.Value = "changed"
+	clone.Source = "other"
+	clone.UnmarkArray()
+	clone.SetOrderSet(false)
+	clone.SetTypeFixed(false)
+	clone.SetAnnotation(nil)
+	clone.DeleteChild("0")
+	clone.SetChild("1", tree.New())
+	clone.SetChild("3", tree.New())
+	root.SetChild("4", tree.New())
+
+	assert.Equal(t, "metadata", root.Value)
+	assert.Equal(t, "file", root.Source)
+	assert.True(t, root.IsArray())
+	assert.True(t, root.OrderSet())
+	assert.True(t, root.TypeFixed())
+	assert.NotNil(t, root.Annotation())
+	assert.Equal(t, []string{"2", "0", "1", "4"}, root.ChildrenKeys())
+	assert.Equal(t, []string{"2", "1", "3"}, clone.ChildrenKeys())
+	assert.Equal(t, "1", root.Child("1").Value)
+
+	clone.ClearChildren()
+	assert.Len(t, root.ChildrenKeys(), 4)
+
+	var node *tree.Node
+	assert.Nil(t, node.ShallowClone())
 }
 
 func TestIsSliceNode_EdgeCases(t *testing.T) {
@@ -195,7 +270,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newMap("key", newLeaf("existing"))
 		source := newLeaf("source")
-		mergeIntoResult(result, "key", source, MergeDeep)
+		mergeIntoResult(result, "key", source, MergeDeep, nil)
 		// Should replace with source leaf (fallback).
 		child := result.Child("key")
 		require.NotNil(t, child)
@@ -207,7 +282,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newLeaf("existing")
 		source := newMap("nested", newLeaf("value"))
-		mergeIntoResult(result, "key", source, MergeDeep)
+		mergeIntoResult(result, "key", source, MergeDeep, nil)
 		// Should replace with source map (fallback).
 		keyChild := result.Child("key")
 		require.NotNil(t, keyChild)
@@ -222,7 +297,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newLeaf("existing")
 		source := newLeaf("source")
-		mergeIntoResult(result, "key", source, MergeDeep)
+		mergeIntoResult(result, "key", source, MergeDeep, nil)
 		// Should replace with source leaf (fallback).
 		child := result.Child("key")
 		require.NotNil(t, child)
@@ -234,7 +309,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newMap("nested", newLeaf("existing"))
 		source := newMap("nested", newLeaf("source"))
-		mergeIntoResult(result, "key", source, MergeDeep)
+		mergeIntoResult(result, "key", source, MergeDeep, nil)
 		// Should deep merge nested maps.
 
 		keyChild := result.Child("key")
@@ -250,7 +325,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := tree.New()
 		source := newLeaf([]any{1, 2})
-		mergeIntoResult(result, "key", source, MergeAppend)
+		mergeIntoResult(result, "key", source, MergeAppend, nil)
 		// Should replace with source slice (existing nil).
 		require.NotNil(t, result.Child("key"))
 
@@ -264,7 +339,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newMap("key", newLeaf("existing"))
 		source := newLeaf([]any{1, 2})
-		mergeIntoResult(result, "key", source, MergeAppend)
+		mergeIntoResult(result, "key", source, MergeAppend, nil)
 		// Should replace with source slice (existing not slice).
 		require.NotNil(t, result.Child("key"))
 
@@ -278,7 +353,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		result := newLeaf([]any{1, 2})
 		source := newLeaf("not-slice")
-		mergeIntoResult(result, "key", source, MergeAppend)
+		mergeIntoResult(result, "key", source, MergeAppend, nil)
 		// Should replace with source leaf (source not slice).
 		child := result.Child("key")
 		require.NotNil(t, child)
@@ -293,7 +368,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 		existing := newLeaf([]int{1, 2}) // Concrete slice type.
 		result := newMap("key", existing)
 		source := newLeaf([]any{3, 4})
-		mergeIntoResult(result, "key", source, MergeAppend)
+		mergeIntoResult(result, "key", source, MergeAppend, nil)
 		// Should fall back to replace with source slice.
 		child := result.Child("key")
 		require.NotNil(t, child)
@@ -309,7 +384,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 		existing := newLeaf([]any{1, 2})
 		result := newMap("key", existing)
 		source := newLeaf([]int{3, 4}) // Concrete slice type.
-		mergeIntoResult(result, "key", source, MergeAppend)
+		mergeIntoResult(result, "key", source, MergeAppend, nil)
 		// Should fall back to replace with source slice.
 		child := result.Child("key")
 		require.NotNil(t, child)
@@ -326,7 +401,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 		originalValue := dst.Value
 		originalChild := dst.Child("key")
 		src := newLeaf("src-value")
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// Source leaf has no children, so nothing should change.
 		assert.Equal(t, originalValue, dst.Value)
 		assert.Equal(t, originalChild, dst.Child("key"))
@@ -337,7 +412,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		dst := newLeaf("dst-value")
 		src := newMap("key", newLeaf("src-value"))
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// Source map has children, dst leaf gains children but retains its value (maybe weird but allowed).
 		require.NotNil(t, dst.Child("key"))
 		assert.Equal(t, "src-value", dst.Child("key").Value)
@@ -350,7 +425,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		dst := newLeaf("dst-value")
 		src := newLeaf("src-value")
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// Both leaf, source has no children, nothing changes.
 		assert.Equal(t, "dst-value", dst.Value)
 	})
@@ -361,7 +436,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 		// Both dst and src are maps, but for key "k", dst child is leaf, src child is map.
 		dst := newMap("k", newLeaf("dst-leaf"))
 		src := newMap("k", newMap("nested", newLeaf("src-nested")))
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// Since src child is map and dst child is leaf, source wins (line 425)
 		// dst child at "k" should be replaced with clone of src child (map).
 
@@ -379,7 +454,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		dst := newMap("k", newMap("nested", newLeaf("dst-nested")))
 		src := newMap("k", newLeaf("src-leaf"))
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// dst child is map, src child is leaf, source wins (line 425).
 		keyChild := dst.Child("k")
 		require.NotNil(t, keyChild)
@@ -395,7 +470,7 @@ func TestMergeIntoResult_EdgeCases(t *testing.T) {
 
 		src := newMap("common", newLeaf("src"))
 		src.SetChild("src-only", newLeaf("src-only"))
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 		// Should merge: common key replaced, src-only added, dst-only retained.
 
 		commonChild := dst.Child("common")
@@ -448,7 +523,7 @@ func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
 		src := tree.New()
 		src.SetChild("listen", arrayNode("x"))
 
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 
 		listen := dst.Child("listen")
 		require.NotNil(t, listen)
@@ -467,7 +542,7 @@ func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
 		src := tree.New()
 		src.SetChild("listen", arrayNode("x", "y", "z"))
 
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 
 		listen := dst.Child("listen")
 		require.NotNil(t, listen)
@@ -493,7 +568,7 @@ func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
 		src := tree.New()
 		src.SetChild("k", srcChild)
 
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 
 		got := dst.Child("k")
 		require.NotNil(t, got)
@@ -516,7 +591,7 @@ func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
 		src := tree.New()
 		src.SetChild("k", arrayNode("x", "y"))
 
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 
 		got := dst.Child("k")
 		require.NotNil(t, got)
@@ -538,7 +613,7 @@ func TestDeepMergeNodes_ArraysAreOpaque(t *testing.T) {
 		src := tree.New()
 		src.SetChild("k", srcLeaf)
 
-		deepMergeNodes(dst, src)
+		deepMergeNodes(dst, src, nil)
 
 		got := dst.Child("k")
 		require.NotNil(t, got)
@@ -595,7 +670,7 @@ func TestMergeArrayNodes_Basic(t *testing.T) {
 	source.Child("0").Value = "c"
 	source.Child("1").Value = "d"
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Len(t, children, 4)
@@ -618,7 +693,7 @@ func TestMergeArrayNodes_EmptySource(t *testing.T) {
 	source := tree.New()
 	source.MarkArray()
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Len(t, children, 1)
@@ -639,7 +714,7 @@ func TestMergeArrayNodes_EmptyExisting(t *testing.T) {
 	source.Child("0").Value = "a"
 	source.Child("1").Value = "b"
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Len(t, children, 2)
@@ -656,7 +731,7 @@ func TestMergeArrayNodes_BothEmpty(t *testing.T) {
 	source := tree.New()
 	source.MarkArray()
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Empty(t, children)
@@ -681,7 +756,7 @@ func TestMergeArrayNodes_WithNestedObjects(t *testing.T) {
 	child1.Set(NewKeyPath("age"), 25)
 	source.SetChild("0", child1)
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Len(t, children, 2)
@@ -715,7 +790,7 @@ func TestMergeArrayNodes_Reindexing(t *testing.T) {
 		source.SetChild(strconv.Itoa(i), child)
 	}
 
-	mergeArrayNodes(existing, source)
+	mergeArrayNodes(existing, source, nil)
 
 	children := existing.Children()
 	assert.Len(t, children, 8)

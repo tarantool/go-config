@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -127,6 +128,9 @@ type Config struct {
 
 	// tombstones records key paths deleted via MutableConfig.Delete.
 	tombstones []keypath.KeyPath
+
+	// templates is a bounded index of immutable source nodes for this version.
+	templates *templateIndex
 }
 
 // entityTombstoned reports whether entityPath, or one of its ancestor scopes,
@@ -163,6 +167,7 @@ func newConfig(root *tree.Node, inheritances []inheritanceConfig, val validator.
 		layers:       nil,
 		modified:     nil,
 		tombstones:   nil,
+		templates:    newTemplateIndex(),
 	}
 }
 
@@ -181,6 +186,7 @@ func newLayeredConfig(
 		layers:       layers,
 		modified:     nil,
 		tombstones:   nil,
+		templates:    newTemplateIndex(),
 	}
 }
 
@@ -366,6 +372,8 @@ func (c *Config) Slice(path KeyPath) (Config, error) {
 //
 // The returned Config contains only config keys (no structural keys like
 // "groups", "replicasets", "instances").
+// Variables configured through [WithTemplateVariables] are substituted after
+// inheritance. Unknown placeholders are preserved exactly.
 func (c *Config) Effective(path KeyPath) (Config, error) {
 	if c.root == nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
@@ -376,6 +384,7 @@ func (c *Config) Effective(path KeyPath) (Config, error) {
 		inheritanceCfg := &c.inheritances[i]
 
 		resolved, matched, tombstoned := c.resolveEntityConfig(inheritanceCfg, path)
+
 		if tombstoned {
 			return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 		}
@@ -391,7 +400,7 @@ func (c *Config) Effective(path KeyPath) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s", ErrPathNotFound, path)
 	}
 
-	return newConfig(cloneNode(node), c.inheritances, nil), nil
+	return newConfig(node.Clone(), c.inheritances, nil), nil
 }
 
 // EffectiveAll returns resolved configs for ALL leaf entities found in the
@@ -407,6 +416,7 @@ func (c *Config) EffectiveAll() (map[string]Config, error) {
 
 	for i := range c.inheritances {
 		inheritanceCfg := &c.inheritances[i]
+
 		c.collectLeafEntities(inheritanceCfg, c.root, nil, 0, result)
 	}
 
@@ -418,7 +428,7 @@ func (c *Config) EffectiveAll() (map[string]Config, error) {
 func (c *Config) deepClone() Config {
 	clonedLayers := make([]*tree.Node, len(c.layers))
 	for i, layer := range c.layers {
-		clonedLayers[i] = cloneNode(layer)
+		clonedLayers[i] = layer.Clone()
 	}
 
 	clonedTombstones := make([]keypath.KeyPath, len(c.tombstones))
@@ -427,12 +437,13 @@ func (c *Config) deepClone() Config {
 	}
 
 	return Config{
-		root:         cloneNode(c.root),
+		root:         c.root.Clone(),
 		inheritances: c.inheritances,
 		validator:    c.validator,
 		layers:       clonedLayers,
-		modified:     cloneNode(c.modified),
+		modified:     c.modified.Clone(),
 		tombstones:   clonedTombstones,
+		templates:    newTemplateIndex(),
 	}
 }
 
@@ -444,6 +455,16 @@ func (c *Config) resolveEntityConfig(
 	inheritanceCfg *inheritanceConfig,
 	entityPath keypath.KeyPath,
 ) (Config, bool, bool) {
+	var (
+		root      *tree.Node
+		templates *templateIndex
+		plan      *templatePlan
+	)
+
+	if len(inheritanceCfg.templateVars) > 0 {
+		templates = c.templates
+	}
+
 	if len(c.layers) == 0 {
 		// Not produced by a Builder: single merged-tree resolution.
 		layers, ok := matchHierarchy(c.root, inheritanceCfg, entityPath)
@@ -451,18 +472,29 @@ func (c *Config) resolveEntityConfig(
 			return newConfig(nil, nil, nil), false, false
 		}
 
-		return newConfig(resolveEffective(layers, inheritanceCfg), c.inheritances, nil), true, false
+		root, plan = resolveEffective(layers, inheritanceCfg, templates)
+	} else {
+		if _, ok := matchHierarchy(c.root, inheritanceCfg, entityPath); !ok {
+			return newConfig(nil, nil, nil), false, false
+		}
+
+		if entityTombstoned(c.tombstones, entityPath) {
+			return newConfig(nil, nil, nil), false, true
+		}
+
+		root, plan = resolveEffectiveLayered(c, inheritanceCfg, entityPath, templates)
 	}
 
-	if _, ok := matchHierarchy(c.root, inheritanceCfg, entityPath); !ok {
-		return newConfig(nil, nil, nil), false, false
+	if plan != nil {
+		vars := make(map[string]string)
+		for _, resolve := range inheritanceCfg.templateVars {
+			maps.Copy(vars, resolve(entityPath))
+		}
+
+		root = expandPlannedTemplates(root, plan, vars)
 	}
 
-	if entityTombstoned(c.tombstones, entityPath) {
-		return newConfig(nil, nil, nil), false, true
-	}
-
-	return newConfig(resolveEffectiveLayered(c, inheritanceCfg, entityPath), c.inheritances, nil), true, false
+	return newConfig(root, c.inheritances, nil), true, false
 }
 
 // collectLeafEntities recursively finds all leaf entities in the hierarchy
@@ -498,6 +530,7 @@ func (c *Config) collectLeafEntities(
 			entityPath := currentPath.Append(structKey, name)
 
 			resolved, matched, _ := c.resolveEntityConfig(inheritanceCfg, entityPath)
+
 			if !matched {
 				continue
 			}
@@ -516,6 +549,7 @@ func (c *Config) collectLeafEntities(
 		}
 
 		childPath := currentPath.Append(structKey, name)
+
 		c.collectLeafEntities(inheritanceCfg, namedNode, childPath, nextLevel, result)
 	}
 }
@@ -656,7 +690,7 @@ func (mc *MutableConfig) Walk(ctx context.Context, path KeyPath, depth int) (<-c
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
-	snap := newConfig(cloneNode(mc.root), mc.inheritances, mc.validator)
+	snap := newConfig(mc.root.Clone(), mc.inheritances, mc.validator)
 
 	return snap.Walk(ctx, path, depth)
 }
@@ -702,7 +736,10 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	oldRoot := cloneNode(mc.root)
+	oldRoot := mc.root
+
+	mc.root = oldRoot.Clone()
+	mc.templates = newTemplateIndex()
 
 	mc.root = setMutableValue(mc.root, path, value)
 
@@ -712,6 +749,8 @@ func (mc *MutableConfig) Set(path KeyPath, value any) error {
 	}
 
 	markModified(mc.root.Get(path))
+
+	mc.modified = mc.modified.Clone()
 
 	// Record the mutation in the runtime overlay (it outranks every loader).
 	if mc.modified == nil {
@@ -832,7 +871,10 @@ func (mc *MutableConfig) Merge(other *Config) error {
 		return err
 	}
 
-	oldRoot := cloneNode(mc.root)
+	oldRoot := mc.root
+
+	mc.root = oldRoot.Clone()
+	mc.templates = newTemplateIndex()
 
 	for _, mergeEntry := range ops {
 		mc.root = setMutableValue(mc.root, mergeEntry.path, mergeEntry.value)
@@ -844,6 +886,8 @@ func (mc *MutableConfig) Merge(other *Config) error {
 	if restoreErr != nil {
 		return restoreErr
 	}
+
+	mc.modified = mc.modified.Clone()
 
 	// Record the mutations in the runtime overlay (it outranks every loader).
 	if mc.modified == nil {
@@ -874,7 +918,10 @@ func (mc *MutableConfig) Update(other *Config) error {
 		return err
 	}
 
-	oldRoot := cloneNode(mc.root)
+	oldRoot := mc.root
+
+	mc.root = oldRoot.Clone()
+	mc.templates = newTemplateIndex()
 
 	var applied []mergeOp
 
@@ -893,6 +940,8 @@ func (mc *MutableConfig) Update(other *Config) error {
 	if restoreErr != nil {
 		return restoreErr
 	}
+
+	mc.modified = mc.modified.Clone()
 
 	// Record the mutations in the runtime overlay (it outranks every loader).
 	if len(applied) > 0 && mc.modified == nil {
@@ -927,7 +976,10 @@ func (mc *MutableConfig) Delete(path KeyPath) bool {
 		return false
 	}
 
-	oldRoot := cloneNode(mc.root)
+	oldRoot := mc.root
+
+	mc.root = oldRoot.Clone()
+	mc.templates = newTemplateIndex()
 
 	// Cascade delete the target subtree and prune empty ancestors.
 	pruneTreePath(mc.root, path)
@@ -938,7 +990,7 @@ func (mc *MutableConfig) Delete(path KeyPath) bool {
 	}
 
 	// Keep the overlay consistent with the live tree.
-	pruneTreePath(mc.modified, path)
+	mc.modified = pruneSharedPath(mc.modified, path, nil)
 
 	// Record a tombstone so resolveEffectiveLayered suppresses this path in every layer.
 	mc.tombstones = append(mc.tombstones, append(keypath.KeyPath{}, path...))
