@@ -1,6 +1,7 @@
 package jsonschema
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/kaptinlin/jsonschema"
@@ -58,9 +59,35 @@ func (ve *validationErrors) rangeForPath(p keypath.KeyPath) validator.Range {
 
 // collectErrorsFromPath recursively collects validation errors from the evaluation result and its details.
 func (ve *validationErrors) collectErrorsFromPath(result *jsonschema.EvaluationResult, basePath string) {
+	if result.IsValid() {
+		return
+	}
+
 	ve.addErrors(result, basePath)
 
 	for _, detail := range result.Details {
+		keyword, _, _ := strings.Cut(strings.TrimPrefix(detail.EvaluationPath, "/"), "/")
+		switch keyword {
+		case "if", "not":
+			// A failed condition selects else; a failed negated schema makes
+			// not succeed. Neither failure is an error in the input.
+			continue
+		case "anyOf", "oneOf":
+			// Another keyword (e.g. enum) can fail at the same node even
+			// though an alternative matched. For oneOf with multiple matches,
+			// retain its own error, not failures of the remaining alternatives.
+			if result.Errors[keyword] == nil {
+				continue
+			}
+
+			matched := slices.ContainsFunc(result.Details, func(other *jsonschema.EvaluationResult) bool {
+				return strings.HasPrefix(other.EvaluationPath, "/"+keyword+"/") && other.IsValid()
+			})
+			if matched {
+				continue
+			}
+		}
+
 		ve.collectErrorsFromPath(detail, basePath+result.InstanceLocation)
 	}
 }
