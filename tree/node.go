@@ -61,6 +61,19 @@ func New() *Node {
 	}
 }
 
+// ShallowClone copies the node and its child table. Child nodes, Value and
+// annotation data remain shared; callers must detach them before mutation.
+// A nil receiver returns nil.
+func (n *Node) ShallowClone() *Node {
+	return n.clone(false)
+}
+
+// Clone copies the node and all descendants. Value and annotation data remain
+// shared; callers must detach them before mutation. A nil receiver returns nil.
+func (n *Node) Clone() *Node {
+	return n.clone(true)
+}
+
 // Annotation returns the opaque annotation attached to this node, if any.
 // Format-specific collectors may set this to retain information (such as
 // comments and scalar style) that the tree itself does not model.
@@ -130,11 +143,11 @@ func (n *Node) Children() []*Node {
 
 // ChildrenKeys returns the keys of child nodes in insertion order.
 func (n *Node) ChildrenKeys() []string {
-	if n.children == nil {
+	if n.children == nil || n.children.Len() == 0 {
 		return nil
 	}
 
-	return slices.Collect(n.children.Keys())
+	return slices.AppendSeq(make([]string, 0, n.children.Len()), n.children.Keys())
 }
 
 // Child returns the child node for the given key, or nil if not found.
@@ -319,4 +332,27 @@ func (n *Node) ReorderChildren(keys []string) error {
 	n.children = newChildren
 
 	return nil
+}
+
+func (n *Node) clone(deep bool) *Node {
+	if n == nil {
+		return nil
+	}
+
+	clone := *n
+
+	clone.children = nil
+
+	if n.children != nil && n.children.Len() > 0 {
+		clone.children = omap.NewWithCapacity[string, *Node](n.children.Len())
+		for key, child := range n.children.Items() {
+			if deep {
+				child = child.Clone()
+			}
+
+			clone.children.Set(key, child)
+		}
+	}
+
+	return &clone
 }

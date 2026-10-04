@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -88,6 +89,27 @@ type inheritanceConfig struct {
 	// mergeStrategies maps config key prefixes to their merge strategy
 	// during inheritance resolution.
 	mergeStrategies map[string]InheritMergeStrategy
+
+	// templateVars supplies variables for the resolved leaf entity.
+	templateVars []func(KeyPath) map[string]string
+}
+
+// WithTemplateVariables enables {{ name }} substitution in effective configs.
+// Variables are derived from the full entity path after inheritance is applied.
+// Multiple providers are combined in registration order; later values win.
+// String leaves and mapping keys in the config tree are expanded once.
+// Containers stored as whole leaf values are not traversed. Unknown placeholders
+// are preserved exactly, while a known variable with an empty value replaces its
+// placeholder with an empty string. Raw Get, Slice and MarshalYAML retain source
+// templates. Providers are skipped when the effective tree has no placeholders.
+// resolve may be called concurrently and must not mutate shared state.
+// A nil provider is ignored.
+func WithTemplateVariables(resolve func(KeyPath) map[string]string) InheritanceOption {
+	return func(ic *inheritanceConfig) {
+		if resolve != nil {
+			ic.templateVars = append(ic.templateVars, resolve)
+		}
+	}
 }
 
 // WithDefaults sets default values applied to every resolved leaf entity.
@@ -173,34 +195,100 @@ func WithInheritMerge(key string, strategy InheritMergeStrategy) InheritanceOpti
 	}
 }
 
-// cloneNode creates a deep copy of a tree node and all its descendants.
-func cloneNode(node *tree.Node) *tree.Node {
-	if node == nil {
+// templateBuild records temporary nodes and changes to detached source maps.
+// Unmarked nodes are immutable source subtrees. A nil changes entry marks a
+// new node (including defaults), whose plan must stay local to this call.
+type templateBuild struct {
+	temporary map[*tree.Node]*templateChanges
+}
+
+type templateChanges struct {
+	source *tree.Node
+	keys   map[string]struct{}
+}
+
+func newTemplateBuild(enabled bool) *templateBuild {
+	if !enabled {
 		return nil
 	}
 
-	clone := tree.New()
+	return &templateBuild{temporary: make(map[*tree.Node]*templateChanges)}
+}
 
-	clone.Value = node.Value
-	clone.Source = node.Source
-	clone.Revision = node.Revision
-	clone.Range = node.Range
-	clone.SetAnnotation(node.Annotation())
-	clone.SetTypeFixed(node.TypeFixed())
+func (build *templateBuild) track(node *tree.Node) {
+	if build != nil && node != nil {
+		build.temporary[node] = nil
+	}
+}
 
-	if node.IsArray() {
-		clone.MarkArray()
+func (build *templateBuild) trackSubtree(node *tree.Node) {
+	if build == nil || node == nil {
+		return
 	}
 
-	if node.OrderSet() {
-		clone.SetOrderSet(true)
-	}
+	build.track(node)
 
 	for _, key := range node.ChildrenKeys() {
-		clone.SetChild(key, cloneNode(node.Child(key)))
+		build.trackSubtree(node.Child(key))
+	}
+}
+
+// shallowCloneForBuild records the detached node as temporary so its plans
+// stay local to the current Effective call.
+func shallowCloneForBuild(node *tree.Node, build *templateBuild) *tree.Node {
+	clone := node.ShallowClone()
+	if build != nil {
+		changes, temporary := build.temporary[node]
+		switch {
+		case !temporary:
+			build.temporary[clone] = &templateChanges{source: node, keys: nil}
+		case changes != nil:
+			build.temporary[clone] = &templateChanges{source: changes.source, keys: maps.Clone(changes.keys)}
+		default:
+			build.track(clone)
+		}
 	}
 
 	return clone
+}
+
+func (build *templateBuild) changed(node *tree.Node, key string) {
+	if build == nil {
+		return
+	}
+
+	if changes := build.temporary[node]; changes != nil {
+		if changes.keys == nil {
+			changes.keys = make(map[string]struct{})
+		}
+
+		changes.keys[key] = struct{}{}
+	}
+}
+
+// pruneSharedPath copies only ancestors of a removed node. Missing paths keep
+// their identity, and empty ancestors disappear as in pruneTreePath.
+func pruneSharedPath(root *tree.Node, path keypath.KeyPath, build *templateBuild) *tree.Node {
+	if root == nil || len(path) == 0 || root.Get(path) == nil {
+		return root
+	}
+
+	result := shallowCloneForBuild(root, build)
+	key := path[0]
+	build.changed(result, key)
+
+	if len(path) == 1 {
+		result.DeleteChild(key)
+	} else {
+		child := pruneSharedPath(root.Child(key), path[1:], build)
+		if child.IsLeaf() && child.Value == nil {
+			result.DeleteChild(key)
+		} else {
+			result.SetChild(key, child)
+		}
+	}
+
+	return result
 }
 
 // keyMatchesPrefix checks if a key path matches a prefix path.
@@ -360,6 +448,7 @@ func foldScopeChainInto(
 	scopeChain []*tree.Node,
 	inheritanceCfg *inheritanceConfig,
 	suppressedByLevel map[int][]keypath.KeyPath,
+	build *templateBuild,
 ) {
 	leafIdx := len(scopeChain) - 1
 
@@ -387,9 +476,8 @@ func foldScopeChainInto(
 		}
 
 		if len(prunes) > 0 {
-			layer = cloneNode(layer)
 			for _, kp := range prunes {
-				pruneTreePath(layer, kp)
+				layer = pruneSharedPath(layer, kp, build)
 			}
 		}
 
@@ -400,7 +488,7 @@ func foldScopeChainInto(
 			}
 
 			child := layer.Child(key)
-			mergeIntoResultWithStrategies(result, key, child, inheritanceCfg)
+			mergeIntoResultWithStrategies(result, key, child, inheritanceCfg, build)
 		}
 	}
 }
@@ -437,17 +525,26 @@ func pruneTreePath(root *tree.Node, path keypath.KeyPath) {
 }
 
 // resolveEffective merges layers from global to leaf with inheritance rules.
-func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *tree.Node {
+func resolveEffective(
+	layers []*tree.Node, inheritanceCfg *inheritanceConfig, templates *templateIndex,
+) (*tree.Node, *templatePlan) {
+	build := newTemplateBuild(templates != nil)
 	result := tree.New()
+	build.track(result)
 
 	// Start with defaults (lowest priority).
 	if inheritanceCfg.defaults != nil {
 		mergeDefaults(result, inheritanceCfg.defaults)
+		build.trackSubtree(result)
 	}
 
-	foldScopeChainInto(result, layers, inheritanceCfg, nil)
+	foldScopeChainInto(result, layers, inheritanceCfg, nil, build)
 
-	return result
+	if templates != nil {
+		return result, templates.planFor(result, build.temporary)
+	}
+
+	return result, nil
 }
 
 // accumulateLayerResult folds the higher-priority layer srcLayer into dst.
@@ -455,10 +552,12 @@ func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *t
 // which is now MergeDeep and handles the cross-loader sibling-sub-key
 // invariant uniformly. Explicit MergeReplace means wholesale replace here
 // just as it does inside a single layer's scope chain.
-func accumulateLayerResult(dst, srcLayer *tree.Node, inheritanceCfg *inheritanceConfig) {
+func accumulateLayerResult(
+	dst, srcLayer *tree.Node, inheritanceCfg *inheritanceConfig, build *templateBuild,
+) {
 	for _, key := range srcLayer.ChildrenKeys() {
 		src := srcLayer.Child(key)
-		mergeIntoResultWithStrategies(dst, key, src, inheritanceCfg)
+		mergeIntoResultWithStrategies(dst, key, src, inheritanceCfg, build)
 	}
 }
 
@@ -543,11 +642,16 @@ func buildSuppressedByLevel(
 // mutations outrank every loader). suppressedByLevel, built from cfg.tombstones,
 // prunes runtime-deleted keys from each layer's scope chain; it is not applied
 // to cfg.modified, which Delete prunes directly.
-func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, entityPath keypath.KeyPath) *tree.Node {
+func resolveEffectiveLayered(
+	cfg *Config, inheritanceCfg *inheritanceConfig, entityPath keypath.KeyPath, templates *templateIndex,
+) (*tree.Node, *templatePlan) {
+	build := newTemplateBuild(templates != nil)
 	result := tree.New()
+	build.track(result)
 
 	if inheritanceCfg.defaults != nil {
 		mergeDefaults(result, inheritanceCfg.defaults)
+		build.trackSubtree(result)
 	}
 
 	suppressedByLevel := buildSuppressedByLevel(cfg.tombstones, inheritanceCfg, entityPath)
@@ -559,20 +663,24 @@ func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, ent
 		}
 
 		layerResult := tree.New()
-		foldScopeChainInto(layerResult, scopeChain, inheritanceCfg, suppressedByLevel)
-		accumulateLayerResult(result, layerResult, inheritanceCfg)
+		foldScopeChainInto(layerResult, scopeChain, inheritanceCfg, suppressedByLevel, build)
+		accumulateLayerResult(result, layerResult, inheritanceCfg, build)
 	}
 
 	if cfg.modified != nil {
 		scopeChain, ok := matchHierarchy(cfg.modified, inheritanceCfg, entityPath)
 		if ok {
 			modResult := tree.New()
-			foldScopeChainInto(modResult, scopeChain, inheritanceCfg, nil)
-			accumulateLayerResult(result, modResult, inheritanceCfg)
+			foldScopeChainInto(modResult, scopeChain, inheritanceCfg, nil, build)
+			accumulateLayerResult(result, modResult, inheritanceCfg, build)
 		}
 	}
 
-	return result
+	if templates != nil {
+		return result, templates.planFor(result, build.temporary)
+	}
+
+	return result, nil
 }
 
 // mergeDefaults merges default values into the result node.
@@ -612,7 +720,7 @@ func isSliceNode(node *tree.Node) bool {
 		return false
 	}
 
-	return reflect.TypeOf(node.Value).Kind() == reflect.Slice
+	return node.Value != nil && reflect.TypeOf(node.Value).Kind() == reflect.Slice
 }
 
 // isMapNode returns true if node is a non-leaf, non-array node (has children representing a map).
@@ -622,25 +730,32 @@ func isMapNode(n *tree.Node) bool {
 
 // mergeIntoResult merges a single key's subtree into the result node
 // using the specified inheritance merge strategy.
-func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy InheritMergeStrategy) {
+func mergeIntoResult(
+	result *tree.Node, key string, source *tree.Node, strategy InheritMergeStrategy, build *templateBuild,
+) {
 	existing := result.Child(key)
+	build.changed(result, key)
 
 	switch strategy {
 	case MergeReplace:
-		// Child completely replaces parent. Simple: set/overwrite.
-		result.SetChild(key, cloneNode(source))
+		// Child completely replaces parent; the source subtree stays immutable.
+		result.SetChild(key, source)
 
 	case MergeAppend:
 		// Append slice elements.
 		if existing == nil || !isSliceNode(existing) || !isSliceNode(source) {
 			// Fallback to replace if not both slices.
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
+
 			return
 		}
 
 		// Both are array nodes (from YAML sequences).
 		if existing.IsArray() && source.IsArray() {
-			mergeArrayNodes(existing, source)
+			existing = shallowCloneForBuild(existing, build)
+			result.SetChild(key, existing)
+			mergeArrayNodes(existing, source, build)
+
 			return
 		}
 
@@ -650,7 +765,7 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 		sourceSlice, ok2 := source.Value.([]any)
 		if !ok1 || !ok2 {
 			// Can happen when slice is not []any (e.g., []int).
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
 
 			return
 		}
@@ -659,36 +774,43 @@ func mergeIntoResult(result *tree.Node, key string, source *tree.Node, strategy 
 
 		merged = append(merged, existingSlice...)
 		merged = append(merged, sourceSlice...)
+		existing = shallowCloneForBuild(existing, build)
+		result.SetChild(key, existing)
+
 		existing.Value = merged
-		// Note: we modify existing node in place, which is okay because
-		// it's already part of the result tree (not the raw tree).
+		// The detached parent owns the new combined slice.
 
 	case MergeDeep:
 		// Recursive map merge.
 		if existing == nil {
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
+
 			return
 		}
 
 		// Both must be non-leaf (map) nodes.
 		if isMapNode(existing) && isMapNode(source) {
-			deepMergeNodes(existing, source)
+			existing = shallowCloneForBuild(existing, build)
+			result.SetChild(key, existing)
+			deepMergeNodes(existing, source, build)
 		} else {
 			// Fallback to replace if not both maps.
-			result.SetChild(key, cloneNode(source))
+			result.SetChild(key, source)
 		}
 	}
 }
 
 // mergeArrayNodes appends children from source array node to existing array node,
 // reindexing the source children to continue after the existing ones.
-func mergeArrayNodes(existing, source *tree.Node) {
+func mergeArrayNodes(existing, source *tree.Node, build *templateBuild) {
 	existingKeys := existing.ChildrenKeys()
 	start := len(existingKeys)
 
 	for i, key := range source.ChildrenKeys() {
 		srcChild := source.Child(key)
-		existing.SetChild(strconv.Itoa(start+i), cloneNode(srcChild))
+		newKey := strconv.Itoa(start + i)
+		build.changed(existing, newKey)
+		existing.SetChild(newKey, srcChild)
 	}
 }
 
@@ -699,24 +821,29 @@ func mergeArrayNodes(existing, source *tree.Node) {
 // into the effective view, which surprised real Tarantool cluster
 // configs where iproto.listen at the instance scope is expected to fully
 // replace iproto.listen at the global scope.
-func deepMergeNodes(dst, source *tree.Node) {
+func deepMergeNodes(dst, source *tree.Node, build *templateBuild) {
 	for _, key := range source.ChildrenKeys() {
 		srcChild := source.Child(key)
 		dstChild := dst.Child(key)
+		build.changed(dst, key)
 
 		if dstChild == nil {
-			dst.SetChild(key, cloneNode(srcChild))
+			dst.SetChild(key, srcChild)
+
 			continue
 		}
 
 		// Both sides must be maps (not leaves, not arrays) to recurse.
 		if isMapNode(dstChild) && isMapNode(srcChild) {
-			deepMergeNodes(dstChild, srcChild)
+			dstChild = shallowCloneForBuild(dstChild, build)
+			dst.SetChild(key, dstChild)
+			deepMergeNodes(dstChild, srcChild, build)
+
 			continue
 		}
 
 		// Otherwise source wins.
-		dst.SetChild(key, cloneNode(srcChild))
+		dst.SetChild(key, srcChild)
 	}
 }
 
@@ -725,12 +852,14 @@ func deepMergeNodes(dst, source *tree.Node) {
 // when merging the "credentials" key).
 func mergeIntoResultWithStrategies(
 	result *tree.Node, key string, source *tree.Node, inheritanceCfg *inheritanceConfig,
+	build *templateBuild,
 ) {
 	strategy, _ := inheritanceCfg.strategyFor(key)
 
 	if !inheritanceCfg.hasSubStrategies(key) {
 		// No nested strategies — use direct merge.
-		mergeIntoResult(result, key, source, strategy)
+		mergeIntoResult(result, key, source, strategy, build)
+
 		return
 	}
 
@@ -738,13 +867,17 @@ func mergeIntoResultWithStrategies(
 	existing := result.Child(key)
 	if existing == nil || !isMapNode(existing) || !isMapNode(source) {
 		// Cannot walk children — fall back to this level's strategy.
-		mergeIntoResult(result, key, source, strategy)
+		mergeIntoResult(result, key, source, strategy, build)
+
 		return
 	}
 
 	// Recursively merge, applying strategies at the correct depth.
 	// The current level's strategy becomes the default for children.
-	strategyAwareMerge(existing, source, key, strategy, inheritanceCfg)
+	existing = shallowCloneForBuild(existing, build)
+	build.changed(result, key)
+	result.SetChild(key, existing)
+	strategyAwareMerge(existing, source, key, strategy, inheritanceCfg, build)
 }
 
 // strategyAwareMerge recursively merges source into dst, checking for nested
@@ -752,7 +885,7 @@ func mergeIntoResultWithStrategies(
 // an explicit strategy inherit defaultStrategy from their parent.
 func strategyAwareMerge(
 	dst, src *tree.Node, pathPrefix string, defaultStrategy InheritMergeStrategy,
-	inheritanceCfg *inheritanceConfig,
+	inheritanceCfg *inheritanceConfig, build *templateBuild,
 ) {
 	for _, childKey := range src.ChildrenKeys() {
 		childPath := pathPrefix + "/" + childKey
@@ -765,16 +898,20 @@ func strategyAwareMerge(
 
 		if !inheritanceCfg.hasSubStrategies(childPath) {
 			// Apply the strategy directly at this level.
-			mergeIntoResult(dst, childKey, srcChild, strategy)
+			mergeIntoResult(dst, childKey, srcChild, strategy, build)
+
 			continue
 		}
 
 		// Need to recurse deeper for nested strategies.
 		dstChild := dst.Child(childKey)
 		if dstChild == nil || !isMapNode(dstChild) || !isMapNode(srcChild) {
-			mergeIntoResult(dst, childKey, srcChild, strategy)
+			mergeIntoResult(dst, childKey, srcChild, strategy, build)
 		} else {
-			strategyAwareMerge(dstChild, srcChild, childPath, strategy, inheritanceCfg)
+			dstChild = shallowCloneForBuild(dstChild, build)
+			build.changed(dst, childKey)
+			dst.SetChild(childKey, dstChild)
+			strategyAwareMerge(dstChild, srcChild, childPath, strategy, inheritanceCfg, build)
 		}
 	}
 }
