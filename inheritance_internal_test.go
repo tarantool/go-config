@@ -50,7 +50,7 @@ func TestResolveEffectiveSimple(t *testing.T) {
 	layers, ok := matchHierarchy(root, cfg, NewKeyPath("groups/storages/replicasets/s-001/instances/s-001-a"))
 	require.True(t, ok)
 
-	result := resolveEffective(layers, cfg)
+	result, _ := resolveEffective(layers, cfg, nil)
 	require.NotNil(t, result)
 
 	val := result.Child("foo")
@@ -122,6 +122,79 @@ func TestCloneNode_Nil(t *testing.T) {
 
 	result := cloneNode(nil)
 	assert.Nil(t, result)
+}
+
+func TestCloneNode_Allocations(t *testing.T) { //nolint:paralleltest // AllocsPerRun requires serial execution.
+	root := tree.New()
+	for i := range 8 {
+		root.Set(KeyPath{strconv.Itoa(i)}, i)
+	}
+
+	var clone *tree.Node
+
+	shallow := testing.AllocsPerRun(100, func() {
+		clone = shallowCloneNode(root)
+	})
+
+	require.NotNil(t, clone)
+	assert.LessOrEqual(t, shallow, float64(5))
+
+	deep := testing.AllocsPerRun(100, func() {
+		clone = cloneNode(root)
+	})
+
+	require.NotNil(t, clone)
+	assert.LessOrEqual(t, deep, float64(14))
+}
+
+func TestShallowCloneNode_Isolation(t *testing.T) {
+	t.Parallel()
+
+	root := tree.New()
+
+	root.Value = "metadata"
+	root.Source = "file"
+	root.Revision = "revision"
+	root.Range = tree.NewRange(2, 3, 5, 7)
+	root.MarkArray()
+	root.SetOrderSet(true)
+	root.SetTypeFixed(true)
+	root.SetAnnotation(&struct{ label string }{label: "annotation"})
+
+	for _, key := range []string{"2", "0", "1"} {
+		root.Set(KeyPath{key}, key)
+	}
+
+	clone := shallowCloneNode(root)
+	require.Equal(t, root, clone)
+	require.NotSame(t, root, clone)
+	assert.Same(t, root.Annotation(), clone.Annotation())
+	assert.Same(t, root.Child("2"), clone.Child("2"))
+
+	clone.Value = "changed"
+	clone.Source = "other"
+	clone.UnmarkArray()
+	clone.SetOrderSet(false)
+	clone.SetTypeFixed(false)
+	clone.SetAnnotation(nil)
+	clone.DeleteChild("0")
+	clone.SetChild("1", tree.New())
+	clone.SetChild("3", tree.New())
+	root.SetChild("4", tree.New())
+
+	assert.Equal(t, "metadata", root.Value)
+	assert.Equal(t, "file", root.Source)
+	assert.True(t, root.IsArray())
+	assert.True(t, root.OrderSet())
+	assert.True(t, root.TypeFixed())
+	assert.NotNil(t, root.Annotation())
+	assert.Equal(t, []string{"2", "0", "1", "4"}, root.ChildrenKeys())
+	assert.Equal(t, []string{"2", "1", "3"}, clone.ChildrenKeys())
+	assert.Equal(t, "1", root.Child("1").Value)
+
+	clone.ClearChildren()
+	assert.Len(t, root.ChildrenKeys(), 4)
+	assert.Nil(t, shallowCloneNode(nil))
 }
 
 func TestIsSliceNode_EdgeCases(t *testing.T) {

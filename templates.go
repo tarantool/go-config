@@ -2,18 +2,58 @@ package config
 
 import (
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/tarantool/go-config/v2/tree"
 )
 
+type templateMatch struct {
+	start, end         int
+	nameStart, nameEnd int
+}
+
 // Tarantool permits ASCII spaces around names; tabs and newlines are part of
 // the variable name. Values substituted into a string are not expanded again.
-var templatePattern = regexp.MustCompile(`(?s)\{\{ *(.*?) *\}\}`)
+func compileTemplate(text string) []templateMatch {
+	var matches []templateMatch
 
-func expandCompiledTemplate(text string, matches [][]int, vars map[string]string) string {
+	for offset := 0; offset < len(text); {
+		start := strings.Index(text[offset:], "{{")
+		if start < 0 {
+			break
+		}
+
+		start += offset
+
+		nameStart := start + len("{{")
+
+		end := strings.Index(text[nameStart:], "}}")
+		if end < 0 {
+			break
+		}
+
+		end += nameStart
+
+		nameEnd := end
+		for nameStart < nameEnd && text[nameStart] == ' ' {
+			nameStart++
+		}
+
+		for nameEnd > nameStart && text[nameEnd-1] == ' ' {
+			nameEnd--
+		}
+
+		matches = append(matches, templateMatch{
+			start: start, end: end + len("}}"), nameStart: nameStart, nameEnd: nameEnd,
+		})
+		offset = end + len("}}")
+	}
+
+	return matches
+}
+
+func expandCompiledTemplate(text string, matches []templateMatch, vars map[string]string) string {
 	if len(matches) == 0 {
 		return text
 	}
@@ -25,20 +65,18 @@ func expandCompiledTemplate(text string, matches [][]int, vars map[string]string
 	end := 0
 
 	for _, match := range matches {
-		const nameStart, nameEnd = 2, 3
-
-		name := text[match[nameStart]:match[nameEnd]]
+		name := text[match.nameStart:match.nameEnd]
 		value, ok := vars[name]
 
-		result.WriteString(text[end:match[0]])
+		result.WriteString(text[end:match.start])
 
 		if !ok {
-			result.WriteString(text[match[0]:match[1]])
+			result.WriteString(text[match.start:match.end])
 		} else {
 			result.WriteString(value)
 		}
 
-		end = match[1]
+		end = match.end
 	}
 
 	result.WriteString(text[end:])
@@ -51,34 +89,41 @@ func expandCompiledTemplate(text string, matches [][]int, vars map[string]string
 // Only string leaves and mapping keys are inspected. Containers stored as leaf
 // values are left unchanged. No template state is attached to public tree nodes.
 type templateIndex struct {
-	once  sync.Once
+	mu    sync.RWMutex
 	plans map[*tree.Node]*templatePlan
 }
 type templatePlan struct {
-	matches  [][]int
+	matches  []templateMatch
 	children []templateChild
 }
 type templateChild struct {
 	key     string
-	matches [][]int
+	matches []templateMatch
 	plan    *templatePlan
 }
 
-func (index *templateIndex) prepare(cfg *Config) {
-	index.once.Do(func() {
+// prepare requires a read lock, which it temporarily releases on a cache miss.
+func (index *templateIndex) prepare(node *tree.Node) {
+	if _, found := index.plans[node]; found {
+		return
+	}
+
+	index.mu.RUnlock()
+	index.mu.Lock()
+	defer func() {
+		index.mu.Unlock()
+		index.mu.RLock()
+	}()
+
+	if index.plans == nil {
 		index.plans = make(map[*tree.Node]*templatePlan)
-		index.compile(cfg.root, true)
+	}
 
-		for _, root := range cfg.layers {
-			index.compile(root, true)
-		}
-
-		index.compile(cfg.modified, true)
-	})
+	index.compile(node, true)
 }
 
 func newTemplateIndex() *templateIndex {
-	return &templateIndex{once: sync.Once{}, plans: nil}
+	return &templateIndex{mu: sync.RWMutex{}, plans: nil}
 }
 
 func (index *templateIndex) compile(node *tree.Node, retain bool) *templatePlan {
@@ -111,10 +156,10 @@ func (index *templateIndex) compileChildren(node *tree.Node, retain bool) *templ
 	for _, key := range node.ChildrenKeys() {
 		childPlan := index.compile(node.Child(key), retain)
 
-		var matches [][]int
+		var matches []templateMatch
 
 		if !node.IsArray() {
-			matches = templatePattern.FindAllStringSubmatchIndex(key, -1)
+			matches = compileTemplate(key)
 		}
 
 		if childPlan != nil || len(matches) > 0 {
@@ -135,7 +180,7 @@ func compileTemplateLeaf(node *tree.Node) *templatePlan {
 		return nil
 	}
 
-	matches := templatePattern.FindAllStringSubmatchIndex(value.String(), -1)
+	matches := compileTemplate(value.String())
 	if len(matches) == 0 {
 		return nil
 	}
@@ -236,8 +281,10 @@ func expandPlannedLeaf(
 		return node
 	}
 
-	replacement := reflect.New(value.Type()).Elem()
-	replacement.SetString(text)
+	replacement := reflect.ValueOf(text)
+	if replacement.Type() != value.Type() {
+		replacement = replacement.Convert(value.Type())
+	}
 
 	result := shallowCloneNode(node)
 	setExpandedLeaf(result, replacement)

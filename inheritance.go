@@ -196,58 +196,13 @@ func WithInheritMerge(key string, strategy InheritMergeStrategy) InheritanceOpti
 
 // cloneNode creates a deep copy of a tree node and all its descendants.
 func cloneNode(node *tree.Node) *tree.Node {
-	if node == nil {
-		return nil
-	}
-
-	clone := tree.New()
-
-	clone.Value = node.Value
-	clone.Source = node.Source
-	clone.Revision = node.Revision
-	clone.Range = node.Range
-	clone.SetAnnotation(node.Annotation())
-	clone.SetTypeFixed(node.TypeFixed())
-
-	if node.IsArray() {
-		clone.MarkArray()
-	}
-
-	if node.OrderSet() {
-		clone.SetOrderSet(true)
-	}
-
-	for _, key := range node.ChildrenKeys() {
-		clone.SetChild(key, cloneNode(node.Child(key)))
-	}
-
-	return clone
+	return node.Clone()
 }
 
 // shallowCloneNode detaches the node and its immediate child table while
 // retaining immutable descendants. Callers own the returned parent.
 func shallowCloneNode(node *tree.Node) *tree.Node {
-	if node == nil {
-		return nil
-	}
-
-	clone := tree.New()
-
-	clone.Value, clone.Source, clone.Revision, clone.Range = node.Value, node.Source, node.Revision, node.Range
-	clone.SetAnnotation(node.Annotation())
-	clone.SetTypeFixed(node.TypeFixed())
-
-	if node.IsArray() {
-		clone.MarkArray()
-	}
-
-	clone.SetOrderSet(node.OrderSet())
-
-	for _, key := range node.ChildrenKeys() {
-		clone.SetChild(key, node.Child(key))
-	}
-
-	return clone
+	return node.ShallowClone()
 }
 
 // pruneSharedPath copies only ancestors of a removed node. Missing paths keep
@@ -431,6 +386,7 @@ func foldScopeChainInto(
 	scopeChain []*tree.Node,
 	inheritanceCfg *inheritanceConfig,
 	suppressedByLevel map[int][]keypath.KeyPath,
+	templates *templateIndex,
 ) {
 	leafIdx := len(scopeChain) - 1
 
@@ -467,6 +423,11 @@ func foldScopeChainInto(
 			// Skip structural keys (groups, replicasets, instances, …).
 			if isStructuralKey(inheritanceCfg, key) {
 				continue
+			}
+
+			if templates != nil {
+				// Pruning may have detached layer; retain only the source subtree.
+				templates.prepare(scopeChain[levelIdx].Child(key))
 			}
 
 			child := layer.Child(key)
@@ -507,7 +468,14 @@ func pruneTreePath(root *tree.Node, path keypath.KeyPath) {
 }
 
 // resolveEffective merges layers from global to leaf with inheritance rules.
-func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *tree.Node {
+func resolveEffective(
+	layers []*tree.Node, inheritanceCfg *inheritanceConfig, templates *templateIndex,
+) (*tree.Node, *templatePlan) {
+	if templates != nil {
+		templates.mu.RLock()
+		defer templates.mu.RUnlock()
+	}
+
 	result := tree.New()
 
 	// Start with defaults (lowest priority).
@@ -515,9 +483,13 @@ func resolveEffective(layers []*tree.Node, inheritanceCfg *inheritanceConfig) *t
 		mergeDefaults(result, inheritanceCfg.defaults)
 	}
 
-	foldScopeChainInto(result, layers, inheritanceCfg, nil)
+	foldScopeChainInto(result, layers, inheritanceCfg, nil, templates)
 
-	return result
+	if templates != nil {
+		return result, templates.compile(result, false)
+	}
+
+	return result, nil
 }
 
 // accumulateLayerResult folds the higher-priority layer srcLayer into dst.
@@ -613,7 +585,14 @@ func buildSuppressedByLevel(
 // mutations outrank every loader). suppressedByLevel, built from cfg.tombstones,
 // prunes runtime-deleted keys from each layer's scope chain; it is not applied
 // to cfg.modified, which Delete prunes directly.
-func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, entityPath keypath.KeyPath) *tree.Node {
+func resolveEffectiveLayered(
+	cfg *Config, inheritanceCfg *inheritanceConfig, entityPath keypath.KeyPath, templates *templateIndex,
+) (*tree.Node, *templatePlan) {
+	if templates != nil {
+		templates.mu.RLock()
+		defer templates.mu.RUnlock()
+	}
+
 	result := tree.New()
 
 	if inheritanceCfg.defaults != nil {
@@ -629,7 +608,7 @@ func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, ent
 		}
 
 		layerResult := tree.New()
-		foldScopeChainInto(layerResult, scopeChain, inheritanceCfg, suppressedByLevel)
+		foldScopeChainInto(layerResult, scopeChain, inheritanceCfg, suppressedByLevel, templates)
 		accumulateLayerResult(result, layerResult, inheritanceCfg)
 	}
 
@@ -637,12 +616,16 @@ func resolveEffectiveLayered(cfg *Config, inheritanceCfg *inheritanceConfig, ent
 		scopeChain, ok := matchHierarchy(cfg.modified, inheritanceCfg, entityPath)
 		if ok {
 			modResult := tree.New()
-			foldScopeChainInto(modResult, scopeChain, inheritanceCfg, nil)
+			foldScopeChainInto(modResult, scopeChain, inheritanceCfg, nil, templates)
 			accumulateLayerResult(result, modResult, inheritanceCfg)
 		}
 	}
 
-	return result
+	if templates != nil {
+		return result, templates.compile(result, false)
+	}
+
+	return result, nil
 }
 
 // mergeDefaults merges default values into the result node.

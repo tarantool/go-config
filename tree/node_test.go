@@ -1,6 +1,7 @@
 package tree_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,63 @@ import (
 	"github.com/tarantool/go-config/v2/keypath"
 	"github.com/tarantool/go-config/v2/tree"
 )
+
+func TestNode_Clone(t *testing.T) {
+	t.Parallel()
+
+	for _, count := range []int{0, 1, 8, 9, 17} {
+		t.Run(strconv.Itoa(count), func(t *testing.T) {
+			t.Parallel()
+
+			root := tree.New()
+			root.SetChild("removed", tree.New())
+			root.DeleteChild("removed")
+
+			for i := count; i > 0; i-- {
+				child := tree.New()
+				child.Set(keypath.KeyPath{"nested"}, i)
+				child.MarkArray()
+				child.SetOrderSet(true)
+				child.SetTypeFixed(true)
+				child.SetAnnotation("annotation")
+
+				child.Range = tree.NewRange(2, 3, 5, 7)
+				root.SetChild(strconv.Itoa(i), child)
+			}
+
+			deep := root.Clone()
+			shallow := root.ShallowClone()
+			assert.Equal(t, root.ChildrenKeys(), deep.ChildrenKeys())
+			assert.Equal(t, root.ChildrenKeys(), shallow.ChildrenKeys())
+
+			for _, key := range root.ChildrenKeys() {
+				original := root.Child(key)
+				cloned := deep.Child(key)
+				require.Equal(t, original, cloned)
+				assert.NotSame(t, original, cloned)
+				assert.NotSame(t, original.Child("nested"), cloned.Child("nested"))
+				assert.Same(t, original, shallow.Child(key))
+
+				expected, err := strconv.Atoi(key)
+				require.NoError(t, err)
+
+				cloned.Set(keypath.KeyPath{"nested"}, "changed")
+				assert.Equal(t, expected, original.Child("nested").Value)
+			}
+
+			deep.SetChild("extra", tree.New())
+			shallow.SetChild("extra", tree.New())
+			assert.Nil(t, root.Child("extra"))
+			deep.ClearChildren()
+			shallow.ClearChildren()
+			assert.Len(t, root.ChildrenKeys(), count)
+		})
+	}
+
+	var node *tree.Node
+	assert.Nil(t, node.Clone())
+	assert.Nil(t, node.ShallowClone())
+}
 
 func TestNode_Set_Get_leaf(t *testing.T) {
 	t.Parallel()
@@ -305,6 +363,31 @@ func TestNode_ChildrenKeys_initializedButEmpty(t *testing.T) {
 	node.SetChild("child", tree.New())
 	node.DeleteChild("child")
 	assert.Nil(t, node.ChildrenKeys())
+}
+
+//nolint:paralleltest // AllocsPerRun requires serial execution.
+func TestNode_ChildrenKeys_Allocations(t *testing.T) {
+	node := tree.New()
+
+	expected := []string{"z", "a", "y", "b", "x", "c", "w", "d"}
+	for _, key := range expected {
+		node.SetChild(key, tree.New())
+	}
+
+	var keys []string
+
+	allocations := testing.AllocsPerRun(100, func() {
+		keys = node.ChildrenKeys()
+	})
+
+	require.Equal(t, expected, keys)
+	require.LessOrEqual(t, allocations, float64(1), "one slice with capacity for every child")
+
+	keys[0] = "changed"
+
+	node.DeleteChild("a")
+	node.SetChild("new", tree.New())
+	require.Equal(t, []string{"z", "y", "b", "x", "c", "w", "d", "new"}, node.ChildrenKeys())
 }
 
 func TestNode_SetChild_ReplacePreservesOrder_order(t *testing.T) {

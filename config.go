@@ -455,7 +455,15 @@ func (c *Config) resolveEntityConfig(
 	inheritanceCfg *inheritanceConfig,
 	entityPath keypath.KeyPath,
 ) (Config, bool, bool) {
-	var root *tree.Node
+	var (
+		root      *tree.Node
+		templates *templateIndex
+		plan      *templatePlan
+	)
+
+	if len(inheritanceCfg.templateVars) > 0 {
+		templates = c.templates
+	}
 
 	if len(c.layers) == 0 {
 		// Not produced by a Builder: single merged-tree resolution.
@@ -464,7 +472,7 @@ func (c *Config) resolveEntityConfig(
 			return newConfig(nil, nil, nil), false, false
 		}
 
-		root = resolveEffective(layers, inheritanceCfg)
+		root, plan = resolveEffective(layers, inheritanceCfg, templates)
 	} else {
 		if _, ok := matchHierarchy(c.root, inheritanceCfg, entityPath); !ok {
 			return newConfig(nil, nil, nil), false, false
@@ -474,7 +482,7 @@ func (c *Config) resolveEntityConfig(
 			return newConfig(nil, nil, nil), false, true
 		}
 
-		root = resolveEffectiveLayered(c, inheritanceCfg, entityPath)
+		root, plan = resolveEffectiveLayered(c, inheritanceCfg, entityPath, templates)
 	}
 
 	if len(inheritanceCfg.templateVars) > 0 {
@@ -482,10 +490,6 @@ func (c *Config) resolveEntityConfig(
 		for _, resolve := range inheritanceCfg.templateVars {
 			maps.Copy(vars, resolve(entityPath))
 		}
-
-		c.templates.prepare(c)
-
-		plan := c.templates.compile(root, false)
 
 		root = expandPlannedTemplates(root, plan, vars)
 	}
