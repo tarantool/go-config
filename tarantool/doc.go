@@ -52,6 +52,31 @@
 // (Global → groups → replicasets → instances) with default merge strategies:
 //   - credentials — MergeDeep
 //
+// # Templates
+//
+// Effective and EffectiveAll substitute {{ instance_name }},
+// {{ replicaset_name }} and {{ group_name }} after source priority and
+// inheritance. Substitution applies to string leaves and mapping keys, including
+// nested YAML mappings and sequences. Go containers stored as whole leaf values
+// stay unchanged. ASCII spaces around names are optional; replacement values are
+// not expanded again. Unknown placeholders retain their exact spelling.
+//
+// TemplateVariables supplies the three built-in names from a complete Tarantool
+// instance path and returns nil for other path shapes. For a generic builder,
+// register it through config.WithTemplateVariables under the Tarantool hierarchy.
+// Additional variables can be supplied through WithInheritanceOption and
+// config.WithTemplateVariables. Later providers override earlier values; known
+// empty values replace their placeholders with an empty string.
+//
+// config.context declarations remain ordinary configuration data. References
+// such as {{ context.secret }} stay unchanged unless a variable provider supplies
+// that name. The template engine performs no environment or file reads.
+//
+// Get, Slice and MarshalYAML on the original config retain source templates.
+// MarshalYAML on an effective config writes substituted values and preserves
+// unknown placeholders, comments and scalar styles. WithEnvPrefix controls
+// TT_* config overrides independently of template substitution.
+//
 // # Schema Validation
 //
 // By default the builder validates the assembled configuration against the

@@ -10,6 +10,15 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Added
 
+* `config.WithTemplateVariables` enables single-pass template substitution after
+  inheritance in `Effective` and `EffectiveAll`. Providers return string variables
+  derived from the entity path; later providers win. Unknown placeholders are
+  preserved exactly, while known empty values remove their placeholders.
+  Substitution covers string leaves and mapping keys, including nested YAML
+  mappings and sequences. Go containers stored as whole leaf values stay unchanged.
+* The Tarantool builder registers `instance_name`, `replicaset_name` and
+  `group_name`. `tarantool.TemplateVariables` exposes the same path-based provider
+  for generic builders. 
 * `tree.Node.TypeFixed` and `SetTypeFixed` record whether the source fixed the
   type of a node's value; `tree.ErrFixedTypeString` reports a string with a
   fixed type decoded into a bool or a number.
@@ -39,6 +48,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* Effective inheritance reuses unchanged source branches and copies only changed
+  parents, including exclusion and deletion paths. Mutable writes detach their
+  tree and overlay, preserving previously returned views.
+* Template expressions use a bounded index per configuration version and sparse
+  expansion after inheritance. Variable providers run on every effective view.
 * The Tarantool builder enables `collectors.WithTarantoolParserFormatting`
   for YAML from files, directories and storage.
 * The Tarantool builder reads an empty YAML value as "", the way Tarantool's
@@ -68,6 +82,8 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Fixed
 
+* Inheritance with an explicit append strategy treats null as a replacement
+  value instead of panicking when checking whether it is a slice.
 * The YAML collector rejects an anchor that contains an alias to itself and a
   document that expands aliases far beyond its size, as yaml.v3's decoder
   does, instead of recursing forever or building an exponential tree.
