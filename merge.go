@@ -255,7 +255,7 @@ func mergeTreeInto(dst, src *tree.Node) {
 		}
 
 		// Otherwise replace: clone the entire src child subtree into dst.
-		dst.SetChild(key, cloneNode(srcChild))
+		dst.SetChild(key, srcChild.Clone())
 	}
 
 	// Apply ordering at this level.

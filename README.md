@@ -274,6 +274,35 @@ builder = builder.WithInheritance(
 )
 ```
 
+### Templates
+
+`WithTemplateVariables` registers a provider of string variables derived from
+an entity path. A known variable with an empty value removes its placeholder.
+Unknown placeholders are preserved exactly, including their whitespace.
+
+The Tarantool builder registers `instance_name`, `replicaset_name` and
+`group_name` automatically. A generic builder can register the same variables:
+
+```go
+builder = builder.WithInheritance(
+    config.Levels(config.Global, "groups", "replicasets", "instances"),
+    config.WithTemplateVariables(tarantool.TemplateVariables),
+)
+```
+
+`tarantool.TemplateVariables` returns a fresh map for a complete Tarantool instance
+path and nil for other path shapes. Additional variables can be registered with
+`WithTemplateVariables`. 
+
+Templates in string leaves and mapping keys of the config tree are expanded
+once after inheritance, including nested YAML mappings and sequences.
+Maps, slices and arrays stored as whole leaf values by Go collectors are left
+unchanged. Only ASCII spaces around names are trimmed. Tabs and newlines are part
+of the name. Replacement text is never expanded again.
+Raw `Get`, `Slice` and `MarshalYAML` retain source templates. `Effective` and
+`EffectiveAll` return substituted views, preserving unknown placeholders.
+Their YAML output preserves source comments and styles.
+
 ### Validation
 
 Configuration can be validated against a JSON Schema or a custom validator
