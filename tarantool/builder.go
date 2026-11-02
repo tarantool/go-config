@@ -367,7 +367,9 @@ func envFilter(
 
 func resolvePath(resolver *envpath.Node, key string) config.KeyPath {
 	if resolver != nil {
-		return resolver.Resolve(key)
+		path, _ := resolver.Resolve(key)
+
+		return path
 	}
 
 	return keyPathFromdKey(key)

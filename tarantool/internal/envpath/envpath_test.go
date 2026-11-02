@@ -20,7 +20,7 @@ func TestTrie_SimpleKey(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	got := root.Resolve("REPLICATION_FAILOVER")
+	got, _ := root.Resolve("REPLICATION_FAILOVER")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"replication", "failover"}), got)
 }
 
@@ -30,7 +30,7 @@ func TestTrie_CompoundKey_AuditLog(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	got := root.Resolve("AUDIT_LOG_NONBLOCK")
+	got, _ := root.Resolve("AUDIT_LOG_NONBLOCK")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"audit_log", "nonblock"}), got)
 }
 
@@ -40,10 +40,10 @@ func TestTrie_CompoundKey_LongestWins(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	gotLong := root.Resolve("WAL_QUEUE_MAX_SIZE")
+	gotLong, _ := root.Resolve("WAL_QUEUE_MAX_SIZE")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"wal_queue_max_size"}), gotLong)
 
-	gotShort := root.Resolve("WAL_DIR")
+	gotShort, _ := root.Resolve("WAL_DIR")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"wal", "dir"}), gotShort)
 }
 
@@ -53,7 +53,7 @@ func TestTrie_Wildcard(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	got := root.Resolve("GROUPS_FOO_REPLICASETS_BAR_INSTANCES_BAZ_IPROTO_LISTEN")
+	got, _ := root.Resolve("GROUPS_FOO_REPLICASETS_BAR_INSTANCES_BAZ_IPROTO_LISTEN")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{
 		"groups", "foo", "replicasets", "bar", "instances", "baz", "iproto", "listen",
 	}), got)
@@ -65,7 +65,7 @@ func TestTrie_Unknown(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	got := root.Resolve("UNKNOWN_THING")
+	got, _ := root.Resolve("UNKNOWN_THING")
 	assert.Nil(t, got)
 }
 
@@ -75,7 +75,7 @@ func TestTrie_EmptyKey(t *testing.T) {
 	root, err := envpath.Build(fixtureSchema)
 	require.NoError(t, err)
 
-	got := root.Resolve("")
+	got, _ := root.Resolve("")
 	assert.Nil(t, got)
 }
 
@@ -112,12 +112,12 @@ func TestTrie_RefCycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Properties siblings of the cyclic ref stay reachable.
-	got := root.Resolve("ROOT_LEAF")
+	got, _ := root.Resolve("ROOT_LEAF")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"root", "leaf"}), got)
 
 	// Paths through the cycle are pruned at the first re-entry — the
 	// env var is silently dropped rather than expanded indefinitely.
-	got = root.Resolve("ROOT_CHILD_LEAF")
+	got, _ = root.Resolve("ROOT_CHILD_LEAF")
 	assert.Nil(t, got)
 }
 
@@ -142,6 +142,6 @@ func TestTrie_Ref(t *testing.T) {
 	root, err := envpath.Build(schema)
 	require.NoError(t, err)
 
-	got := root.Resolve("IPROTO_LISTEN")
+	got, _ := root.Resolve("IPROTO_LISTEN")
 	assert.Equal(t, config.NewKeyPathFromSegments([]string{"iproto", "listen"}), got)
 }
