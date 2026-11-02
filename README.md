@@ -198,6 +198,12 @@ func main() {
 }
 ```
 
+With a schema, the builder reads `TT_*` environment variables the way
+Tarantool does: the name resolves to a config path through the schema, and the
+value takes the type of that path. `TT_CONFIG_ETCD_ENDPOINTS=http://a:2379`
+is an array, `TT_CONSOLE_ENABLED=TRUE` a boolean, `TT_LABELS=zone=east` a map,
+and an empty value is unset. The package documentation lists the rules.
+
 ### Collectors
 
 Collectors are pluggable data sources. Each implements the `Collector` interface

@@ -39,6 +39,18 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 
 ### Changed
 
+* The Tarantool builder reads a `TT_*` or `TT_*_DEFAULT` value as the type
+  the schema gives its path, by the rules of Tarantool's env source, instead
+  of always storing a string, so `Get`, `Effective`, merging and validation
+  see it as if a file had set it. `TT_CONFIG_ETCD_ENDPOINTS=a,b` (or
+  `'["a","b"]'`) is now a `[]any` that replaces a file's endpoints whole,
+  `TT_IPROTO_LISTEN='[{"uri":"127.0.0.1:3301"}]'` validates and reads as an
+  array of maps, `TT_LABELS=k=v,k2=v2` is a map, booleans accept
+  `true`/`false` in any case and `1`/`0`, numbers parse, and a string field
+  keeps `123` a string through validation. An empty value is unset, as in
+  Tarantool, instead of overriding with "". A value that cannot be read as
+  its type stays the raw string and fails validation as before. With
+  `WithoutSchema` values stay strings.
 * The Tarantool builder enables `collectors.WithTarantoolParserFormatting`
   for YAML from files, directories and storage.
 * The Tarantool builder reads an empty YAML value as "", the way Tarantool's

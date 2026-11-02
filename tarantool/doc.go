@@ -46,6 +46,35 @@
 // or #/definitions/<name> — are treated as opaque and any paths
 // buried beneath them won't be reachable via env vars.
 //
+// # Environment variable values
+//
+// With a schema, an env-var value is read as the type the schema gives
+// its path, following the rules of Tarantool's own env source, and
+// lands in the config typed, as if a file had set it:
+//
+//   - An empty value is unset, as in Tarantool: it overrides nothing.
+//   - A string field takes the value as is, and the value stays a
+//     string: TT_CONSOLE_SOCKET=123 is "123" through validation.
+//   - A number or an integer is parsed (decimal, or hex with "0x"); a
+//     duration or byte size with a unit ("30s", "1GiB") stays a string,
+//     as it does in a file.
+//   - A boolean is "true" or "false" in any case, or "1" or "0".
+//   - An array is JSON when the value starts with "[", or a comma-separated
+//     list when its items are scalars: TT_CONFIG_ETCD_ENDPOINTS=a,b.
+//   - A map (an object with free keys, like labels) is JSON when the value
+//     starts with "{", or "k=v,k2=v2" when its values are scalars.
+//   - A value of no type (app.cfg, roles_cfg) is JSON only.
+//   - A union, such as a number-or-string, prefers the variant that turns
+//     the value into something other than the plain string.
+//
+// An array or a map becomes nodes of the tree, as from a file, so an
+// env array replaces a file array whole and an env map merges into a
+// file map key by key. A value that cannot be read as its type (a record
+// such as TT_CONSOLE, JSON that does not parse, "yes" for a boolean) is
+// kept as the raw string, and validation reports the type error where
+// Tarantool would refuse to start. Without a schema every value stays a
+// string.
+//
 // # Inheritance
 //
 // The builder registers the Tarantool hierarchy
