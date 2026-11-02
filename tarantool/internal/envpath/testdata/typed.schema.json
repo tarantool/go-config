@@ -1,0 +1,141 @@
+{
+  "type": "object",
+  "$defs": {
+    "listen": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uri": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "socket": {
+          "type": "string"
+        }
+      }
+    },
+    "wal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queue_max_size": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "pattern": "^\\d+\\s*(?:[Kk][Ii][Bb])?$"
+        }
+      }
+    },
+    "iproto": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "listen": {
+          "$ref": "#/$defs/listen"
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "roles_cfg": {
+      "type": "object",
+      "additionalProperties": {}
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "enum": [
+            5,
+            "info"
+          ]
+        },
+        "modules": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "replicasets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "instances": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "iproto": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "listen": {
+                            "$ref": "#/$defs/listen"
+                          }
+                        }
+                      },
+                      "snapshot": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

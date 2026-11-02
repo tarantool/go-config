@@ -1,6 +1,8 @@
 // Package envpath builds a trie of property paths from a Tarantool JSON
 // schema and resolves stripped environment-variable keys against it via
-// greedy longest-prefix matching.
+// greedy longest-prefix matching. A resolved key also yields the [Type] the
+// schema gives its path, and [Type.Parse] reads a variable's value as that
+// type the way Tarantool's config module does.
 package envpath
 
 import (
@@ -13,9 +15,11 @@ import (
 
 // Node is a trie node keyed by lowercased schema segment names.
 // wildcard is set when the schema permits arbitrary names at this level.
+// typ is the type the schema gives the value at the node's path.
 type Node struct {
 	children map[string]*Node
 	wildcard *Node
+	typ      *Type
 }
 
 // Build parses a JSON schema and returns a trie of property paths.
@@ -28,17 +32,19 @@ func Build(schema []byte) (*Node, error) {
 	}
 
 	defs := extractDefs(root)
-	node := newNode()
+	visited := map[string]bool{}
+	node := newNode(typeOf(root, defs, visited))
 
-	walkSchemaNode(node, root, defs, map[string]bool{})
+	walkSchemaNode(node, root, defs, visited)
 
 	return node, nil
 }
 
-func newNode() *Node {
+func newNode(typ *Type) *Node {
 	return &Node{
 		children: map[string]*Node{},
 		wildcard: nil,
+		typ:      typ,
 	}
 }
 
@@ -56,34 +62,11 @@ func extractDefs(root map[string]any) map[string]any {
 // walkSchemaNode populates parent with children for every property reachable
 // beneath node. visited guards against self-referential $refs.
 func walkSchemaNode(parent *Node, node map[string]any, defs map[string]any, visited map[string]bool) {
-	var marked []string
+	node, marked, ok := followRef(node, defs, visited)
+	defer unmark(visited, marked)
 
-	defer func() {
-		for _, name := range marked {
-			delete(visited, name)
-		}
-	}()
-
-	for {
-		ref, hasRef := node["$ref"].(string)
-		if !hasRef {
-			break
-		}
-
-		name, ok := localRefName(ref)
-		if !ok || visited[name] {
-			return
-		}
-
-		target, ok := defs[name].(map[string]any)
-		if !ok {
-			return
-		}
-
-		visited[name] = true
-
-		marked = append(marked, name)
-		node = target
+	if !ok {
+		return
 	}
 
 	props, ok := node["properties"].(map[string]any)
@@ -94,7 +77,7 @@ func walkSchemaNode(parent *Node, node map[string]any, defs map[string]any, visi
 				continue
 			}
 
-			childNode := newNode()
+			childNode := newNode(typeOf(child, defs, visited))
 
 			parent.children[strings.ToLower(name)] = childNode
 
@@ -103,7 +86,7 @@ func walkSchemaNode(parent *Node, node map[string]any, defs map[string]any, visi
 	}
 
 	if hasWildcardChildren(node) {
-		parent.wildcard = newNode()
+		parent.wildcard = newNode(freeValuesType(node, defs, visited))
 
 		additional, isObj := node["additionalProperties"].(map[string]any)
 		if isObj {
@@ -123,6 +106,48 @@ func walkSchemaNode(parent *Node, node map[string]any, defs map[string]any, visi
 				walkSchemaNode(parent.wildcard, schema, defs, visited)
 			}
 		}
+	}
+}
+
+// followRef follows the $ref chain of node to the schema it ends at. Every
+// definition entered on the way is marked in visited and returned, for the
+// caller to [unmark] once it is done with the schema. ok is false when a
+// $ref is not local, names a missing definition, or re-enters a definition
+// that is already being expanded.
+func followRef(
+	node map[string]any,
+	defs map[string]any,
+	visited map[string]bool,
+) (map[string]any, []string, bool) {
+	var marked []string
+
+	for {
+		ref, hasRef := node["$ref"].(string)
+		if !hasRef {
+			return node, marked, true
+		}
+
+		name, ok := localRefName(ref)
+		if !ok || visited[name] {
+			return nil, marked, false
+		}
+
+		target, ok := defs[name].(map[string]any)
+		if !ok {
+			return nil, marked, false
+		}
+
+		visited[name] = true
+
+		marked = append(marked, name)
+		node = target
+	}
+}
+
+// unmark removes the definitions [followRef] marked from visited.
+func unmark(visited map[string]bool, marked []string) {
+	for _, name := range marked {
+		delete(visited, name)
 	}
 }
 
@@ -158,10 +183,14 @@ func localRefName(ref string) (string, bool) {
 }
 
 // Resolve maps a stripped env-var key to a config.KeyPath via greedy
-// longest-prefix matching against the schema trie. Returns nil on no match.
-func (n *Node) Resolve(key string) config.KeyPath {
+// longest-prefix matching against the schema trie, and returns the type the
+// schema gives that path. A path through a wildcard level (a group, a
+// replicaset or an instance name) has the type of the matching
+// additionalProperties or patternProperties schema. Returns nil, nil on no
+// match.
+func (n *Node) Resolve(key string) (config.KeyPath, *Type) {
 	if key == "" {
-		return nil
+		return nil, nil
 	}
 
 	parts := strings.Split(strings.ToLower(key), "_")
@@ -174,15 +203,23 @@ func (n *Node) Resolve(key string) config.KeyPath {
 	}
 
 	if len(tokens) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	return resolveTokens(n, tokens)
+	path, node := resolveTokens(n, tokens)
+	if node == nil {
+		return nil, nil
+	}
+
+	return path, node.typ
 }
 
-func resolveTokens(node *Node, tokens []string) config.KeyPath {
+// resolveTokens matches tokens against the trie below node and returns the
+// path they spell together with the node it ends at, or nil, nil when they
+// match no path.
+func resolveTokens(node *Node, tokens []string) (config.KeyPath, *Node) {
 	if len(tokens) == 0 {
-		return config.KeyPath{}
+		return config.KeyPath{}, node
 	}
 
 	for take := len(tokens); take >= 1; take-- {
@@ -193,22 +230,22 @@ func resolveTokens(node *Node, tokens []string) config.KeyPath {
 			continue
 		}
 
-		tail := resolveTokens(child, tokens[take:])
-		if tail == nil {
+		tail, last := resolveTokens(child, tokens[take:])
+		if last == nil {
 			continue
 		}
 
-		return append(config.KeyPath{segment}, tail...)
+		return append(config.KeyPath{segment}, tail...), last
 	}
 
 	if node.wildcard != nil {
-		tail := resolveTokens(node.wildcard, tokens[1:])
-		if tail == nil {
-			return nil
+		tail, last := resolveTokens(node.wildcard, tokens[1:])
+		if last == nil {
+			return nil, nil
 		}
 
-		return append(config.KeyPath{tokens[0]}, tail...)
+		return append(config.KeyPath{tokens[0]}, tail...), last
 	}
 
-	return nil
+	return nil, nil
 }
