@@ -344,72 +344,71 @@ func keyPathFromdKey(key string) config.KeyPath {
 	return config.NewKeyPathFromSegments(filtered)
 }
 
-func envFilter(
-	prefix string,
-	patterns []string,
-	next func(string) config.KeyPath,
-) func(string) config.KeyPath {
-	if len(patterns) == 0 {
-		return next
+// envIgnored reports whether the full env-var name matches one of the
+// [Builder.WithEnvIgnore] patterns.
+func envIgnored(name string, patterns []string) bool {
+	for _, pat := range patterns {
+		if ok, _ := path.Match(pat, name); ok {
+			return true
+		}
 	}
 
-	return func(key string) config.KeyPath {
-		full := prefix + key
-		for _, pat := range patterns {
-			if ok, _ := path.Match(pat, full); ok {
+	return false
+}
+
+// regularEnvKey selects the variables of the regular env collector: it skips
+// names ending with "_DEFAULT", which belong to the default-env collector,
+// and keeps the rest whole.
+func regularEnvKey(key string) (string, bool) {
+	return key, !strings.HasSuffix(key, defaultEnvSuffix)
+}
+
+// defaultEnvKey selects the variables of the default-env collector: names
+// ending with "_DEFAULT", with that suffix stripped.
+func defaultEnvKey(key string) (string, bool) {
+	key, ok := strings.CutSuffix(key, defaultEnvSuffix)
+
+	return key, ok && key != ""
+}
+
+// envCollector returns the collector of the env vars selectKey picks out by
+// their name without the prefix. With a schema the names resolve through the
+// schema trie and the values take the type of their path (see [schemaEnv]);
+// without one the names are split naively on underscores and the values stay
+// strings.
+func (b *Builder) envCollector(
+	name string,
+	source config.SourceType,
+	selectKey func(string) (string, bool),
+	resolver *envpath.Node,
+) config.Collector {
+	if resolver != nil {
+		return &schemaEnv{
+			name:       name,
+			sourceType: source,
+			prefix:     b.envPrefix,
+			ignore:     b.envIgnore,
+			selectKey:  selectKey,
+			resolver:   resolver,
+		}
+	}
+
+	return collectors.NewEnv().
+		WithPrefix(b.envPrefix).
+		WithTransform(func(key string) config.KeyPath {
+			if envIgnored(b.envPrefix+key, b.envIgnore) {
 				return nil
 			}
-		}
 
-		return next(key)
-	}
-}
+			key, ok := selectKey(key)
+			if !ok {
+				return nil
+			}
 
-func resolvePath(resolver *envpath.Node, key string) config.KeyPath {
-	if resolver != nil {
-		path, _ := resolver.Resolve(key)
-
-		return path
-	}
-
-	return keyPathFromdKey(key)
-}
-
-// regularEnvTransform returns a transform function for the regular env
-// collector. It skips variables ending with "_DEFAULT" (those belong to the
-// default-env collector) and resolves the remainder via the schema trie
-// when available, otherwise via naive underscore split.
-func regularEnvTransform(resolver *envpath.Node) func(string) config.KeyPath {
-	suffix := defaultEnvSuffix
-
-	return func(key string) config.KeyPath {
-		if strings.HasSuffix(key, suffix) {
-			return nil
-		}
-
-		return resolvePath(resolver, key)
-	}
-}
-
-// defaultEnvTransform returns a transform function for the default-env
-// collector. It filters for variables ending with "_DEFAULT", strips that
-// suffix, and resolves the remainder via the schema trie when available,
-// otherwise via naive underscore split.
-func defaultEnvTransform(resolver *envpath.Node) func(string) config.KeyPath {
-	suffix := defaultEnvSuffix
-
-	return func(key string) config.KeyPath {
-		if !strings.HasSuffix(key, suffix) {
-			return nil
-		}
-
-		key = strings.TrimSuffix(key, suffix)
-		if key == "" {
-			return nil
-		}
-
-		return resolvePath(resolver, key)
-	}
+			return keyPathFromdKey(key)
+		}).
+		WithName(name).
+		WithSourceType(source)
 }
 
 // buildInner assembles the inner [config.Builder] with all collectors,
@@ -441,7 +440,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 		}
 
 		// Malformed schemas surface via WithJSONSchema below; a nil resolver
-		// falls back to the naive underscore split.
+		// falls back to the naive underscore split and string values.
 		resolver, _ = envpath.Build(schemaBytes)
 	}
 
@@ -455,13 +454,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 	var sources []config.Collector
 
 	// 1. TT_* env vars (highest priority).
-	sources = append(sources,
-		collectors.NewEnv().
-			WithPrefix(b.envPrefix).
-			WithTransform(envFilter(b.envPrefix, b.envIgnore, regularEnvTransform(resolver))).
-			WithName("env").
-			WithSourceType(config.EnvSource),
-	)
+	sources = append(sources, b.envCollector("env", config.EnvSource, regularEnvKey, resolver))
 
 	// 2. Config file or directory.
 	if b.configFile != "" {
@@ -490,12 +483,7 @@ func (b *Builder) buildInner(ctx context.Context) (config.Builder, error) {
 
 	// 4. TT_*_DEFAULT env vars (lowest priority).
 	sources = append(sources,
-		collectors.NewEnv().
-			WithPrefix(b.envPrefix).
-			WithTransform(envFilter(b.envPrefix, b.envIgnore, defaultEnvTransform(resolver))).
-			WithName("env-default").
-			WithSourceType(config.EnvDefaultSource),
-	)
+		b.envCollector("env-default", config.EnvDefaultSource, defaultEnvKey, resolver))
 
 	// AddCollector treats later additions as higher priority, so add in reverse.
 	for i := len(sources) - 1; i >= 0; i-- {
