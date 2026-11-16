@@ -129,6 +129,29 @@ func TestMergeTreeInto_EmptyMapKeepsMap(t *testing.T) {
 	}, tree.ToAny(dst))
 }
 
+// TestMergeTreeInto_NullKeepsValue verifies that null in src is no value: dst
+// keeps what it has, and takes null where it has nothing.
+func TestMergeTreeInto_NullKeepsValue(t *testing.T) {
+	t.Parallel()
+
+	dst := tree.New()
+	dst.Set(keypath.NewKeyPath("port"), 3301)
+	dst.Set(keypath.NewKeyPath("server/host"), "localhost")
+
+	src := tree.New()
+	src.Set(keypath.NewKeyPath("port"), nil)
+	src.Set(keypath.NewKeyPath("server"), nil)
+	src.Set(keypath.NewKeyPath("extra"), nil)
+
+	mergeTreeInto(dst, src)
+
+	assert.Equal(t, map[string]any{
+		"port":   3301,
+		"server": map[string]any{"host": "localhost"},
+		"extra":  nil,
+	}, tree.ToAny(dst))
+}
+
 // TestMergeTreeInto_ArrayCarry verifies that isArray is propagated from src to dst.
 func TestMergeTreeInto_ArrayCarry(t *testing.T) {
 	t.Parallel()

@@ -294,6 +294,124 @@ func TestBuild_EnvOverridesStorage(t *testing.T) {
 	assert.Equal(t, "env-host", host, "env should override storage")
 }
 
+const precedenceInstance = "groups/g/replicasets/r/instances/i"
+
+// effectiveAny reads path of the effective config of the instance of cfg.
+func effectiveAny(t *testing.T, cfg config.Config, path string) any {
+	t.Helper()
+
+	instance, err := cfg.Effective(config.NewKeyPath(precedenceInstance))
+	require.NoError(t, err)
+
+	var value any
+
+	_, err = instance.Get(config.NewKeyPath(path), &value)
+	require.NoError(t, err, path)
+
+	return value
+}
+
+// TestBuild_SourcesOverScopes checks that the sources outrank the scopes, as
+// Tarantool merges them: it makes the config of the instance of each source
+// on its own, the scopes merged, and merges these by the priority of the
+// sources. A global key of the file wins over an instance key of the
+// storage, as an instance key of the file does over a global key of the
+// storage, and the environment wins over both.
+func TestBuild_SourcesOverScopes(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	writeFile(t, cfgPath, `labels:
+  b: file-global
+groups:
+  g:
+    replicasets:
+      r:
+        instances:
+          i:
+            labels:
+              a: file-instance
+`)
+
+	mock := testutil.NewMockStorage()
+	testutil.PutIntegrity(mock, "/config/", "all", []byte(`labels:
+  a: storage-global
+  k: storage-global
+groups:
+  g:
+    replicasets:
+      r:
+        instances:
+          i:
+            labels:
+              b: storage-instance
+              d: storage-instance
+            memtx:
+              memory: storage-instance
+`))
+
+	t.Setenv("TT_MEMTX_MEMORY", "env-global")
+
+	cfg, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithStorage(testutil.NewRawTyped(mock, "/config/")).
+		WithoutSchema().
+		Build(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{
+		"a": "file-instance",
+		"b": "file-global",
+		"k": "storage-global",
+		"d": "storage-instance",
+	}, effectiveAny(t, cfg, "labels"))
+	assert.Equal(t, "env-global", effectiveAny(t, cfg, "memtx/memory"))
+}
+
+// TestBuild_NullIsUnset checks that null is no value, as in Tarantool: the
+// sources and the scopes under it fill it in.
+func TestBuild_NullIsUnset(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	writeFile(t, cfgPath, `memtx:
+  memory: null
+snapshot:
+  count: file-global
+groups:
+  g:
+    replicasets:
+      r:
+        instances:
+          i:
+            replication:
+              failover: null
+            snapshot:
+              count: null
+`)
+
+	mock := testutil.NewMockStorage()
+	testutil.PutIntegrity(mock, "/config/", "all", []byte("replication:\n  failover: manual\n"))
+
+	t.Setenv("TT_MEMTX_MEMORY_DEFAULT", "env-default")
+
+	cfg, err := tarantool.New().
+		WithConfigFile(cfgPath).
+		WithStorage(testutil.NewRawTyped(mock, "/config/")).
+		WithoutSchema().
+		Build(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "manual", effectiveAny(t, cfg, "replication/failover"),
+		"null of the file over a value of the storage")
+	assert.Equal(t, "env-default", effectiveAny(t, cfg, "memtx/memory"),
+		"null of the file over a default of the environment")
+	assert.Equal(t, "file-global", effectiveAny(t, cfg, "snapshot/count"),
+		"null of the instance over the global scope")
+
+	var memory any
+
+	_, err = cfg.Get(config.NewKeyPath("memtx/memory"), &memory)
+	require.NoError(t, err)
+	assert.Equal(t, "env-default", memory, "null over a lower source in the merged config")
+}
+
 func TestBuild_FullStack(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
