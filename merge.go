@@ -289,9 +289,22 @@ func emptyMapOverMap(dst, src *tree.Node) bool {
 	return isEmptyMapNode(src) && (isMapNode(dst) || isEmptyMapNode(dst))
 }
 
+// isNullNode reports whether node holds null: a leaf with no value, as a
+// source gives `key: null`.
+func isNullNode(node *tree.Node) bool {
+	return node != nil && node.IsLeaf() && !node.IsArray() && node.Value == nil
+}
+
+// keepsDst reports whether merging src over dst leaves dst as it is: src is
+// null over any value, which Tarantool reads as unset and fills from the
+// sources and scopes under it, or an empty map over a map.
+func keepsDst(dst, src *tree.Node) bool {
+	return dst != nil && (isNullNode(src) || emptyMapOverMap(dst, src))
+}
+
 // mergeTreeInto folds src into dst at the tree level.
-// Map-into-map is recursive, and an empty map adds nothing to a map; any
-// other src child (leaf or array) replaces the dst child wholesale
+// Map-into-map is recursive, and null or an empty map adds nothing to a
+// value; any other src child (leaf or array) replaces the dst child wholesale
 // (carrying Source, Revision, Range, annotation, and isArray). Arrays are
 // opaque — index-merging would leak orphan lower-priority indices into the
 // result.
@@ -319,7 +332,7 @@ func mergeTreeInto(dst, src *tree.Node) {
 			continue
 		}
 
-		if emptyMapOverMap(dstChild, srcChild) {
+		if keepsDst(dstChild, srcChild) {
 			continue
 		}
 

@@ -793,7 +793,7 @@ func mergeIntoResult(
 			existing = shallowCloneForBuild(existing, build)
 			result.SetChild(key, existing)
 			deepMergeNodes(existing, source, build)
-		} else if !emptyMapOverMap(existing, source) {
+		} else if !keepsDst(existing, source) {
 			// Fallback to replace if not both maps.
 			result.SetChild(key, source)
 		}
@@ -816,7 +816,8 @@ func mergeArrayNodes(existing, source *tree.Node, build *templateBuild) {
 
 // deepMergeNodes recursively merges source children into dst.
 // Source keys override dst keys for leaves and for arrays; recurse only
-// for nested maps, and an empty map leaves a map alone. Arrays are opaque on purpose — index-merging a
+// for nested maps, and null or an empty map leaves dst alone (see keepsDst).
+// Arrays are opaque on purpose — index-merging a
 // higher-priority [a, b] with a lower-priority [x, y, z] would leak z
 // into the effective view, which surprised real Tarantool cluster
 // configs where iproto.listen at the instance scope is expected to fully
@@ -842,7 +843,7 @@ func deepMergeNodes(dst, source *tree.Node, build *templateBuild) {
 			continue
 		}
 
-		if emptyMapOverMap(dstChild, srcChild) {
+		if keepsDst(dstChild, srcChild) {
 			continue
 		}
 

@@ -111,6 +111,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   and so does `labels: {}` of an instance for the labels it inherits, where
   the empty map replaced them with null. An empty map with nothing under it
   reads back as an empty map, not as null.
+* Null is no value in a merge, as in Tarantool: `failover: null` of an
+  instance in the config file leaves the failover of the global scope, of
+  the config storage or of `TT_*_DEFAULT`, where null replaced it. The
+  merged config and the effective configs read it so; a key that only null
+  sets is still null.
 
 ## [v2.0.1] - 2026-08-25
 
