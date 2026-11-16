@@ -117,6 +117,7 @@ func (ec *Env) Read(ctx context.Context) <-chan config.Value {
 		// Skip if no environment variables matched — emitting an empty
 		// root node would overwrite all existing values during merge.
 		if !root.IsLeaf() {
+			markIndexedArrays(root)
 			walkTree(ctx, root, config.NewKeyPath(""), valueCh)
 		}
 	}()

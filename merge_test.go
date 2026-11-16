@@ -501,3 +501,65 @@ func TestMergeCollector_MapToArrayConversion(t *testing.T) {
 	assert.Empty(t, thingsNode.ChildrenKeys(),
 		"all prior map children must be cleared")
 }
+
+// TestMergeCollector_NumericMapKeysStayMap checks that the merge takes the
+// arrays from the source: a map whose keys are numbers stays a map, and a
+// sequence stays an array, rather than both being guessed from the keys.
+func TestMergeCollector_NumericMapKeysStayMap(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildConfig(t, yamlCollector(t, `labels:
+  "0": x
+  "1": "y"
+replicasets:
+  "1":
+    members: [a, b]
+listen:
+  - endpoint: localhost:4401
+`))
+
+	var labels any
+
+	_, err := cfg.Get(config.NewKeyPath("labels"), &labels)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"0": "x", "1": "y"}, labels)
+
+	var replicasets any
+
+	_, err = cfg.Get(config.NewKeyPath("replicasets"), &replicasets)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"1": map[string]any{"members": []any{"a", "b"}}}, replicasets)
+
+	var listen any
+
+	_, err = cfg.Get(config.NewKeyPath("listen"), &listen)
+	require.NoError(t, err)
+	assert.Equal(t, []any{map[string]any{"endpoint": "localhost:4401"}}, listen)
+
+	out, err := cfg.MarshalYAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "\"1\":\n    members:")
+}
+
+// TestMergeCollector_NumericMapKeysOfMapCollector checks the same for a Go
+// map: its keys are map keys, numbers or not.
+func TestMergeCollector_NumericMapKeysOfMapCollector(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildConfig(t, collectors.NewMap(map[string]any{
+		"labels":  map[string]any{"0": "x"},
+		"aliases": []any{"a"},
+	}))
+
+	var labels any
+
+	_, err := cfg.Get(config.NewKeyPath("labels"), &labels)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"0": "x"}, labels)
+
+	var aliases any
+
+	_, err = cfg.Get(config.NewKeyPath("aliases"), &aliases)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"a"}, aliases)
+}

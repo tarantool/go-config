@@ -287,6 +287,15 @@ func TestBuild_EnvTyped_Map(t *testing.T) {
 			"maps merge deep, as Tarantool merges them")
 	})
 
+	t.Run("numeric keys", func(t *testing.T) {
+		t.Setenv("TT_LABELS", "1=east,2=west")
+
+		cfg, err := tarantool.New().WithSchema(schema).Build(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{"1": zoneEast, "2": "west"}, getAny(t, cfg, labelsPath),
+			"a map whose keys are numbers is no array")
+	})
+
 	t.Run("untyped values need JSON", func(t *testing.T) {
 		t.Setenv("TT_ROLES_CFG", "myrole=x")
 

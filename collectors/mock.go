@@ -99,6 +99,7 @@ func (mc *Mock) Read(ctx context.Context) <-chan config.Value {
 		}
 
 		// Walk the tree and send leaf values.
+		markIndexedArrays(root)
 		walkTree(ctx, root, config.NewKeyPath(""), valueCh)
 	}()
 
