@@ -131,22 +131,14 @@ func mergeNodeValue(node *tree.Node, value any, col Collector) {
 	// Array nodes are treated as opaque (replaced wholesale) — they are not
 	// maps even though they are non-leaf.
 	m, newIsMap := value.(map[string]any)
-	currentIsMap := isMapNode(node)
 
-	if newIsMap {
-		if currentIsMap {
-			// Recursive map merging.
-			mergeMapIntoNode(node, m, col)
-		} else {
-			// Convert leaf or array to map: clear value, drop array flag,
-			// drop existing children, then merge the map into a clean slate.
-			node.ClearChildren()
-			node.UnmarkArray()
-
-			node.Value = nil
-			mergeMapIntoNode(node, m, col)
-		}
-	} else {
+	switch {
+	case newIsMap && isMapNode(node):
+		// Recursive map merging.
+		mergeMapIntoNode(node, m, col)
+	case newIsMap:
+		replaceWithMap(node, m, col)
+	default:
 		// Replacement (primitive, slice, or map overwriting non‑map).
 		// Clear children, drop array flag, reset order flag.
 		node.ClearChildren()
@@ -159,6 +151,23 @@ func mergeNodeValue(node *tree.Node, value any, col Collector) {
 	// Update node metadata.
 	node.Source = col.Name()
 	node.Revision = string(col.Revision())
+}
+
+// replaceWithMap turns a leaf or an array node into the map m: it clears the
+// value, drops the array flag and the existing children, then merges m into
+// the clean slate.
+func replaceWithMap(node *tree.Node, m map[string]any, col Collector) {
+	node.ClearChildren()
+	node.UnmarkArray()
+
+	node.Value = nil
+	mergeMapIntoNode(node, m, col)
+
+	// An empty map has no keys to become children: the node holds it, so
+	// that it reads back as an empty map and not as null.
+	if len(m) == 0 {
+		node.Value = map[string]any{}
+	}
 }
 
 // copyAnnotation forwards the format-specific annotation from a source Value
@@ -260,11 +269,32 @@ func copyTypeFixed(root *tree.Node, path keypath.KeyPath, src Value) {
 	dest.SetTypeFixed(ok && carrier.TypeFixed())
 }
 
+// isEmptyMapNode reports whether node holds an empty map, as a source gives
+// `{}`: a leaf whose value is a map without keys.
+func isEmptyMapNode(node *tree.Node) bool {
+	if node == nil || !node.IsLeaf() || node.IsArray() {
+		return false
+	}
+
+	m, ok := node.Value.(map[string]any)
+
+	return ok && len(m) == 0
+}
+
+// emptyMapOverMap reports whether src is an empty map merged over the map
+// dst. Maps merge key by key, and an empty map has no key to bring: dst is
+// left as it is, as Tarantool leaves labels {a: x} of a file under
+// TT_LABELS='{}', rather than replaced with nothing.
+func emptyMapOverMap(dst, src *tree.Node) bool {
+	return isEmptyMapNode(src) && (isMapNode(dst) || isEmptyMapNode(dst))
+}
+
 // mergeTreeInto folds src into dst at the tree level.
-// Map-into-map is recursive; any other src child (leaf or array) replaces
-// the dst child wholesale (carrying Source, Revision, Range, annotation,
-// and isArray). Arrays are opaque — index-merging would leak orphan
-// lower-priority indices into the result.
+// Map-into-map is recursive, and an empty map adds nothing to a map; any
+// other src child (leaf or array) replaces the dst child wholesale
+// (carrying Source, Revision, Range, annotation, and isArray). Arrays are
+// opaque — index-merging would leak orphan lower-priority indices into the
+// result.
 // When src.OrderSet() and !dst.OrderSet() the dst children are reordered
 // to match src's key order and dst.OrderSet() is set true.
 func mergeTreeInto(dst, src *tree.Node) {
@@ -286,6 +316,10 @@ func mergeTreeInto(dst, src *tree.Node) {
 
 			mergeTreeInto(dstChild, srcChild)
 
+			continue
+		}
+
+		if emptyMapOverMap(dstChild, srcChild) {
 			continue
 		}
 

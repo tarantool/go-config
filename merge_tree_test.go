@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tarantool/go-config/v2/keypath"
 	"github.com/tarantool/go-config/v2/tree"
 )
 
@@ -103,6 +104,29 @@ func TestMergeTreeInto_LeafReplace(t *testing.T) {
 	assert.Equal(t, "new", keyNode.Value)
 	assert.Equal(t, srcSecond, keyNode.Source)
 	assert.Equal(t, "2", keyNode.Revision)
+}
+
+// TestMergeTreeInto_EmptyMapKeepsMap verifies that an empty map in src adds
+// nothing to a map in dst, and replaces anything else.
+func TestMergeTreeInto_EmptyMapKeepsMap(t *testing.T) {
+	t.Parallel()
+
+	dst := tree.New()
+	dst.Set(keypath.NewKeyPath("labels/zone"), "west")
+	dst.Set(keypath.NewKeyPath("port"), 3301)
+
+	src := tree.New()
+	src.Set(keypath.NewKeyPath("labels"), map[string]any{})
+	src.Set(keypath.NewKeyPath("port"), map[string]any{})
+	src.Set(keypath.NewKeyPath("extra"), map[string]any{})
+
+	mergeTreeInto(dst, src)
+
+	assert.Equal(t, map[string]any{
+		"labels": map[string]any{"zone": "west"},
+		"port":   map[string]any{},
+		"extra":  map[string]any{},
+	}, tree.ToAny(dst))
 }
 
 // TestMergeTreeInto_ArrayCarry verifies that isArray is propagated from src to dst.

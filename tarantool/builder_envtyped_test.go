@@ -287,6 +287,49 @@ func TestBuild_EnvTyped_Map(t *testing.T) {
 			"maps merge deep, as Tarantool merges them")
 	})
 
+	t.Run("empty map", func(t *testing.T) {
+		// Tarantool merges TT_LABELS='{}' into the labels of the file key
+		// by key: there is no key, and the labels stay.
+		cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+		writeFile(t, cfgPath, `labels:
+  zone: east
+groups:
+  g:
+    replicasets:
+      r:
+        instances:
+          i:
+            labels: {}
+`)
+
+		t.Setenv("TT_LABELS", "{}")
+		t.Setenv("TT_ROLES_CFG_DEFAULT", "{}")
+
+		// The schema of the test has no groups: validation is not the point.
+		cfg, err := tarantool.New().WithConfigFile(cfgPath).WithSchema(schema).
+			WithoutValidation().Build(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{zoneKey: zoneEast}, getAny(t, cfg, labelsPath))
+		assert.Equal(t, map[string]any{}, getAny(t, cfg, "roles_cfg"),
+			"an empty map with nothing under it is an empty map, not null")
+
+		instance, err := cfg.Effective(config.NewKeyPath("groups/g/replicasets/r/instances/i"))
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{zoneKey: zoneEast}, getAny(t, instance, labelsPath),
+			"the empty labels of the instance inherit those of the global scope")
+	})
+
+	t.Run("empty map default", func(t *testing.T) {
+		cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+		writeFile(t, cfgPath, "labels:\n  zone: east\n")
+
+		t.Setenv("TT_LABELS_DEFAULT", "{}")
+
+		cfg, err := tarantool.New().WithConfigFile(cfgPath).WithSchema(schema).Build(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{zoneKey: zoneEast}, getAny(t, cfg, labelsPath))
+	})
+
 	t.Run("numeric keys", func(t *testing.T) {
 		t.Setenv("TT_LABELS", "1=east,2=west")
 

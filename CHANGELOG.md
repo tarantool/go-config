@@ -106,6 +106,11 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
   `tree.NewValueOnPath`) and guesses them from the keys only for a value that
   does not tell. `collectors.Env` and `collectors.Mock`, which build their
   trees from bare key paths, still read a number as an array index.
+* An empty map merged over a map adds nothing to it, as Tarantool merges
+  maps: `TT_LABELS='{}'` leaves the labels of the config file as they are,
+  and so does `labels: {}` of an instance for the labels it inherits, where
+  the empty map replaced them with null. An empty map with nothing under it
+  reads back as an empty map, not as null.
 
 ## [v2.0.1] - 2026-08-25
 

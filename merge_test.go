@@ -563,3 +563,55 @@ func TestMergeCollector_NumericMapKeysOfMapCollector(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []any{"a"}, aliases)
 }
+
+// TestMergeCollector_EmptyMap checks that an empty map reads back as an empty
+// map, and that over a map of a lower-priority source it adds nothing,
+// in the merged config and in an effective one.
+func TestMergeCollector_EmptyMap(t *testing.T) {
+	t.Parallel()
+
+	const (
+		attrsKey = "attrs"
+		zonesKey = "zones"
+		northKey = "north"
+	)
+
+	cfg := buildConfig(t, collectors.NewMap(map[string]any{attrsKey: map[string]any{}}))
+
+	var attrs any
+
+	_, err := cfg.Get(config.NewKeyPath(attrsKey), &attrs)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{}, attrs, "an empty map is no null")
+
+	low := collectors.NewMap(map[string]any{
+		attrsKey: map[string]any{northKey: "1"},
+		zonesKey: map[string]any{"z": map[string]any{
+			attrsKey: map[string]any{"south": "2"},
+		}},
+	}).WithName("low")
+	high := collectors.NewMap(map[string]any{
+		attrsKey: map[string]any{},
+		zonesKey: map[string]any{"z": map[string]any{attrsKey: map[string]any{}}},
+	}).WithName("high")
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(low)
+	builder = builder.AddCollector(high)
+	builder = builder.WithInheritance(config.Levels(config.Global, zonesKey))
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	_, err = cfg.Get(config.NewKeyPath(attrsKey), &attrs)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{northKey: "1"}, attrs)
+
+	zone, err := cfg.Effective(config.NewKeyPath(zonesKey + "/z"))
+	require.NoError(t, err)
+
+	_, err = zone.Get(config.NewKeyPath(attrsKey), &attrs)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{northKey: "1", "south": "2"}, attrs)
+}
