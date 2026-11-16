@@ -35,6 +35,42 @@ func flattenMapIntoTree(node *tree.Node, prefix config.KeyPath, m map[string]any
 	}
 }
 
+// markIndexedArrays marks as an array every node below root that has a key
+// made of digits. A collector that builds its tree from bare key paths, as
+// Env and Mock do, cannot tell an index from a map key, and takes roles/0
+// for the first item of roles. The merge takes the arrays from the tree the
+// values come from, so a map whose keys are numbers in a YAML document stays
+// a map.
+func markIndexedArrays(root *tree.Node) {
+	for _, key := range root.ChildrenKeys() {
+		child := root.Child(key)
+		if child == nil {
+			continue
+		}
+
+		if slices.ContainsFunc(child.ChildrenKeys(), isIndexKey) {
+			child.MarkArray()
+		}
+
+		markIndexedArrays(child)
+	}
+}
+
+// isIndexKey reports whether key consists only of ASCII digits.
+func isIndexKey(key string) bool {
+	if key == "" {
+		return false
+	}
+
+	for i := range len(key) {
+		if key[i] < '0' || key[i] > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
 // setSource recursively sets the Source field on a tree node and all its descendants.
 func setSource(node *tree.Node, source string) {
 	node.Source = source

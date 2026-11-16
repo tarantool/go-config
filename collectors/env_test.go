@@ -170,6 +170,34 @@ func TestEnv_Read_Cancellation(t *testing.T) {
 	testutil.Drain(t, valueCh)
 }
 
+// TestEnv_Read_IndexKeysMakeArrays checks that a number in a variable name
+// is still read as an array index: the names do not tell an index from a map
+// key, and Env keeps taking them for indices.
+func TestEnv_Read_IndexKeysMakeArrays(t *testing.T) {
+	t.Setenv("MYAPP_ROLES_0", "a")
+	t.Setenv("MYAPP_ROLES_1", "b")
+	t.Setenv("MYAPP_LISTEN_0_URI", "127.0.0.1:3301")
+
+	builder := config.NewBuilder()
+
+	builder = builder.AddCollector(collectors.NewEnv().WithPrefix("MYAPP_"))
+
+	cfg, errs := builder.Build(t.Context())
+	require.Empty(t, errs)
+
+	var roles any
+
+	_, err := cfg.Get(config.NewKeyPath("roles"), &roles)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"a", "b"}, roles)
+
+	var listen any
+
+	_, err = cfg.Get(config.NewKeyPath("listen"), &listen)
+	require.NoError(t, err)
+	assert.Equal(t, []any{map[string]any{"uri": "127.0.0.1:3301"}}, listen)
+}
+
 func TestEnv_Read_NoMatchNoEmit(t *testing.T) {
 	ctx := context.Background()
 

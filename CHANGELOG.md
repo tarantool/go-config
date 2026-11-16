@@ -99,6 +99,13 @@ Versioning](http://semver.org/spec/v2.0.0.html) except to the first release.
 * The YAML collector rejects an anchor that contains an alias to itself and a
   document that expands aliases far beyond its size, as yaml.v3's decoder
   does, instead of recursing forever or building an exponential tree.
+* A map whose keys are numbers, such as `labels: {"1": x}` in YAML, in a
+  `TT_LABELS` variable or in a Go map of `collectors.NewMap`, stays a map
+  instead of turning into an array. The merge takes the arrays from the tree
+  a value comes from (the new `PathArrays` of a value built by
+  `tree.NewValueOnPath`) and guesses them from the keys only for a value that
+  does not tell. `collectors.Env` and `collectors.Mock`, which build their
+  trees from bare key paths, still read a number as an array index.
 
 ## [v2.0.1] - 2026-08-25
 

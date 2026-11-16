@@ -67,6 +67,7 @@ func MergeCollectorWithMerger(ctx context.Context, root *tree.Node, col Collecto
 		copyAnnotation(root, meta.Key, val)
 		copyRanges(root, meta.Key, val)
 		copyTypeFixed(root, meta.Key, val)
+		copyArrays(root, meta.Key, val)
 	}
 
 	err := mergeCtx.ApplyOrdering(root)
@@ -207,6 +208,40 @@ func copyRanges(root *tree.Node, path keypath.KeyPath, src Value) {
 
 		if dest := root.Get(path[:first+i]); dest != nil {
 			dest.Range = rng
+		}
+	}
+}
+
+// copyArrays forwards which of the maps and arrays above a value the source
+// holds as arrays onto the destination nodes along its path. The merge can
+// only guess it from a key that is a number (see mergeValue), and a map
+// whose keys are numbers, such as labels {"1": x}, would come out as an
+// array. A value whose source does not tell keeps the guess. The value's own
+// node is not touched: merging the value has set it.
+func copyArrays(root *tree.Node, path keypath.KeyPath, src Value) {
+	carrier, ok := src.(interface{ PathArrays() []bool })
+	if !ok {
+		return
+	}
+
+	arrays := carrier.PathArrays()
+	if len(arrays) < 2 || len(arrays) > len(path)+1 {
+		return
+	}
+
+	// The flags end with the value's own node; align them with path's end.
+	first := len(path) + 1 - len(arrays)
+
+	for i, isArray := range arrays[:len(arrays)-1] {
+		dest := root.Get(path[:first+i])
+		if dest == nil {
+			continue
+		}
+
+		if isArray {
+			dest.MarkArray()
+		} else {
+			dest.UnmarkArray()
 		}
 	}
 }

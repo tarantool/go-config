@@ -52,6 +52,23 @@ func (v *valueImpl) PathRanges() []Range {
 	return ranges
 }
 
+// PathArrays reports which of the nodes along the value's key path are
+// arrays, ending with the value's own node, as PathRanges orders them. A
+// value created with NewValue knows only its own node.
+func (v *valueImpl) PathArrays() []bool {
+	arrays := make([]bool, 0, len(v.ancestors)+1)
+
+	for _, node := range v.ancestors {
+		arrays = append(arrays, node.IsArray())
+	}
+
+	if v.node != nil {
+		arrays = append(arrays, v.node.IsArray())
+	}
+
+	return arrays
+}
+
 // NewValue creates a new value.Value from a tree node and its key path.
 // The source information and revision are extracted from the node.
 func NewValue(node *Node, keyPath keypath.KeyPath) value.Value {
